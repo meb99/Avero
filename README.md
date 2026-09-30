@@ -95,7 +95,7 @@ Ein Demo-Board mit passendem Demo-Schaltplan ist eingebaut, damit man alles ohne
 3. Beim ersten Start meldet macOS, dass die App nicht von Apple geprüft ist (Avero ist nicht notarisiert). Unter macOS 13/14: Rechtsklick auf Avero → **Öffnen**. Unter macOS 15: einmal starten, dann **Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen"**.
    Alternativ im Terminal: `xattr -dr com.apple.quarantine /Applications/Avero.app`
 
-Avero meldet neue Versionen selbst. Eine neue Version entsteht, wenn ein Tag `v*` gepusht wird: GitHub Actions baut die DMG und veröffentlicht sie als Release.
+Avero meldet neue Versionen selbst. Eine neue Version entsteht über GitHub Actions: **Actions → Release → Run workflow**, Version eintragen (z. B. `0.5.0`) – der Workflow legt den Tag an, baut die DMG und veröffentlicht sie als Release. Ein gepushter Tag `v*` tut dasselbe.
 
 ## Selbst bauen
 

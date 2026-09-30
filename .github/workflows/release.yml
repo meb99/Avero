@@ -1,10 +1,16 @@
 name: Release
 
-# Push a tag like v0.5.0 to build a universal DMG and publish it as a GitHub release.
+# Builds a universal DMG and publishes it as a GitHub release, either for a
+# pushed tag like v0.5.0 or started by hand (Actions → Release → Run
+# workflow) with a version, which then also creates the tag.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version, e.g. 0.5.0 (the tag v0.5.0 is created on the chosen branch)"
+        required: true
 
 permissions:
   contents: write
@@ -12,6 +18,8 @@ permissions:
 jobs:
   dmg:
     runs-on: macos-latest
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -27,8 +35,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Avero ${{ github.ref_name }}
+          tagName: ${{ env.TAG }}
+          releaseName: Avero ${{ env.TAG }}
           releaseBody: |
             Universal-DMG für Apple Silicon und Intel (macOS 13 oder neuer).
 
