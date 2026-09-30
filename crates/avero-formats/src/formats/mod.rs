@@ -116,7 +116,7 @@ pub struct FormatInfo {
 
 pub const SUPPORTED: &[FormatInfo] = &[
     FormatInfo { id: "brd", name: "Test_Link BRD", extensions: &["brd"] },
-    FormatInfo { id: "brd2", name: "BRD2 (BRDOUT)", extensions: &["brd"] },
+    FormatInfo { id: "brd2", name: "BRD2 (BRDOUT)", extensions: &["brd", "gr"] },
     FormatInfo { id: "bdv", name: "Honhan BDV", extensions: &["bdv"] },
     FormatInfo { id: "asc", name: "ASUS ASC", extensions: &["asc"] },
     FormatInfo { id: "bvr", name: "BoardViewer BVR", extensions: &["bvr"] },

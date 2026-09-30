@@ -5,7 +5,7 @@ Alle Parser liegen in `crates/avero-formats/src/formats`. Erkannt wird zuerst am
 | Format | Endung | Erkennung | Einheit | Hinweise |
 | --- | --- | --- | --- | --- |
 | Test_Link BRD | `.brd` | `str_length:` + `var_data:`, oder verschleierter Kopf `23 E2 63 28` | mil | Verschleierung: jedes Byte um 2 Bit nach links rotiert und invertiert. Pins ohne Netznamen bekommen das Netz des Nagels mit gleicher Prüfnummer (Lenovo). |
-| BRD2 | `.brd` | `BRDOUT:` + `NETS:` | mil | Unterseite ist in Y gespiegelt gespeichert. Bauteile tragen ihre Box und den Index des ersten Pins. |
+| BRD2 / GR | `.brd`, `.gr` | `BRDOUT:` + `NETS:` | mil | Unterseite ist in Y gespiegelt gespeichert. Bauteile tragen ihre Box und den Index des ersten Pins. Manche Exporte (z. B. Dell `.gr`) setzen eine Gruppennummer vor Netz- und Bauteilnamen (`3%GND`); sie wird entfernt, damit gleiche Netze zusammenfallen. |
 | Honhan BDV | `.bdv` | verschleierter Kopf `dd:1.3?,r?-=bb` | Zoll | Pro Byte `Schlüssel − Wert`, Schlüssel beginnt bei 160 und steigt pro CRLF-Zeile, von 286 zurück auf 159. Inhalt = ASC-Abschnitte. |
 | ASUS ASC | `.asc` | Endung | Zoll | Drei Dateien im selben Ordner: `format.asc`, `pins.asc`, `nails.asc` (Groß-/Kleinschreibung egal). Kopfzeilen werden an der Zeilenform erkannt statt an einer festen Anzahl. |
 | BoardViewer BVR | `.bvr` | `BVRAW_FORMAT_1` | Zoll | Abschnitte `<<Layout>>`, `<<Pin>>`, `<<Nail>>`. |

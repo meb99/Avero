@@ -38,6 +38,20 @@ struct Brd2Pin {
     side: Side,
 }
 
+/// Some exporters (seen in Dell `.gr` files) put a group number before net
+/// names: `3%GND`, `1%GND`. The number is not part of the name; keeping it
+/// would split one net into several.
+fn strip_group(name: &str) -> &str {
+    match name.split_once('%') {
+        Some((group, rest))
+            if !group.is_empty() && group.bytes().all(|b| b.is_ascii_digit()) && !rest.is_empty() =>
+        {
+            rest
+        }
+        _ => name,
+    }
+}
+
 fn side_code(code: i64) -> Side {
     match code {
         1 => Side::Top,
@@ -90,7 +104,7 @@ pub fn parse(buf: &[u8]) -> Result<RawBoard, ParseError> {
             },
             Block::Nets => match (f.int(), f.string()) {
                 (Some(id), Some(name)) => {
-                    nets.insert(id as u32, name);
+                    nets.insert(id as u32, strip_group(&name).to_string());
                     true
                 }
                 _ => false,
@@ -101,7 +115,7 @@ pub fn parse(buf: &[u8]) -> Result<RawBoard, ParseError> {
                 match (name, coords, f.int(), f.int()) {
                     (Some(name), (Some(x1), Some(y1), Some(x2), Some(y2)), Some(first), side) => {
                         parts.push(Brd2Part {
-                            name,
+                            name: strip_group(&name).to_string(),
                             p1: Point::new(x1 as f64, y1 as f64),
                             p2: Point::new(x2 as f64, y2 as f64),
                             first_pin: usize::try_from(first).unwrap_or(0),
@@ -198,4 +212,18 @@ pub fn parse(buf: &[u8]) -> Result<RawBoard, ParseError> {
         board.warn(format!("{skipped} unreadable lines were skipped"));
     }
     Ok(board)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::strip_group;
+
+    #[test]
+    fn strips_group_numbers_from_net_names() {
+        assert_eq!(strip_group("3%GND"), "GND");
+        assert_eq!(strip_group("12%PP3V3_S5"), "PP3V3_S5");
+        assert_eq!(strip_group("GND"), "GND");
+        assert_eq!(strip_group("A%B"), "A%B");
+        assert_eq!(strip_group("3%"), "3%");
+    }
 }
