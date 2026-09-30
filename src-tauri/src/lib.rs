@@ -121,6 +121,33 @@ async fn open_board(
     load(Path::new(&path), ParseOptions { xzz_key, fz_key })
 }
 
+/// Part and net names of a boardview, upper case, for the library's
+/// content search. Keys are passed like for `open_board`.
+#[tauri::command]
+async fn board_words(
+    path: String,
+    xzz_key: Option<String>,
+    fz_key: Option<String>,
+) -> Result<Vec<String>, LoadError> {
+    let board = open_board(path, xzz_key, fz_key).await?;
+    let mut words: Vec<String> = board
+        .parts
+        .iter()
+        .map(|p| p.name.to_uppercase())
+        .chain(
+            board
+                .nets
+                .iter()
+                .filter(|n| n.kind != avero_formats::NetKind::Unconnected)
+                .map(|n| n.name.to_uppercase()),
+        )
+        .filter(|w| w.len() >= 2)
+        .collect();
+    words.sort_unstable();
+    words.dedup();
+    Ok(words)
+}
+
 #[tauri::command]
 async fn open_demo() -> Result<Board, LoadError> {
     Ok(avero_formats::demo::board())
@@ -323,6 +350,7 @@ pub fn run() {
             scan_library,
             library_root,
             import_files,
+            board_words,
             rename_library_file,
             load_notes,
             save_notes,

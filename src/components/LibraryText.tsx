@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { readFileBytes } from "../core/loader";
+import { loadSettings } from "../settings";
 import { useI18n } from "../i18n";
 import { cachedIndex, searchText, storeIndex, type PdfTextIndex } from "../workbench/fulltext";
 import type { LibraryEntry, LibraryFile } from "../workbench/library";
@@ -11,10 +13,26 @@ interface Props {
   onOpen(entry: LibraryEntry, file: LibraryFile, query: string): void;
 }
 
-/** Full-text search over the schematics of the library. */
+const isPdf = (file: LibraryFile) => /\.pdf$/i.test(file.name);
+
+/** Words of one library file: schematic text by page, or a board's part and net names. */
+async function buildIndex(file: LibraryFile, stop: () => boolean): Promise<PdfTextIndex | null> {
+  if (isPdf(file)) {
+    const { extractTextIndex } = await import("../schematic/document");
+    return extractTextIndex(await readFileBytes(file.path), stop);
+  }
+  const { xzzKey, fzKey } = loadSettings();
+  const names = await invoke<string[]>("board_words", { path: file.path, xzzKey: xzzKey || null, fzKey: fzKey || null });
+  return { v: 1, pages: 1, words: Object.fromEntries(names.map((n) => [n, [0]])) };
+}
+
+/** Full-text search over the schematics and boardviews of the library. */
 export function LibraryText({ entries, query, onOpen }: Props) {
   const { t } = useI18n();
-  const pdfs = useMemo(() => entries.flatMap((entry) => entry.schematics.map((file) => ({ entry, file }))), [entries]);
+  const pdfs = useMemo(
+    () => entries.flatMap((entry) => [...entry.schematics, ...entry.boards].map((file) => ({ entry, file }))),
+    [entries],
+  );
   const byPath = useMemo(() => new Map(pdfs.map((p) => [p.file.path, p])), [pdfs]);
   const [indexes, setIndexes] = useState(new Map<string, PdfTextIndex>());
   const [loading, setLoading] = useState(true);
@@ -52,12 +70,11 @@ export function LibraryText({ entries, query, onOpen }: Props) {
 
   const build = async () => {
     stop.current = false;
-    const { extractTextIndex } = await import("../schematic/document");
     for (let i = 0; i < missing.length && !stop.current; i++) {
       const { file } = missing[i];
       setBuilding({ done: i, total: missing.length, name: file.name });
       try {
-        const index = await extractTextIndex(await readFileBytes(file.path), () => stop.current);
+        const index = await buildIndex(file, () => stop.current);
         if (!index) break;
         await storeIndex(file, index);
         setIndexes((m) => new Map(m).set(file.path, index));
@@ -113,8 +130,15 @@ export function LibraryText({ entries, query, onOpen }: Props) {
                   <button className="library-row" onClick={() => onOpen(pdf.entry, pdf.file, debounced.trim())}>
                     <span className="library-title">{pdf.file.name}</span>
                     <span className="library-folder">
-                      {pdf.entry.title} · {t("library.pagesList", { pages: pages.join(", ") })}
-                      {hit.pages.length > pages.length && ` +${hit.pages.length - pages.length}`}
+                      {pdf.entry.title} ·{" "}
+                      {isPdf(pdf.file) ? (
+                        <>
+                          {t("library.pagesList", { pages: pages.join(", ") })}
+                          {hit.pages.length > pages.length && ` +${hit.pages.length - pages.length}`}
+                        </>
+                      ) : (
+                        t("library.inBoard")
+                      )}
                     </span>
                     <span className="library-files">
                       {hit.words.map((w) => (

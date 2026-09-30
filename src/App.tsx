@@ -16,6 +16,7 @@ import { Welcome } from "./components/Welcome";
 import { BoardModel, type ViewSide } from "./core/board";
 import type { Command } from "./core/commands";
 import { mapSelection } from "./core/compare";
+import { search } from "./core/search";
 import {
   BOARD_EXTENSIONS,
   loadDemo,
@@ -436,9 +437,18 @@ export function App() {
     [openPath, openSchematicPath],
   );
 
+  // Selects the first part, net or pin matching this text once the board is shown.
+  const pendingBoardSearch = useRef<string | null>(null);
+
   const openLibraryText = useCallback(
     async (entry: LibraryEntry, file: LibraryFile, query: string) => {
       setDialog(null);
+      // A hit in a boardview: open it and select the part or net.
+      if (!/\.pdf$/i.test(file.name)) {
+        pendingBoardSearch.current = query;
+        await openPath(file.path, entry.schematics[0]?.path);
+        return;
+      }
       const board = entry.boards[0]?.path;
       if (board) await openPath(board, file.path);
       else await openSchematicPath(file.path);
@@ -503,6 +513,15 @@ export function App() {
     },
     [model],
   );
+
+  // A pending hit from the library search, once its board is shown.
+  useEffect(() => {
+    const q = pendingBoardSearch.current;
+    if (!model || !q) return;
+    pendingBoardSearch.current = null;
+    const [hit] = search(model, q, 1);
+    if (hit) select(hit.selection, true);
+  }, [model, select]);
 
   // Board selection -> schematic.
   useEffect(() => {

@@ -299,11 +299,11 @@ export const en = {
   "photo.samePoints": "The two points are too close together. Please pick them again, further apart.",
   "photo.failed": "Photo could not be loaded: {message}",
   "library.modeBoards": "Boards",
-  "library.modeText": "Schematic text",
-  "library.searchText": "Search the text of all schematics (net, part, chip, …)",
-  "library.textIndexed": "{n} of {total} schematics indexed",
+  "library.modeText": "Contents",
+  "library.searchText": "Search all schematics and boardviews (net, part, chip, …)",
+  "library.textIndexed": "{n} of {total} files indexed",
   "library.indexing": "indexing {n}/{total}: {name}",
-  "library.buildIndex": "Index {n} schematics",
+  "library.buildIndex": "Index {n} files",
   "library.stopIndex": "Stop",
   "library.textHint": "Type at least two characters. Indexed schematics are searched without opening them.",
   "library.pagesList": "pages {pages}",
@@ -328,6 +328,7 @@ export const en = {
   "rename.imported": "imported files",
   "rename.hint": "Give downloads clear names, ideally with the board number (e.g. 820-02100): Avero groups files by it. The file extension stays if you leave it out.",
   "rename.save": "Rename",
+  "library.inBoard": "parts and nets of the boardview",
 };
 
 export type MessageKey = keyof typeof en;
