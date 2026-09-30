@@ -14,8 +14,10 @@ import {
   scanLibrary,
   type ImportResult,
   type LibraryEntry,
+  type LibraryFile,
   type LibraryState,
 } from "../workbench/library";
+import { LibraryText } from "./LibraryText";
 import { Dialog } from "./Dialogs";
 import { CloseIcon, OpenIcon } from "./Icons";
 import { VirtualList } from "./VirtualList";
@@ -29,17 +31,21 @@ export interface LibraryDrop {
 interface Props {
   drop: LibraryDrop | null;
   onOpen(entry: LibraryEntry): void;
+  /** Opens a schematic found by full-text search and searches it for `query`. */
+  onOpenText(entry: LibraryEntry, file: LibraryFile, query: string): void;
   onClose(): void;
 }
 
 /** Rescan automatically when the last scan is older than this. */
 const STALE_MS = 10 * 60 * 1000;
 
-export function LibraryDialog({ drop, onOpen, onClose }: Props) {
+export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
   const { t, lang } = useI18n();
   const [library, setLibrary] = useState<LibraryState>(loadLibrary);
   const [root, setRoot] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  // Search boards by name, or the text inside all schematics.
+  const [mode, setMode] = useState<"boards" | "text">("boards");
   const [device, setDevice] = useState("");
   const [scanning, setScanning] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -125,13 +131,22 @@ export function LibraryDialog({ drop, onOpen, onClose }: Props) {
         <input
           type="search"
           autoFocus
-          placeholder={t("library.search")}
+          placeholder={t(mode === "text" ? "library.searchText" : "library.search")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && entries[0] && entries[0].boards.length + entries[0].schematics.length > 0) onOpen(entries[0]);
+            if (mode === "boards" && e.key === "Enter" && entries[0] && entries[0].boards.length + entries[0].schematics.length > 0)
+              onOpen(entries[0]);
           }}
         />
+        <div className="segmented" role="tablist">
+          <button role="tab" aria-selected={mode === "boards"} className={mode === "boards" ? "on" : undefined} onClick={() => setMode("boards")}>
+            {t("library.modeBoards")}
+          </button>
+          <button role="tab" aria-selected={mode === "text"} className={mode === "text" ? "on" : undefined} onClick={() => setMode("text")}>
+            {t("library.modeText")}
+          </button>
+        </div>
         <button onClick={() => void addFolder()}>{t("library.addFolder")}</button>
         <button onClick={() => void rescan(library.folders)} disabled={scanning}>
           {scanning ? t("library.scanning") : t("library.rescan")}
@@ -193,7 +208,9 @@ export function LibraryDialog({ drop, onOpen, onClose }: Props) {
       ))}
       {error && <p className="library-warn">{error}</p>}
 
-      {(library.scan?.entries.length ?? 0) === 0 && !scanning ? (
+      {mode === "text" ? (
+        <LibraryText entries={library.scan?.entries ?? []} query={query} onOpen={onOpenText} />
+      ) : (library.scan?.entries.length ?? 0) === 0 && !scanning ? (
         <p className="library-empty">{t("library.empty")}</p>
       ) : entries.length === 0 && !scanning ? (
         <p className="library-empty">{t("library.noMatch")}</p>

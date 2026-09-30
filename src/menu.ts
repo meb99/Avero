@@ -27,6 +27,8 @@ export interface MenuActions {
   popOutSchematic(): void;
   toggleSidebar(): void;
   toggleRatsnest(): void;
+  addPhoto(): void;
+  togglePhoto(): void;
   shortcuts(): void;
   checkUpdates(): void;
   website(): void;
@@ -137,6 +139,9 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
         item("schematic", t("menu.schematic"), (a) => a.toggleSchematic(), "CmdOrCtrl+E"),
         item("schematic-window", t("menu.popOut"), (a) => a.popOutSchematic()),
         item("sidebar", t("menu.sidebar"), (a) => a.toggleSidebar(), "CmdOrCtrl+I"),
+        SEP,
+        item("photo-add", t("photo.add"), (a) => a.addPhoto()),
+        item("photo-toggle", t("photo.toggle"), (a) => a.togglePhoto()),
         SEP,
         { item: "Fullscreen" },
       ],

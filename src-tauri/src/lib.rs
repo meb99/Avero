@@ -168,6 +168,43 @@ fn notes_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path().app_data_dir().map(|d| d.join("boards")).map_err(|e| e.to_string())
 }
 
+fn photos_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    use tauri::Manager;
+    app.path().app_data_dir().map(|d| d.join("photos")).map_err(|e| e.to_string())
+}
+
+/// Copies a board photo into the app's data folder; returns the copy's path.
+#[tauri::command]
+fn import_photo(app: tauri::AppHandle, key: String, side: String, path: String) -> Result<String, String> {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or_default();
+    notes::store_photo(&photos_dir(&app)?, &key, &side, Path::new(&path), stamp)
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+fn remove_photo(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    notes::remove_photo(&photos_dir(&app)?, Path::new(&path))
+}
+
+fn text_index_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    use tauri::Manager;
+    app.path().app_data_dir().map(|d| d.join("text-index")).map_err(|e| e.to_string())
+}
+
+/// Cached word index of a library schematic (full-text search).
+#[tauri::command]
+fn load_text_index(app: tauri::AppHandle, key: String) -> Result<Option<String>, String> {
+    notes::load(&text_index_dir(&app)?, &key)
+}
+
+#[tauri::command]
+fn save_text_index(app: tauri::AppHandle, key: String, data: String) -> Result<(), String> {
+    notes::save(&text_index_dir(&app)?, &key, &data)
+}
+
 #[tauri::command]
 fn load_notes(app: tauri::AppHandle, key: String) -> Result<Option<String>, String> {
     notes::load(&notes_dir(&app)?, &key)
@@ -265,6 +302,10 @@ pub fn run() {
             save_notes,
             export_json,
             write_binary,
+            import_photo,
+            remove_photo,
+            load_text_index,
+            save_text_index,
             open_schematic_window,
             close_schematic_window,
             take_pending_paths

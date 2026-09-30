@@ -52,6 +52,17 @@ export async function pickPath(title: string, kind: "any" | "pdf"): Promise<stri
   return typeof picked === "string" ? picked : undefined;
 }
 
+/** Native open panel for a photo. */
+export async function pickImage(title: string): Promise<string | undefined> {
+  const picked = await open({
+    title,
+    multiple: false,
+    directory: false,
+    filters: [{ name: "Foto", extensions: ["jpg", "jpeg", "png", "heic", "webp"] }],
+  });
+  return typeof picked === "string" ? picked : undefined;
+}
+
 /** Raw bytes of a file, transferred as binary. */
 export async function readFileBytes(path: string): Promise<Uint8Array> {
   return new Uint8Array(await invoke<ArrayBuffer>("read_file", { path }));

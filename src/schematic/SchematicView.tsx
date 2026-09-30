@@ -22,6 +22,8 @@ export interface SchematicFocus {
   /** Move the view to the first occurrence (false when the click came from here). */
   jump: boolean;
   nonce: number;
+  /** Search for words containing the text (typed into the search field). */
+  partial?: boolean;
 }
 
 export interface SchematicViewHandle {
@@ -304,8 +306,9 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
     };
   }, [doc, showPage]);
 
-  // A new selection on the board takes over from typed text.
-  useEffect(() => setQuery(""), [focus]);
+  // A new selection on the board takes over from typed text; a text search
+  // from outside (the library) fills the search field.
+  useEffect(() => setQuery(focus?.partial ? focus.text : ""), [focus]);
 
   // Occurrences of the typed text or the focused name; re-evaluated while
   // indexing continues.

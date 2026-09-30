@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { BoardView, type BoardViewHandle, type ViewState } from "./components/BoardView";
+import { invoke } from "@tauri-apps/api/core";
+import { BoardView, type BoardViewHandle, type PhotoLayer, type ViewState } from "./components/BoardView";
+import { PhotoBoardHint, PhotoPointDialog } from "./components/PhotoAlign";
 import { CommandPalette } from "./components/CommandPalette";
 import { HelpDialog, SettingsDialog } from "./components/Dialogs";
 import { LibraryDialog, type LibraryDrop } from "./components/Library";
@@ -19,6 +21,7 @@ import {
   loadPath,
   onFileDrop,
   onFinderOpen,
+  pickImage,
   pickPath,
   readFileBytes,
   saveBytes,
@@ -27,7 +30,7 @@ import {
   type BoardSource,
   type Loaded,
 } from "./core/loader";
-import type { LoadError, Selection, Side } from "./core/types";
+import type { LoadError, Point, Selection, Side } from "./core/types";
 import { emitTo, listen } from "@tauri-apps/api/event";
 import { I18nContext, systemLanguage, translator, type MessageKey } from "./i18n";
 import { installMenu, nativeMenuActive, type MenuActions } from "./menu";
@@ -39,14 +42,27 @@ import type { Word } from "./schematic/textIndex";
 import { clearRecent, loadRecent, loadSettings, rememberRecent, saveSettings, type Settings } from "./settings";
 import { useTheme } from "./theme";
 import { dailyCheck, fetchUpdate, type Update } from "./updates";
-import { pickImport, type LibraryEntry } from "./workbench/library";
-import { netStatuses, type NetStatus } from "./workbench/notes";
+import { pickImport, type LibraryEntry, type LibraryFile } from "./workbench/library";
+import { netStatuses, setPhoto, type NetStatus } from "./workbench/notes";
+import { alignPhoto } from "./workbench/photo";
+import { loadPhotoImage } from "./workbench/photoImage";
 import { useBoardNotes } from "./workbench/store";
 
 const NONE: Selection = { kind: "none" };
 const DEMO_SCHEMATIC = `${import.meta.env.BASE_URL}demo/avero-demo-schematic.pdf`;
 const WEBSITE = "https://github.com/meb99/Avero";
 const TOAST_MS = 4000;
+
+/** A photo being aligned: two points on the photo, then the same two on the board. */
+interface PhotoAlignment {
+  side: ViewSide;
+  file: string;
+  image: HTMLCanvasElement;
+  /** True for a photo imported for this alignment (deleted when cancelled). */
+  fresh: boolean;
+  photoPoints: Point[];
+  boardPoints: Point[];
+}
 
 /** Everything that belongs to one tab. */
 interface Tab {
@@ -121,6 +137,9 @@ export function App() {
   // The schematic is shown in its own window instead of the split view.
   const [detached, setDetached] = useState(false);
   const [focus, setFocus] = useState<SchematicFocus | null>(null);
+  // Text searched in the schematic on request (library full-text search);
+  // the next selection on the board replaces it.
+  const [textQuery, setTextQuery] = useState<string | null>(null);
   // The active tab lives in the states above; `tabs` keeps the other tabs as
   // they were left (its entry for the active tab is stale).
   const [tabs, setTabs] = useState<Tab[]>(() => [emptyTab(0)]);
@@ -147,6 +166,86 @@ export function App() {
   const palette = theme === "dark" ? DARK : LIGHT;
   const showSchematic = schematic !== null && schematicVisible && !detached;
   const { notes, update: updateNotes, error: notesError } = useBoardNotes(source);
+
+  // --- board photos ----------------------------------------------------------
+
+  const [aligning, setAligning] = useState<PhotoAlignment | null>(null);
+  const aligningRef = useRef(aligning);
+  aligningRef.current = aligning;
+  const [showPhoto, setShowPhoto] = useState(true);
+  const storedPhoto = notes?.photos?.[side];
+  const [photoImage, setPhotoImage] = useState<{ file: string; image: HTMLCanvasElement } | null>(null);
+  const photoFile = storedPhoto?.file;
+  useEffect(() => {
+    if (!photoFile) return;
+    let cancelled = false;
+    loadPhotoImage(photoFile).then(
+      (image) => !cancelled && setPhotoImage({ file: photoFile, image }),
+      (e) => !cancelled && setToast(translator(lang)("photo.failed", { message: e instanceof Error ? e.message : String(e) })),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [photoFile, lang]);
+  const photoLayer: PhotoLayer | undefined =
+    storedPhoto && showPhoto && !aligning && photoImage?.file === storedPhoto.file
+      ? { image: photoImage.image, matrix: storedPhoto.matrix, opacity: storedPhoto.opacity }
+      : undefined;
+
+  const startAlignment = async (file: string, fresh: boolean) => {
+    try {
+      const image = await loadPhotoImage(file);
+      setAligning({ side, file, image, fresh, photoPoints: [], boardPoints: [] });
+    } catch (e) {
+      setToast(t("photo.failed", { message: e instanceof Error ? e.message : String(e) }));
+      if (fresh) void invoke("remove_photo", { path: file }).catch(() => {});
+    }
+  };
+
+  const addPhoto = async () => {
+    if (!model || !notes) return;
+    const path = await pickImage(t("photo.add"));
+    if (!path) return;
+    try {
+      const file = await invoke<string>("import_photo", { key: notes.key, side, path });
+      await startAlignment(file, true);
+    } catch (e) {
+      setToast(t("photo.failed", { message: String(e) }));
+    }
+  };
+
+  const cancelAlignment = () => {
+    const a = aligningRef.current;
+    if (a?.fresh) void invoke("remove_photo", { path: a.file }).catch(() => {});
+    setAligning(null);
+  };
+
+  const pickBoardPoint = (p: Point) => {
+    const a = aligningRef.current;
+    if (!a || a.photoPoints.length < 2) return;
+    const boardPoints = [...a.boardPoints, p];
+    if (boardPoints.length < 2) {
+      setAligning({ ...a, boardPoints });
+      return;
+    }
+    const matrix = alignPhoto(a.side, [a.photoPoints[0], a.photoPoints[1]], [boardPoints[0], boardPoints[1]]);
+    if (!matrix) {
+      setToast(t("photo.samePoints"));
+      setAligning({ ...a, boardPoints: [] });
+      return;
+    }
+    const previous = notes?.photos?.[a.side];
+    updateNotes((n) => setPhoto(n, a.side, { file: a.file, matrix, opacity: previous?.opacity ?? 0.8 }));
+    if (previous && previous.file !== a.file) void invoke("remove_photo", { path: previous.file }).catch(() => {});
+    setAligning(null);
+    setShowPhoto(true);
+  };
+
+  const removePhoto = () => {
+    if (!storedPhoto) return;
+    updateNotes((n) => setPhoto(n, side, undefined));
+    void invoke("remove_photo", { path: storedPhoto.file }).catch(() => {});
+  };
 
   // Measurement state by net index for the board overlay.
   const measured = useMemo(() => {
@@ -223,6 +322,7 @@ export function App() {
 
   const restoreTab = (tab: Tab) => {
     setActiveTab(tab.id);
+    setTextQuery(null);
     setModel(tab.model);
     setSource(tab.source);
     setSide(tab.side);
@@ -283,10 +383,12 @@ export function App() {
         await openSchematicPath(path);
         return;
       }
-      // Already open in a tab: show that tab.
+      // Already open in a tab: show that tab (with the requested schematic).
       const openIn = tabsRef.current.find((t) => (t.id === live.current.id ? live.current : t).source?.path === path);
       if (openIn) {
+        const shown = (openIn.id === live.current.id ? live.current : openIn).schematic?.path;
         switchTab(openIn.id);
+        if (schematicPath && schematicPath !== shown) await openSchematicPath(schematicPath);
         return;
       }
       setLoading(fileName(path));
@@ -315,6 +417,18 @@ export function App() {
       const pdf = entry.schematics[0]?.path;
       if (board) void openPath(board, pdf);
       else if (pdf) void openSchematicPath(pdf);
+    },
+    [openPath, openSchematicPath],
+  );
+
+  const openLibraryText = useCallback(
+    async (entry: LibraryEntry, file: LibraryFile, query: string) => {
+      setDialog(null);
+      const board = entry.boards[0]?.path;
+      if (board) await openPath(board, file.path);
+      else await openSchematicPath(file.path);
+      setSchematicVisible(true);
+      setTextQuery(query);
     },
     [openPath, openSchematicPath],
   );
@@ -359,6 +473,7 @@ export function App() {
   const select = useCallback(
     (sel: Selection, zoom: boolean) => {
       setSelection(sel);
+      setTextQuery(null);
       if (!model) return;
       // Jump to the side the selected thing is on.
       let where: Side | undefined;
@@ -378,9 +493,13 @@ export function App() {
   useEffect(() => {
     const jump = !pickedInSchematic.current;
     pickedInSchematic.current = false;
+    if (textQuery) {
+      setFocus({ text: textQuery, jump: true, partial: true, nonce: ++focusNonce.current });
+      return;
+    }
     const text = model ? focusText(model, selection) : undefined;
     setFocus(text ? { text, jump, nonce: ++focusNonce.current } : null);
-  }, [model, selection]);
+  }, [model, selection, textQuery]);
 
   // Schematic -> board.
   const classifyWord = useCallback(
@@ -556,6 +675,8 @@ export function App() {
     popOutSchematic: () => void popOutSchematic(),
     toggleSidebar: () => setSettings((s) => ({ ...s, showSidebar: !s.showSidebar })),
     toggleRatsnest: () => setSettings((s) => ({ ...s, ratsnest: !s.ratsnest })),
+    addPhoto: () => void addPhoto(),
+    togglePhoto: () => setShowPhoto((v) => !v),
     shortcuts: () => setDialog("help"),
     checkUpdates: () => void checkUpdates(true),
     website: () => openExternal(WEBSITE),
@@ -599,6 +720,10 @@ export function App() {
       { id: "schematic-window", label: t("menu.popOut"), enabled: schematic !== null && !detached, run: a.popOutSchematic },
       { id: "sidebar", label: t("menu.sidebar"), shortcut: "⌘I", enabled: board, run: a.toggleSidebar },
       { id: "export", label: t("menu.exportImage"), shortcut: "⇧⌘E", enabled: board, run: a.exportImage },
+      { id: "photo-add", label: t("photo.add"), enabled: board && notes !== null, run: a.addPhoto },
+      { id: "photo-toggle", label: t("photo.toggle"), enabled: !!storedPhoto, run: a.togglePhoto },
+      { id: "photo-realign", label: `${t("photo.title")}: ${t("photo.realign")}`, enabled: !!storedPhoto, run: () => storedPhoto && void startAlignment(storedPhoto.file, false) },
+      { id: "photo-remove", label: `${t("photo.title")}: ${t("photo.remove")}`, enabled: !!storedPhoto, run: removePhoto },
       { id: "new-tab", label: t("tabs.new"), shortcut: "⌘T", run: a.newTab },
       { id: "close", label: t("tabs.close"), shortcut: "⌘W", enabled: board || schematic !== null, run: a.closeBoard },
       { id: "settings", label: t("menu.settings"), shortcut: "⌘,", run: a.settings },
@@ -686,7 +811,8 @@ export function App() {
           searchRef.current?.focus();
           break;
         case "Escape":
-          setSelection(NONE);
+          if (aligningRef.current) cancelAlignment();
+          else setSelection(NONE);
           break;
         case " ":
           e.preventDefault();
@@ -814,6 +940,8 @@ export function App() {
                     palette={palette}
                     measured={measured}
                     initialView={initialView}
+                    photo={photoLayer}
+                    onPointPick={aligning && aligning.photoPoints.length >= 2 ? pickBoardPoint : undefined}
                     onSelect={select}
                   />
                 ) : (
@@ -884,6 +1012,41 @@ export function App() {
             </div>
           )}
 
+          {aligning && aligning.photoPoints.length >= 2 && (
+            <PhotoBoardHint
+              image={aligning.image}
+              point={aligning.photoPoints[aligning.boardPoints.length]}
+              index={aligning.boardPoints.length}
+              onCancel={cancelAlignment}
+            />
+          )}
+          {model && storedPhoto && !aligning && (
+            <div className="photo-bar">
+              <span>{t("photo.title")}</span>
+              <input
+                type="range"
+                min={0.1}
+                max={1}
+                step={0.05}
+                value={storedPhoto.opacity}
+                aria-label={t("photo.opacity")}
+                disabled={!showPhoto}
+                onChange={(e) => {
+                  const opacity = Number(e.target.value);
+                  updateNotes((n) => (n.photos?.[side] ? setPhoto(n, side, { ...n.photos[side], opacity }) : n));
+                }}
+              />
+              <button className="small" onClick={() => setShowPhoto((v) => !v)}>
+                {showPhoto ? t("photo.hide") : t("photo.show")}
+              </button>
+              <button className="small" onClick={() => void startAlignment(storedPhoto.file, false)}>
+                {t("photo.realign")}
+              </button>
+              <button className="small" onClick={removePhoto}>
+                {t("photo.remove")}
+              </button>
+            </div>
+          )}
           {update && (
             <div className="update-banner" role="status">
               <span>{t("update.available", { version: update.version })}</span>
@@ -925,10 +1088,18 @@ export function App() {
           />
         )}
         {dialog === "help" && <HelpDialog onClose={() => setDialog(null)} />}
+        {aligning && aligning.photoPoints.length < 2 && (
+          <PhotoPointDialog
+            image={aligning.image}
+            points={aligning.photoPoints}
+            onPoint={(p) => setAligning((a) => a && { ...a, photoPoints: [...a.photoPoints, p] })}
+            onCancel={cancelAlignment}
+          />
+        )}
         {dialog === "palette" && (
           <CommandPalette commands={paletteCommands()} model={model} onPick={(sel) => select(sel, true)} onClose={() => setDialog(null)} />
         )}
-        {dialog === "library" && <LibraryDialog drop={libraryDrop} onOpen={openLibraryEntry} onClose={() => setDialog(null)} />}
+        {dialog === "library" && <LibraryDialog drop={libraryDrop} onOpen={openLibraryEntry} onOpenText={(e, f, q) => void openLibraryText(e, f, q)} onClose={() => setDialog(null)} />}
       </div>
     </I18nContext.Provider>
   );

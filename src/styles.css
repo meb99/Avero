@@ -1799,3 +1799,88 @@ button.danger {
   display: flex;
   height: 100%;
 }
+
+.board-view.picking {
+  cursor: crosshair;
+}
+
+/* Board photos */
+
+.dialog.photo-dialog {
+  width: min(1100px, calc(100% - 32px));
+}
+
+.photo-frame {
+  position: relative;
+  margin: 0 auto;
+  cursor: crosshair;
+  line-height: 0;
+}
+
+.photo-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.photo-marker {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border: 2px solid #ffd54f;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  color: #ffd54f;
+  font: 700 11px/18px var(--font);
+  text-align: center;
+  pointer-events: none;
+}
+
+.photo-hint {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  display: flex;
+  gap: 12px;
+  max-width: 460px;
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  z-index: 25;
+}
+
+.photo-hint canvas {
+  width: 132px;
+  height: 132px;
+  border-radius: 4px;
+  background: #000;
+  flex-shrink: 0;
+}
+
+.photo-hint p {
+  margin: 4px 0 8px;
+}
+
+.photo-bar {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  z-index: 20;
+}
+
+.photo-bar input[type="range"] {
+  width: 110px;
+  accent-color: var(--accent);
+}

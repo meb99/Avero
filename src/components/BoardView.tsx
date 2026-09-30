@@ -10,6 +10,14 @@ import { computeStyle } from "../render/style";
 import type { Settings } from "../settings";
 import { formatLength } from "../format";
 import type { NetStatus } from "../workbench/notes";
+import { photoCorners, type Affine } from "../workbench/photo";
+
+/** A decoded photo with its alignment (photo units: pixels / image width). */
+export interface PhotoLayer {
+  image: HTMLCanvasElement;
+  matrix: Affine;
+  opacity: number;
+}
 
 /** Where the view looks, to bring a tab back as it was left. */
 export interface ViewState {
@@ -39,6 +47,13 @@ interface Props {
   measured?: ReadonlyMap<number, NetStatus>;
   /** View to show a newly set board with, instead of fitting it. */
   initialView?: ViewState;
+  /** Photo of the real board for the visible side. */
+  photo?: PhotoLayer;
+  /**
+   * While set, clicks pick board points instead of selecting; the point
+   * snaps to the pin or test point under the cursor.
+   */
+  onPointPick?: (point: Point) => void;
   onSelect(selection: Selection, zoom: boolean): void;
   ref?: Ref<BoardViewHandle>;
 }
@@ -64,7 +79,20 @@ function hitToSelection(hit: Hit | undefined): Selection {
   }
 }
 
-export function BoardView({ model, side, rotation, selection, settings, palette, measured, initialView, onSelect, ref }: Props) {
+export function BoardView({
+  model,
+  side,
+  rotation,
+  selection,
+  settings,
+  palette,
+  measured,
+  initialView,
+  photo,
+  onPointPick,
+  onSelect,
+  ref,
+}: Props) {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const glRef = useRef<HTMLCanvasElement>(null);
@@ -269,6 +297,27 @@ export function BoardView({ model, side, rotation, selection, settings, palette,
     requestDraw();
   }, [model, side, selection, settings, palette, requestDraw, rendererVersion]);
 
+  // Photo of the real board: new image or alignment re-uploads, opacity only redraws.
+  const photoImage = photo?.image;
+  const photoMatrix = photo?.matrix;
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    if (photoImage && photoMatrix) {
+      renderer.setPhoto(photoImage, photoCorners(photoMatrix, 1, photoImage.height / photoImage.width));
+    } else {
+      renderer.setPhoto(null);
+    }
+    requestDraw();
+    // The model dependency re-uploads after setBoard released the photo.
+  }, [model, photoImage, photoMatrix, requestDraw, rendererVersion]);
+
+  const photoOpacity = photo?.opacity ?? 1;
+  useEffect(() => {
+    rendererRef.current?.setPhotoOpacity(photoOpacity);
+    requestDraw();
+  }, [photoOpacity, photoImage, requestDraw]);
+
   // Connection lines of the highlighted net.
   const ratsnestNet = settings.ratsnest ? model.selectedNet(selection) : undefined;
   useEffect(() => {
@@ -382,10 +431,22 @@ export function BoardView({ model, side, rotation, selection, settings, palette,
     if (pointers.current.size < 2) pinch.current = null;
     const d = drag.current;
     drag.current = null;
-    if (d && !d.moved && e.button === 0) onSelect(hitToSelection(hitAt(local(e))), false);
+    if (d && !d.moved && e.button === 0) {
+      const p = local(e);
+      if (onPointPick) {
+        const m = stateRef.current.model;
+        const hit = hitAt(p);
+        const snapped =
+          hit?.kind === "pin" ? m.pins[hit.pin] : hit?.kind === "testPoint" ? m.testPoints[hit.testPoint] : undefined;
+        onPointPick(snapped ? { x: snapped.x, y: snapped.y } : cameraRef.current.toWorld(p));
+        return;
+      }
+      onSelect(hitToSelection(hitAt(p)), false);
+    }
   };
 
   const onDoubleClick = (e: React.MouseEvent) => {
+    if (onPointPick) return;
     const sel = hitToSelection(hitAt(local(e)));
     if (sel.kind !== "none") onSelect(sel, true);
   };
@@ -439,7 +500,7 @@ export function BoardView({ model, side, rotation, selection, settings, palette,
   return (
     <div
       ref={containerRef}
-      className="board-view"
+      className={`board-view${onPointPick ? " picking" : ""}`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

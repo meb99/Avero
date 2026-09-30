@@ -1,4 +1,5 @@
 import { compareReadings, hasValues, type Comparison, type Quantity, type Reading, type Value } from "./measure";
+import { parsePhoto, type BoardPhoto, type PhotoSide } from "./photo";
 
 /** One device on the bench. */
 export interface RepairCase {
@@ -22,6 +23,8 @@ export interface BoardNotes {
   reference: Record<string, Reading>;
   cases: RepairCase[];
   activeCase: string | null;
+  /** Photos of the real board per side, aligned to the boardview. */
+  photos?: Partial<Record<PhotoSide, BoardPhoto>>;
   updated: string;
 }
 
@@ -129,6 +132,22 @@ export function netStatuses(notes: BoardNotes, tolerance: number): Map<string, N
 }
 
 /** Validates stored or imported JSON. */
+function parsePhotos(value: unknown): BoardNotes["photos"] {
+  if (!value || typeof value !== "object") return undefined;
+  const v = value as Record<string, unknown>;
+  const top = parsePhoto(v.top);
+  const bottom = parsePhoto(v.bottom);
+  return top || bottom ? { ...(top && { top }), ...(bottom && { bottom }) } : undefined;
+}
+
+/** Sets or (with `undefined`) removes the photo of one side. */
+export function setPhoto(notes: BoardNotes, side: PhotoSide, photo: BoardPhoto | undefined): BoardNotes {
+  const photos = { ...notes.photos };
+  if (photo) photos[side] = photo;
+  else delete photos[side];
+  return { ...notes, photos, updated: now() };
+}
+
 export function parseNotes(json: string): BoardNotes | null {
   try {
     const d = JSON.parse(json) as Partial<BoardNotes>;
@@ -141,6 +160,7 @@ export function parseNotes(json: string): BoardNotes | null {
       reference: d.reference ?? {},
       cases: d.cases.filter((c): c is RepairCase => !!c && typeof c.id === "string" && typeof c.readings === "object"),
       activeCase: typeof d.activeCase === "string" ? d.activeCase : null,
+      photos: parsePhotos(d.photos),
       updated: typeof d.updated === "string" ? d.updated : new Date(0).toISOString(),
     };
   } catch {

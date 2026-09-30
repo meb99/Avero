@@ -107,6 +107,30 @@ void main() {
   v_color = a_color;
 }`;
 
+const IMAGE_VS = `#version 300 es
+layout(location=0) in vec2 a_pos;
+layout(location=1) in vec2 a_uv;
+uniform mat3 u_world;
+uniform vec2 u_viewport;
+out vec2 v_uv;
+void main() {
+  vec2 p = (u_world * vec3(a_pos, 1.0)).xy;
+  vec2 clip = p / u_viewport * 2.0 - 1.0;
+  gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
+  v_uv = a_uv;
+}`;
+
+const IMAGE_FS = `#version 300 es
+precision mediump float;
+in vec2 v_uv;
+uniform sampler2D u_tex;
+uniform float u_opacity;
+out vec4 o;
+void main() {
+  vec4 c = texture(u_tex, v_uv);
+  o = vec4(c.rgb, c.a * u_opacity);
+}`;
+
 export const SHAPE_CIRCLE = 0;
 export const SHAPE_SQUARE = 1;
 export const SHAPE_DIAMOND = 2;
@@ -134,6 +158,7 @@ export class BoardRenderer {
   private readonly lineProgram: Program;
   private readonly padProgram: Program;
   private readonly fillProgram: Program;
+  private readonly imageProgram: Program;
   private readonly quad: WebGLBuffer;
   private readonly lineCorners: WebGLBuffer;
 
@@ -146,6 +171,8 @@ export class BoardRenderer {
   private partFill?: FillSet;
   private partFillOwner = new Uint32Array(0);
   private boardFill?: { vao: WebGLVertexArrayObject; fans: [number, number][]; quadStart: number };
+  /** Photo of the real board, drawn between the board area and the parts. */
+  private photo?: { texture: WebGLTexture; vao: WebGLVertexArrayObject; buffer: WebGLBuffer; opacity: number };
   /** Lines drawn above everything else, such as the ratsnest. */
   private overlay?: { set: InstanceSet; buffers: WebGLBuffer[]; vaos: WebGLVertexArrayObject[] };
   private buffers: WebGLBuffer[] = [];
@@ -158,6 +185,7 @@ export class BoardRenderer {
     this.lineProgram = this.compile(LINE_VS, COLOR_FS, ["u_world", "u_viewport", "u_dpr"]);
     this.padProgram = this.compile(PAD_VS, PAD_FS, ["u_world", "u_viewport", "u_scale", "u_minRadius"]);
     this.fillProgram = this.compile(FILL_VS, COLOR_FS, ["u_world", "u_viewport"]);
+    this.imageProgram = this.compile(IMAGE_VS, IMAGE_FS, ["u_world", "u_viewport", "u_tex", "u_opacity"]);
     this.quad = this.staticBuffer(new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]));
     this.lineCorners = this.staticBuffer(new Float32Array([0, -1, 1, -1, 0, 1, 1, 1]));
     gl.enable(gl.BLEND);
@@ -341,6 +369,49 @@ export class BoardRenderer {
     upload(gl, this.boardLines.colors, edge);
   }
 
+  /**
+   * Shows a photo of the board. `corners` are the board positions of the
+   * image's top-left, top-right, bottom-left and bottom-right corners.
+   */
+  setPhoto(image: TexImageSource | null, corners: Point[] = [], opacity = 1): void {
+    this.clearPhoto();
+    if (!image || corners.length !== 4) return;
+    const gl = this.gl;
+    const texture = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const [tl, tr, bl, br] = corners;
+    const data = new Float32Array([tl.x, tl.y, 0, 0, tr.x, tr.y, 1, 0, bl.x, bl.y, 0, 1, br.x, br.y, 1, 1]);
+    const vao = gl.createVertexArray()!;
+    gl.bindVertexArray(vao);
+    const buffer = gl.createBuffer()!;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 8);
+    gl.bindVertexArray(null);
+    this.photo = { texture, vao, buffer, opacity };
+  }
+
+  setPhotoOpacity(opacity: number): void {
+    if (this.photo) this.photo.opacity = opacity;
+  }
+
+  private clearPhoto(): void {
+    if (!this.photo) return;
+    this.gl.deleteTexture(this.photo.texture);
+    this.gl.deleteBuffer(this.photo.buffer);
+    this.gl.deleteVertexArray(this.photo.vao);
+    this.photo = undefined;
+  }
+
   /** Replaces the overlay lines: `segments` holds x1, y1, x2, y2 per line. */
   setOverlay(segments: Float32Array, color: readonly number[], width: number): void {
     this.clearOverlay();
@@ -406,6 +477,20 @@ export class BoardRenderer {
       gl.disable(gl.STENCIL_TEST);
     }
 
+    if (this.photo) {
+      const img = this.imageProgram;
+      gl.useProgram(img.program);
+      gl.uniformMatrix3fv(img.uniforms.u_world, false, world);
+      gl.uniform2f(img.uniforms.u_viewport, w, h);
+      gl.uniform1f(img.uniforms.u_opacity, this.photo.opacity);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.photo.texture);
+      gl.uniform1i(img.uniforms.u_tex, 0);
+      gl.bindVertexArray(this.photo.vao);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.useProgram(fill.program);
+    }
+
     if (this.partFill) {
       gl.bindVertexArray(this.partFill.vao);
       gl.drawArrays(gl.TRIANGLES, 0, this.partFill.count);
@@ -447,6 +532,7 @@ export class BoardRenderer {
   private release(): void {
     const gl = this.gl;
     this.clearOverlay();
+    this.clearPhoto();
     for (const b of this.buffers) gl.deleteBuffer(b);
     for (const v of this.vaos) gl.deleteVertexArray(v);
     this.buffers = [];

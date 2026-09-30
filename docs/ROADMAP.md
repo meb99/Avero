@@ -32,10 +32,12 @@ Offen aus 0.2:
 - **Notizen** pro Board und pro Fall
 - Export/Import der Messwerte und Notizen als JSON, gespeichert pro Board im App-Ordner
 
+Nachgereicht in 0.5:
+- **Fotos** des echten Boards über die Boardview legen (zwei Punkte ausrichten) ✅
+- Volltextsuche über alle Schaltpläne der Bibliothek ✅
+
 Offen aus 0.3:
-- **Fotos** des echten Boards über die Boardview legen (zwei Punkte ausrichten)
-- Volltextsuche über alle Schaltpläne der Bibliothek
-- Diodenwerte aus XZZ-Dateien als Referenz übernehmen (kommt mit dem XZZ-Format)
+- Diodenwerte aus XZZ-Dateien als Referenz übernehmen (braucht echte Beispieldateien, siehe 0.4)
 
 ## 0.4 XZZ und eigene Bibliothek ✅
 

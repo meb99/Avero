@@ -35,6 +35,16 @@ export interface TextRun {
 const SEPARATORS = /[\s,;()[\]{}<>"'=|]+/;
 const TRIM = /^[.:]+|[.:]+$/g;
 
+/** The words of a text run, upper case, for full-text indexes. */
+export function splitWords(str: string): string[] {
+  const out: string[] = [];
+  for (const part of str.split(SEPARATORS)) {
+    const word = part.replace(TRIM, "");
+    if (word.length >= 2) out.push(word.toUpperCase());
+  }
+  return out;
+}
+
 export function wordsFromRuns(runs: TextRun[], page: number): Word[] {
   const words: Word[] = [];
   for (const run of runs) {

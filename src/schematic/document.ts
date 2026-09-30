@@ -3,11 +3,50 @@
 // current macOS releases does not have yet.
 import { getDocument, GlobalWorkerOptions, Util, type PDFDocumentProxy, type PDFPageProxy } from "pdfjs-dist/legacy/build/pdf.mjs";
 import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
-import { WordIndex, wordsFromRuns, type TextRun } from "./textIndex";
+import type { PdfTextIndex } from "../workbench/fulltext";
+import { splitWords, WordIndex, wordsFromRuns, type TextRun } from "./textIndex";
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 
 const ASSETS = `${import.meta.env.BASE_URL}pdfjs/`;
+
+function openPdf(bytes: Uint8Array): Promise<PDFDocumentProxy> {
+  return getDocument({
+    data: bytes,
+    cMapUrl: `${ASSETS}cmaps/`,
+    cMapPacked: true,
+    standardFontDataUrl: `${ASSETS}standard_fonts/`,
+    wasmUrl: `${ASSETS}wasm/`,
+    iccUrl: `${ASSETS}iccs/`,
+  }).promise;
+}
+
+/**
+ * Which words appear on which pages, for the library's full-text search.
+ * Stops early when `cancelled` turns true.
+ */
+export async function extractTextIndex(bytes: Uint8Array, cancelled: () => boolean): Promise<PdfTextIndex | null> {
+  const pdf = await openPdf(bytes);
+  try {
+    const words: Record<string, number[]> = {};
+    for (let p = 0; p < pdf.numPages; p++) {
+      if (cancelled()) return null;
+      const page = await pdf.getPage(p + 1);
+      const content = await page.getTextContent();
+      for (const item of content.items) {
+        if (!("str" in item)) continue;
+        for (const word of splitWords(item.str)) {
+          const pages = (words[word] ??= []);
+          if (pages[pages.length - 1] !== p) pages.push(p);
+        }
+      }
+      page.cleanup();
+    }
+    return { v: 1, pages: pdf.numPages, words };
+  } finally {
+    await pdf.loadingTask.destroy();
+  }
+}
 
 export interface OutlineEntry {
   title: string;
@@ -41,14 +80,7 @@ export class SchematicDocument {
   }
 
   static async open(bytes: Uint8Array, name: string, path?: string): Promise<SchematicDocument> {
-    const pdf = await getDocument({
-      data: bytes,
-      cMapUrl: `${ASSETS}cmaps/`,
-      cMapPacked: true,
-      standardFontDataUrl: `${ASSETS}standard_fonts/`,
-      wasmUrl: `${ASSETS}wasm/`,
-      iccUrl: `${ASSETS}iccs/`,
-    }).promise;
+    const pdf = await openPdf(bytes);
     const doc = new SchematicDocument(pdf, name, path);
     void doc.buildIndex();
     return doc;
