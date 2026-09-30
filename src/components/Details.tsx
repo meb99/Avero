@@ -95,7 +95,7 @@ export function Details({ model, selection, side, settings, notes, updateNotes, 
                 const point = model.testPoints[tp];
                 return (
                   <button key={tp} className="pin-chip" onClick={() => onSelect({ kind: "testPoint", testPoint: tp }, true)}>
-                    {point.kind === "via" ? "via" : `TP${point.probe ?? ""}`}
+                    {point.kind === "via" ? "via" : (point.name ?? `TP${point.probe ?? ""}`)}
                   </button>
                 );
               })}
@@ -192,7 +192,7 @@ export function Details({ model, selection, side, settings, notes, updateNotes, 
         <div className="details">
           <header className="details-head">
             <span className="details-type">{tp.kind === "via" ? t("details.via") : t("details.testPoint")}</span>
-            <h2>{tp.probe !== undefined ? `TP${tp.probe}` : model.nets[tp.net].name}</h2>
+            <h2>{tp.name ?? (tp.probe !== undefined ? `TP${tp.probe}` : model.nets[tp.net].name)}</h2>
           </header>
           <dl className="props">
             <Row label={t("details.net")}>{netLink(tp.net)}</Row>

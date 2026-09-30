@@ -7,11 +7,16 @@ pub(crate) mod bvr;
 pub(crate) mod cad;
 pub(crate) mod cst;
 pub(crate) mod gencad;
+pub(crate) mod xzz;
 
 /// Obfuscation used by `.bdv` files; exposed for tests and tooling.
 pub use asc::{decode_bdv, encode_bdv};
 /// Obfuscation used by some `.brd` files; exposed for tests and tooling.
 pub use brd::{decode as decode_brd, encode as encode_brd};
+/// XZZ key handling; `des_encrypt` builds test files.
+pub use xzz::{
+    des_encrypt as xzz_encrypt, key_is_plausible as xzz_key_is_plausible, parse_key as parse_xzz_key,
+};
 
 use serde::Serialize;
 
@@ -77,8 +82,8 @@ pub fn detect(buf: &[u8], file_name: Option<&str>) -> Detected {
     if is_allegro(buf) {
         return Detected::Unsupported("Cadence Allegro");
     }
-    if is_xzz(buf) {
-        return Detected::Unsupported("XinZhiZao PCB");
+    if xzz::detect(buf) {
+        return Detected::Supported(FormatId::Xzz);
     }
     Detected::Unknown
 }
@@ -86,17 +91,6 @@ pub fn detect(buf: &[u8], file_name: Option<&str>) -> Detected {
 /// Allegro databases carry "all" or "vie" plus a version at offset 0xF8.
 fn is_allegro(buf: &[u8]) -> bool {
     buf.get(0xf8..0xfb).is_some_and(|tag| tag == b"all" || tag == b"vie")
-}
-
-/// XZZ files start with `XZZPCB`, sometimes XOR-ed with the byte at 0x10.
-fn is_xzz(buf: &[u8]) -> bool {
-    if buf.starts_with(b"XZZPCB") {
-        return true;
-    }
-    match (buf.get(..6), buf.get(0x10)) {
-        (Some(head), Some(&key)) if key != 0 => head.iter().map(|b| b ^ key).eq(b"XZZPCB".iter().copied()),
-        _ => false,
-    }
 }
 
 /// Description of a readable format for the UI's "supported formats" list.
@@ -117,6 +111,7 @@ pub const SUPPORTED: &[FormatInfo] = &[
     FormatInfo { id: "cad", name: "Panel CAD", extensions: &["cad"] },
     FormatInfo { id: "gencad", name: "GenCAD 1.4", extensions: &["cad", "gcd", "gencad"] },
     FormatInfo { id: "cst", name: "IBM CST", extensions: &["cst"] },
+    FormatInfo { id: "xzz", name: "XinZhiZao PCB", extensions: &["pcb"] },
 ];
 
 /// Every extension the open dialog should offer.
@@ -138,7 +133,7 @@ mod tests {
         for (i, b) in b"XZZPCB".iter().enumerate() {
             buf[i] = b ^ 0x5a;
         }
-        assert_eq!(detect(&buf, Some("board.pcb")), Detected::Unsupported("XinZhiZao PCB"));
+        assert_eq!(detect(&buf, Some("board.pcb")), Detected::Supported(FormatId::Xzz));
     }
 
     #[test]

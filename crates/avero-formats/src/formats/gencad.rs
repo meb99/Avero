@@ -470,6 +470,7 @@ impl Parser {
                 net,
                 probe: None,
                 radius: None,
+                name: None,
             });
         }
         if missing_shapes > 0 {

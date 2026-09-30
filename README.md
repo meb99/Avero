@@ -16,10 +16,11 @@
 
 Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ein Signal über beide Seiten der Platine. Das Ziel ist ein Werkzeug auf dem Niveau von FlexBV und XinZhiZao: Boardview, Schaltplan und Werkstattwissen in einer App. Alles läuft lokal, ohne Konto und ohne Telemetrie.
 
-## Stand (0.3)
+## Stand (0.4)
 
 **Boardview**
-- Liest Test_Link `.brd` (auch verschleierte Dateien), BRD2, Honhan `.bdv`, ASUS `.asc`, BoardViewer `.bvr` / BVR3, GenCAD, Panel-CAD und IBM `.cst`.
+- Liest Test_Link `.brd` (auch verschleierte Dateien), BRD2, Honhan `.bdv`, ASUS `.asc`, BoardViewer `.bvr` / BVR3, GenCAD, Panel-CAD, IBM `.cst` und XinZhiZao `.pcb`.
+- XinZhiZao-Dateien sind verschlüsselt: Den XZZ-Schlüssel trägst du einmal in den Einstellungen ein (Avero liefert ihn nicht mit, genau wie OpenBoardView). Ohne Schlüssel sagt Avero das klar und öffnet die Datei nach dem Eintragen automatisch.
 - Flüssige Darstellung per GPU (WebGL 2), auch bei zehntausenden Pins.
 - Oberseite / Unterseite (gespiegelt wie ein umgedrehtes Board), Drehen in 90°-Schritten.
 - Klick auf einen Pin hebt das ganze Netz hervor. Pins desselben Netzes auf der anderen Seite bleiben schwach sichtbar, damit man sieht, wohin das Signal geht.
@@ -34,7 +35,7 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - Scharf bei jeder Zoomstufe, Seitennavigation und Lesezeichen (Abschnitte) des PDFs.
 
 **Werkstatt**
-- **Bibliothek** (`⌘L`): Ordner mit deiner Sammlung hinzufügen; Avero findet Boardviews und Schaltpläne, fasst sie nach Boardnummer zusammen (`820-02100`, `NM-B481`) und öffnet beides mit einem Klick. Noch nicht lesbare Formate (XZZ `.pcb`, `.fz`, `.tvw`) werden ausgegraut angezeigt.
+- **Bibliothek** (`⌘L`): eigene Avero-Bibliothek unter `~/Dokumente/Avero/Bibliothek`. Dateien, Ordner oder ZIP-Archive ins Bibliotheksfenster ziehen oder „Importieren…" – Avero kopiert Boardviews und Schaltpläne hinein, sortiert sie nach Boardnummer oder in einen Geräteordner deiner Wahl (`Apple/iPhone 13 Pro`) und überspringt Duplikate. Zusätzlich lassen sich bestehende Ordner einbinden. Alles ist nach Boardnummer, Gerät und Dateiname durchsuchbar; ein Klick öffnet Board und Schaltplan zusammen. Noch nicht lesbare Formate (`.fz`, `.tvw`) werden ausgegraut angezeigt.
 - **Messwerte pro Netz**: Diodenmodus, Spannung, Widerstand. Eingaben wie `0,452`, `452` (mV), `4k7`, `OL` werden verstanden.
 - **Referenz und Reparaturfälle**: Werte vom guten Board als Referenz, jedes Gerät auf dem Tisch als eigener Fall. Abweichungen über der Toleranz (Standard ± 10 %) werden rot markiert, auch als Punkt direkt an den Pins auf dem Board.
 - **Notizen** pro Board und pro Fall, Export/Import als JSON (z. B. Referenzwerte weitergeben).
@@ -99,6 +100,7 @@ npm run typecheck && npm test    # Oberfläche
 ```sh
 cargo run -p avero-formats --bin avero-inspect -- board.brd
 cargo run -p avero-formats --bin avero-inspect -- board.brd --json
+cargo run -p avero-formats --bin avero-inspect -- board.pcb --xzz-key 0x…
 ```
 
 ## Aufbau
@@ -111,6 +113,7 @@ crates/avero-formats     Rust: Dateiformate → einheitliches Board-Modell (mil,
   tests/formats.rs       handgeschriebene Mini-Boards pro Format
 src-tauri                Mac-App: Dateien lesen, Finder-Integration
   src/library.rs         Bibliothek: Ordner durchsuchen, nach Boardnummer gruppieren
+  src/import.rs          Import in die eigene Bibliothek (Dateien, Ordner, ZIP)
   src/notes.rs           Messwerte und Notizen speichern
 src                      Oberfläche (React + TypeScript)
   core/                  Board-Modell, Kamera, Raster-Index, Suche, Tauri-Anbindung
@@ -130,7 +133,7 @@ Boardviews und Schaltpläne sind fast immer Eigentum der Hersteller. **Sie gehö
 
 ## Weiter geht's
 
-Die nächsten Schritte stehen in [docs/ROADMAP.md](docs/ROADMAP.md): XZZ `.pcb`, `.fz` und `.tvw`, Fotos über dem Board, Profi-Funktionen.
+Die nächsten Schritte stehen in [docs/ROADMAP.md](docs/ROADMAP.md): Diodenwerte aus XZZ-Dateien, `.fz` und `.tvw`, Fotos über dem Board, Profi-Funktionen.
 
 ## Dank
 

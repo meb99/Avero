@@ -13,6 +13,7 @@ Alle Parser liegen in `crates/avero-formats/src/formats`. Erkannt wird zuerst am
 | GenCAD 1.4 | `.cad`, `.gcd` | `GENCAD` + `$HEADER` | laut `UNITS` | Liest Umriss, Pads/Padstacks (Größe, Seite, Bohrung), Shapes (Pins, Umriss), Komponenten, Devices (Wert), Signale, Vias. |
 | Panel-CAD | `.cad` | `###Panel Added` + `C_PIN` | Zoll | Kein Umriss in der Datei, er wird aus den Pins erzeugt. |
 | IBM CST | `.cst` | Endung | unbekannt | Binär. Nur Bauteile, Netze und Pins; Umriss wird aus den Pins erzeugt. |
+| XinZhiZao PCB | `.pcb` | Kopf `XZZPCB`, auch XOR-verschleiert (Schlüsselbyte bei `0x10`, bis zur Marke `v6v6555v6v6`) | 1/10000 mil | Blöcke: Bögen (1) und Linien (5) auf Lage 28 = Umriss, Bauteile (7) DES-verschlüsselt, Testpads (9). Der DES-Schlüssel wird vom Nutzer eingetragen und über ein Paritätsmuster auf Tippfehler geprüft. Alle Bauteile liegen auf „Oben", wie bei OpenBoardView. |
 
 ## Noch nicht unterstützt
 
@@ -20,7 +21,6 @@ Diese Formate werden erkannt und mit einer klaren Meldung abgelehnt:
 
 | Format | Stand |
 | --- | --- |
-| XinZhiZao `.pcb` | Kopf `XZZPCB` (teils XOR-verschlüsselt), Bauteilblöcke DES-verschlüsselt. Geplant für 0.4. |
 | ASUS `.fz` | verschlüsselt, Schlüssel nötig. Geplant für 0.4. |
 | Teboview `.tvw` | Geplant für 0.4. |
 | Cadence Allegro | Erkennung über Offset `0xF8`. Keine Pläne. |

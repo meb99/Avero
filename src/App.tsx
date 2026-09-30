@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BoardView, type BoardViewHandle } from "./components/BoardView";
 import { HelpDialog, SettingsDialog } from "./components/Dialogs";
-import { LibraryDialog } from "./components/Library";
+import { LibraryDialog, type LibraryDrop } from "./components/Library";
 import { CloseIcon } from "./components/Icons";
 import { Sidebar } from "./components/Sidebar";
 import { Splitter } from "./components/Splitter";
@@ -81,8 +81,13 @@ export function App() {
   const [rotation, setRotation] = useState(0);
   const [selection, setSelection] = useState<Selection>(NONE);
   const [loading, setLoading] = useState<string | null>(null);
-  const [error, setError] = useState<{ name: string; error: LoadError } | null>(null);
+  const [error, setError] = useState<{ name: string; path?: string; error: LoadError } | null>(null);
+  // A file that failed for lack of an XZZ key, reopened once the key is set.
+  const retryPath = useRef<string | null>(null);
   const [dialog, setDialog] = useState<"settings" | "help" | "library" | null>(null);
+  const dialogRef = useRef(dialog);
+  dialogRef.current = dialog;
+  const [libraryDrop, setLibraryDrop] = useState<LibraryDrop | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [recent, setRecent] = useState<string[]>(loadRecent);
   const [schematic, setSchematic] = useState<SchematicDocument | null>(null);
@@ -162,7 +167,7 @@ export function App() {
     setLoading(null);
     const { result, source } = loaded;
     if (!result.ok) {
-      setError({ name: source.name, error: result.error });
+      setError({ name: source.name, path: source.path, error: result.error });
       return false;
     }
     setError(null);
@@ -183,7 +188,7 @@ export function App() {
         return;
       }
       setLoading(fileName(path));
-      if (!finishLoad(await loadPath(path))) return;
+      if (!finishLoad(await loadPath(path, settings.xzzKey))) return;
       if (schematicPath) {
         if (schematicPath !== schematic?.path) await openSchematicPath(schematicPath);
       } else if (settings.autoSchematic) {
@@ -191,7 +196,7 @@ export function App() {
         if (best && best !== schematic?.path) await openSchematicPath(best);
       }
     },
-    [finishLoad, openSchematicPath, settings.autoSchematic, schematic],
+    [finishLoad, openSchematicPath, settings.autoSchematic, settings.xzzKey, schematic],
   );
 
   const openDialog = useCallback(async () => {
@@ -298,6 +303,11 @@ export function App() {
   // Files dropped on the window or opened from Finder.
   useEffect(() => {
     const open = (paths: string[]) => {
+      // With the library open, drops are imported into it.
+      if (dialogRef.current === "library") {
+        setLibraryDrop((d) => ({ paths, nonce: (d?.nonce ?? 0) + 1 }));
+        return;
+      }
       // A board and its schematic dropped together: open both.
       for (const p of [...paths.filter((p) => !isPdf(p)).slice(0, 1), ...paths.filter(isPdf).slice(0, 1)]) void openPath(p);
     };
@@ -526,6 +536,18 @@ export function App() {
               <div>
                 <strong>{t("error.title", { name: error.name })}</strong>
                 <p>{errorText}</p>
+                {(error.error.code === "needs-key" || error.error.code === "invalid-key") && (
+                  <button
+                    className="small"
+                    onClick={() => {
+                      retryPath.current = error.path ?? null;
+                      setError(null);
+                      setDialog("settings");
+                    }}
+                  >
+                    {t("error.openSettings")}
+                  </button>
+                )}
               </div>
               <button className="tool icon-only" onClick={() => setError(null)} aria-label={t("error.dismiss")}>
                 <CloseIcon />
@@ -533,14 +555,25 @@ export function App() {
             </div>
           )}
 
-          {dragOver && <div className="drop-overlay">{t("drop.hint")}</div>}
+          {dragOver && <div className="drop-overlay">{t(dialog === "library" ? "library.dropHere" : "drop.hint")}</div>}
         </main>
 
         <StatusBar model={model} source={source} schematic={schematic} loading={loading} settings={settings} />
 
-        {dialog === "settings" && <SettingsDialog settings={settings} onChange={setSettings} onClose={() => setDialog(null)} />}
+        {dialog === "settings" && (
+          <SettingsDialog
+            settings={settings}
+            onChange={setSettings}
+            onClose={() => {
+              setDialog(null);
+              const retry = retryPath.current;
+              retryPath.current = null;
+              if (retry && settings.xzzKey) void openPath(retry);
+            }}
+          />
+        )}
         {dialog === "help" && <HelpDialog onClose={() => setDialog(null)} />}
-        {dialog === "library" && <LibraryDialog onOpen={openLibraryEntry} onClose={() => setDialog(null)} />}
+        {dialog === "library" && <LibraryDialog drop={libraryDrop} onOpen={openLibraryEntry} onClose={() => setDialog(null)} />}
       </div>
     </I18nContext.Provider>
   );

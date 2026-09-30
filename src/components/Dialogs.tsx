@@ -98,6 +98,21 @@ export function SettingsDialog({ settings, onChange, onClose }: SettingsProps) {
         {check("dimUnselected", t("settings.dim"))}
         {check("showVias", t("settings.vias"))}
       </div>
+      <h3>{t("settings.formats")}</h3>
+      <div className="form-grid">
+        <label htmlFor="set-xzz">{t("settings.xzzKey")}</label>
+        <input
+          id="set-xzz"
+          className="key-input"
+          spellCheck={false}
+          autoComplete="off"
+          placeholder="0x…"
+          value={settings.xzzKey}
+          onChange={(e) => set("xzzKey", e.target.value.trim())}
+          aria-invalid={settings.xzzKey !== "" && !/^(0x)?[0-9a-f]{1,16}$/i.test(settings.xzzKey)}
+        />
+      </div>
+      <p className="muted setting-hint">{t("settings.xzzKeyHint")}</p>
       <h3>{t("schematic.title")}</h3>
       <div className="checks">{check("autoSchematic", t("settings.autoSchematic"))}</div>
       <footer className="dialog-footer">

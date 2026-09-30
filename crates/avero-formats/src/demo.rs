@@ -173,6 +173,7 @@ impl Demo {
             net: net.to_string(),
             probe: Some(probe),
             radius: Some(18.0),
+            name: None,
         });
     }
 }

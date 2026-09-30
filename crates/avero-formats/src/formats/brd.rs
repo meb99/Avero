@@ -133,6 +133,7 @@ pub fn parse(buf: &[u8]) -> Result<RawBoard, ParseError> {
                         net: f.string().unwrap_or_default(),
                         probe: i32::try_from(probe).ok(),
                         radius: None,
+                        name: None,
                     });
                     true
                 }
@@ -172,6 +173,7 @@ pub fn parse(buf: &[u8]) -> Result<RawBoard, ParseError> {
                 net,
                 probe: i32::try_from(pin.probe).ok(),
                 radius: None,
+                name: None,
             });
             continue;
         }

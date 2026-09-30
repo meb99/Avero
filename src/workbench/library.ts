@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 
 // Mirrors src-tauri/src/library.rs.
 export interface LibraryFile {
@@ -53,6 +54,37 @@ export function saveLibrary(state: LibraryState): void {
   } catch {
     // ignore
   }
+}
+
+export interface ImportResult {
+  imported: string[];
+  duplicates: number;
+  skipped: number;
+  errors: string[];
+}
+
+/** Avero's own library folder (~/Documents/Avero/Bibliothek). */
+export function libraryRoot(): Promise<string> {
+  return invoke<string>("library_root");
+}
+
+/** Copies files, folders or ZIP archives into the library. */
+export function importFiles(paths: string[], folder: string): Promise<ImportResult> {
+  return invoke<ImportResult>("import_files", { paths, folder: folder.trim() || null });
+}
+
+export async function pickImport(title: string, extensions: string[]): Promise<string[]> {
+  const picked = await open({
+    title,
+    multiple: true,
+    directory: false,
+    filters: [{ name: "Boardview / PDF / ZIP", extensions: [...extensions, "pdf", "zip", "fz", "tvw"] }],
+  });
+  return Array.isArray(picked) ? picked : typeof picked === "string" ? [picked] : [];
+}
+
+export function revealInFinder(path: string): Promise<void> {
+  return revealItemInDir(path);
 }
 
 export function scanLibrary(folders: string[]): Promise<LibraryScan> {

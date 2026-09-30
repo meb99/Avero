@@ -708,7 +708,7 @@ button.net-chip {
 }
 
 .welcome-card {
-  width: min(560px, 100%);
+  width: min(680px, 100%);
   text-align: center;
 }
 
@@ -738,6 +738,7 @@ button.net-chip {
 .welcome-actions button {
   padding: 10px 18px;
   font-size: 14px;
+  white-space: nowrap;
 }
 
 .welcome-recent {
@@ -1492,4 +1493,76 @@ button.danger {
   background: var(--surface-3);
   color: var(--text-muted);
   text-decoration: line-through;
+}
+
+.key-input {
+  font: 12px var(--mono);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+}
+
+.key-input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.setting-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 8px 0 0;
+}
+
+.error-banner .small {
+  margin-top: 8px;
+}
+
+.library-import {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 8px;
+  padding: 10px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+
+.import-folder {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+}
+
+.import-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.folder-chip.own {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.library-item {
+  display: flex;
+  height: 100%;
+  border-bottom: 1px solid var(--border);
+}
+
+.library-item .library-row {
+  border-bottom: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.library-item .reveal {
+  align-self: center;
+  margin-right: 6px;
+  opacity: 0;
+}
+
+.library-item:hover .reveal,
+.library-item .reveal:focus-visible {
+  opacity: 1;
 }

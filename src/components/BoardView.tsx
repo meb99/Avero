@@ -269,7 +269,7 @@ export function BoardView({ model, side, rotation, selection, settings, palette,
       }
       case "testPoint": {
         const tp = m.testPoints[hit.testPoint];
-        const probe = tp.probe !== undefined ? ` ${tp.probe}` : "";
+        const probe = tp.name ? ` ${tp.name}` : tp.probe !== undefined ? ` ${tp.probe}` : "";
         return `${tp.kind === "via" ? t("details.via") : t("details.testPoint")}${probe}  ·  ${m.nets[tp.net].name}`;
       }
       case "part": {

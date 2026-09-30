@@ -78,6 +78,7 @@ pub fn parse(buf: &[u8]) -> Result<RawBoard, ParseError> {
                 net: via_net.clone(),
                 probe: None,
                 radius: None,
+                name: None,
             });
         }
     }

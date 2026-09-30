@@ -134,6 +134,7 @@ pub fn parse(buf: &[u8]) -> Result<RawBoard, ParseError> {
                         net: nets.get(&(net as u32)).cloned().unwrap_or_default(),
                         probe: i32::try_from(probe).ok(),
                         radius: None,
+                        name: None,
                     });
                     true
                 }

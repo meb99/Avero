@@ -5,6 +5,8 @@
 //! avero-inspect <file> --json   full board as JSON
 //! avero-inspect --demo --json   the built-in demo board
 //! ```
+//!
+//! XinZhiZao files need the DES key: `--xzz-key 0x…` or `AVERO_XZZ_KEY`.
 
 use std::process::ExitCode;
 
@@ -12,12 +14,23 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let json = args.iter().any(|a| a == "--json");
     let demo = args.iter().any(|a| a == "--demo");
-    let path = args.iter().find(|a| !a.starts_with("--"));
+    let key_arg = args.iter().position(|a| a == "--xzz-key").and_then(|i| args.get(i + 1)).cloned();
+    let key_text = key_arg.clone().or_else(|| std::env::var("AVERO_XZZ_KEY").ok());
+    let xzz_key = match key_text.as_deref().map(avero_formats::formats::parse_xzz_key) {
+        None => None,
+        Some(Some(k)) => Some(k),
+        Some(None) => {
+            eprintln!("--xzz-key: not a hexadecimal key");
+            return ExitCode::from(2);
+        }
+    };
+    let options = avero_formats::ParseOptions { xzz_key };
+    let path = args.iter().filter(|a| Some(*a) != key_arg.as_ref()).find(|a| !a.starts_with("--"));
 
     let board = if demo {
         avero_formats::demo::board()
     } else if let Some(path) = path {
-        match read(path) {
+        match read(path, options) {
             Ok(b) => b,
             Err(e) => {
                 eprintln!("{path}: {e}");
@@ -54,10 +67,10 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn read(path: &str) -> Result<avero_formats::Board, String> {
+fn read(path: &str, options: avero_formats::ParseOptions) -> Result<avero_formats::Board, String> {
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
     let name = std::path::Path::new(path).file_name().and_then(|n| n.to_str());
-    match avero_formats::parse(&bytes, name) {
+    match avero_formats::parse_with(&bytes, name, options) {
         Err(avero_formats::ParseError::NeedsAscFiles) => {
             let dir = std::path::Path::new(path).parent().unwrap_or(std::path::Path::new("."));
             let [format, pins, nails] = avero_formats::ASC_FILES.map(|f| find_insensitive(dir, f));

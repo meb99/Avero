@@ -49,6 +49,8 @@ export interface TestPoint {
   side: Side;
   net: number;
   probe?: number;
+  /** Label such as TP1203, when the format has one. */
+  name?: string;
 }
 
 export interface Net {
@@ -82,6 +84,8 @@ export type LoadErrorCode =
   | "no-content"
   | "io"
   | "schematic"
+  | "needs-key"
+  | "invalid-key"
   | "internal";
 
 export interface LoadError {

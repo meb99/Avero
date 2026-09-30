@@ -59,17 +59,47 @@ pub struct LibraryScan {
     pub missing: Vec<String>,
 }
 
-fn kind_of(path: &Path) -> Option<Kind> {
-    let name = path.file_name()?.to_string_lossy().to_ascii_lowercase();
+/// True for `.pcb` files that are XinZhiZao boardviews; other EDA tools use
+/// the extension too.
+pub(crate) fn is_xzz_head(head: &[u8]) -> bool {
+    matches!(
+        avero_formats::detect(head, None),
+        avero_formats::Detected::Supported(avero_formats::FormatId::Xzz)
+    )
+}
+
+fn read_head(path: &Path) -> Vec<u8> {
+    use std::io::Read;
+    let mut head = vec![0u8; 0x20];
+    let n = std::fs::File::open(path).and_then(|mut f| f.read(&mut head)).unwrap_or(0);
+    head.truncate(n);
+    head
+}
+
+/// What a file is, by name; `.pcb` files are checked by content.
+fn classify(name: &str, head: impl FnOnce() -> Vec<u8>) -> Option<Kind> {
+    let name = name.to_ascii_lowercase();
     let ext = name.rsplit_once('.')?.1;
     match ext {
         "pdf" => Some(Kind::Schematic),
         // An ASC board is three files; pins.asc stands for the set.
         "asc" => (name == "pins.asc").then_some(Kind::Board),
-        "pcb" | "fz" | "tvw" | "cae" => Some(Kind::Unsupported),
+        "pcb" => is_xzz_head(&head()).then_some(Kind::Board),
+        "fz" | "tvw" | "cae" => Some(Kind::Unsupported),
         _ if avero_formats::formats::extensions().contains(&ext) => Some(Kind::Board),
         _ => None,
     }
+}
+
+/// Files worth copying into the library: everything [`classify`] knows plus
+/// the companion files of ASC sets.
+pub(crate) fn is_importable(name: &str, head: impl FnOnce() -> Vec<u8>) -> bool {
+    name.to_ascii_lowercase().ends_with(".asc") || classify(name, head).is_some()
+}
+
+fn kind_of(path: &Path) -> Option<Kind> {
+    let name = path.file_name()?.to_string_lossy().into_owned();
+    classify(&name, || read_head(path))
 }
 
 struct Found {
@@ -270,7 +300,7 @@ mod tests {
     fn groups_by_board_number_and_folder() {
         let root = tree(&[
             "Apple/iPhone 13 Pro/820-02100.brd",
-            "Apple/iPhone 13 Pro/820-02100.pcb",
+            "Apple/iPhone 13 Pro/820-02100.fz",
             "Apple/Schematics/J413 820-02100 schematic.pdf",
             "Lenovo/X1C6 NM-B481/pins.asc",
             "Lenovo/X1C6 NM-B481/format.asc",
@@ -288,7 +318,7 @@ mod tests {
             scan.entries.iter().map(|e| (e.title.as_str(), e)).collect();
         let apple = by_title["820-02100"];
         assert_eq!(names(&apple.boards), ["820-02100.brd"]);
-        assert_eq!(names(&apple.unsupported), ["820-02100.pcb"]);
+        assert_eq!(names(&apple.unsupported), ["820-02100.fz"]);
         assert_eq!(names(&apple.schematics), ["J413 820-02100 schematic.pdf"]);
         assert_eq!(apple.folder, "Apple/iPhone 13 Pro");
 

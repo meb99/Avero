@@ -165,6 +165,8 @@ pub struct TestPoint {
     pub net: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub probe: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -189,6 +191,7 @@ pub enum FormatId {
     Cad,
     GenCad,
     Cst,
+    Xzz,
     Demo,
 }
 
@@ -204,6 +207,7 @@ impl FormatId {
             FormatId::Cad => "Panel CAD",
             FormatId::GenCad => "GenCAD",
             FormatId::Cst => "IBM CST",
+            FormatId::Xzz => "XinZhiZao PCB",
             FormatId::Demo => "Avero demo board",
         }
     }

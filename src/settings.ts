@@ -18,6 +18,8 @@ export interface Settings {
   schematicShare: number;
   /** Allowed relative deviation from reference readings (0.1 = 10 %). */
   tolerance: number;
+  /** DES key for XinZhiZao .pcb files, as typed (hex). */
+  xzzKey: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -35,6 +37,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showSidebar: true,
   schematicShare: 0.5,
   tolerance: 0.1,
+  xzzKey: "",
 };
 
 const KEY = "avero.settings.v1";

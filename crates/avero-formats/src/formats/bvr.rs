@@ -106,6 +106,7 @@ pub fn parse_v1(buf: &[u8]) -> Result<RawBoard, ParseError> {
                     net: f.string().unwrap_or_default(),
                     probe: None,
                     radius: None,
+                    name: None,
                 });
             }
         }

@@ -1,13 +1,14 @@
 //! Desktop shell. Parsing runs natively through `avero-formats`; the web UI
 //! receives the finished board as JSON.
 
+mod import;
 mod library;
 mod notes;
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use avero_formats::{Board, ParseError, ASC_FILES, MAX_FILE_SIZE};
+use avero_formats::{Board, ParseError, ParseOptions, ASC_FILES, MAX_FILE_SIZE};
 use serde::Serialize;
 
 /// Error shape the UI expects (see `src/core/types.ts`).
@@ -46,10 +47,10 @@ fn find_insensitive(dir: &Path, name: &str) -> Option<PathBuf> {
         .map(|e| e.path())
 }
 
-pub fn load(path: &Path) -> Result<Board, LoadError> {
+pub fn load(path: &Path, options: ParseOptions) -> Result<Board, LoadError> {
     let bytes = read(path)?;
     let name = path.file_name().and_then(|n| n.to_str());
-    match avero_formats::parse(&bytes, name) {
+    match avero_formats::parse_with(&bytes, name, options) {
         Err(ParseError::NeedsAscFiles) => {
             let dir = path.parent().unwrap_or(Path::new("."));
             let [format, pins, nails] = ASC_FILES.map(|f| find_insensitive(dir, f));
@@ -105,8 +106,12 @@ struct PendingPaths(Mutex<Vec<String>>);
 
 // Commands are async so large files are parsed off the main thread.
 #[tauri::command]
-async fn open_board(path: String) -> Result<Board, LoadError> {
-    load(Path::new(&path))
+async fn open_board(path: String, xzz_key: Option<String>) -> Result<Board, LoadError> {
+    let xzz_key = match xzz_key.as_deref().map(str::trim).filter(|k| !k.is_empty()) {
+        None => None,
+        Some(text) => Some(avero_formats::formats::parse_xzz_key(text).ok_or(ParseError::InvalidKey)?),
+    };
+    load(Path::new(&path), ParseOptions { xzz_key })
 }
 
 #[tauri::command]
@@ -131,6 +136,31 @@ async fn read_file(path: String) -> Result<tauri::ipc::Response, LoadError> {
 async fn scan_library(folders: Vec<String>) -> library::LibraryScan {
     let roots: Vec<PathBuf> = folders.into_iter().map(PathBuf::from).collect();
     library::scan(&roots)
+}
+
+/// Avero's own library folder, `~/Documents/Avero/Bibliothek`, created on demand.
+fn library_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    use tauri::Manager;
+    let dir = app.path().document_dir().map_err(|e| e.to_string())?.join("Avero").join("Bibliothek");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    Ok(dir)
+}
+
+#[tauri::command]
+fn library_root(app: tauri::AppHandle) -> Result<String, String> {
+    library_dir(&app).map(|d| d.to_string_lossy().into_owned())
+}
+
+/// Copies files, folders or ZIP archives into the library.
+#[tauri::command]
+async fn import_files(
+    app: tauri::AppHandle,
+    paths: Vec<String>,
+    folder: Option<String>,
+) -> Result<import::ImportResult, String> {
+    let root = library_dir(&app)?;
+    let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+    Ok(import::import(&root, &paths, folder.as_deref()))
 }
 
 fn notes_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -162,6 +192,7 @@ fn take_pending_paths(pending: tauri::State<'_, PendingPaths>) -> Vec<String> {
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(PendingPaths::default())
         .invoke_handler(tauri::generate_handler![
             open_board,
@@ -169,6 +200,8 @@ pub fn run() {
             schematics_for,
             read_file,
             scan_library,
+            library_root,
+            import_files,
             load_notes,
             save_notes,
             export_json,
@@ -211,7 +244,7 @@ mod tests {
         std::fs::write(dir.join("Format.ASC"), "0 0\n1 0\n1 1\n").unwrap();
         std::fs::write(dir.join("PINS.asc"), "Part U1 (T)\n1 1 0.1 0.1 1 VCC 0\n2 2 0.2 0.1 1 GND 0\n")
             .unwrap();
-        let board = load(&dir.join("PINS.asc")).unwrap();
+        let board = load(&dir.join("PINS.asc"), ParseOptions::default()).unwrap();
         assert_eq!(board.parts.len(), 1);
         assert_eq!(board.outline[0].len(), 3);
         std::fs::remove_dir_all(&dir).unwrap();
@@ -237,7 +270,7 @@ mod tests {
 
     #[test]
     fn reports_missing_files_as_io_errors() {
-        let err = load(Path::new("/definitely/not/here.brd")).unwrap_err();
+        let err = load(Path::new("/definitely/not/here.brd"), ParseOptions::default()).unwrap_err();
         assert_eq!(err.code, "io");
     }
 }

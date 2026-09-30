@@ -47,6 +47,8 @@ pub(crate) struct RawTestPoint {
     pub net: String,
     pub probe: Option<i32>,
     pub radius: Option<f64>,
+    /// Label such as `TP1203`, when the format has one.
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -150,6 +152,7 @@ impl RawBoard {
                 side: tp.side,
                 net,
                 probe: tp.probe,
+                name: tp.name,
             });
         }
 

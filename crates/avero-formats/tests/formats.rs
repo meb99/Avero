@@ -468,10 +468,7 @@ fn errors() {
     assert_eq!(parse(b"", Some("a.brd")).unwrap_err(), ParseError::Empty);
     assert_eq!(parse(b"hello world", Some("a.txt")).unwrap_err(), ParseError::Unrecognized);
     assert_eq!(parse(b"%PDF-1.7 ...", Some("a.pdf")).unwrap_err(), ParseError::Pdf);
-    assert_eq!(
-        parse(b"XZZPCB V1.0 ...", Some("a.pcb")).unwrap_err(),
-        ParseError::Unsupported("XinZhiZao PCB")
-    );
+    assert_eq!(parse(b"XZZPCB V1.0 ...", Some("a.pcb")).unwrap_err(), ParseError::NeedsKey);
     assert_eq!(parse(b"\x00\x01", Some("a.fz")).unwrap_err().code(), "unsupported");
 }
 
@@ -528,4 +525,158 @@ fn json_shape() {
     assert!(v["pins"][0]["radius"].as_f64().unwrap() > 0.0);
     assert_eq!(v["nets"][0]["kind"], "power");
     assert!(v["testPoints"][0]["kind"] == "nail");
+}
+
+const XZZ_KEY: u64 = 0x8003_0303_0303_0303;
+
+/// A small XZZ board: a rectangular outline, one encrypted part with two
+/// pins and a test pad. `xor` > 0 builds the XOR-obfuscated variant.
+fn xzz_fixture(xor: u8) -> Vec<u8> {
+    use avero_formats::formats::xzz_encrypt;
+    fn u32le(v: &mut Vec<u8>, n: u32) {
+        v.extend_from_slice(&n.to_le_bytes());
+    }
+    let mil = |v: u32| v * 10_000;
+
+    let mut nets = Vec::new();
+    for (index, name) in [(1u32, "VCC"), (2, "GND"), (3, "NC")] {
+        u32le(&mut nets, 8 + name.len() as u32);
+        u32le(&mut nets, index);
+        nets.extend_from_slice(name.as_bytes());
+    }
+
+    let pin = |x: u32, y: u32, name: &str, net: u32| {
+        let mut b = vec![0x09];
+        u32le(&mut b, (4 + 4 + 4 + 8 + 4 + name.len() + 32 + 4) as u32);
+        b.extend_from_slice(&[0; 4]);
+        u32le(&mut b, mil(x));
+        u32le(&mut b, mil(y));
+        b.extend_from_slice(&[0; 8]);
+        u32le(&mut b, name.len() as u32);
+        b.extend_from_slice(name.as_bytes());
+        b.extend_from_slice(&[0; 32]);
+        u32le(&mut b, net);
+        b
+    };
+    let mut body = vec![0; 18];
+    u32le(&mut body, 3);
+    body.extend_from_slice(b"GRP");
+    body.push(0x06);
+    body.extend_from_slice(&[0; 30]);
+    u32le(&mut body, 2);
+    body.extend_from_slice(b"U1");
+    // A silkscreen line inside the part, which the reader skips.
+    body.push(0x05);
+    u32le(&mut body, 8);
+    body.extend_from_slice(&[0xAB; 8]);
+    body.extend(pin(300, 400, "1", 1));
+    body.extend(pin(350, 400, "2", 3));
+    let mut part = Vec::new();
+    u32le(&mut part, body.len() as u32);
+    part.extend(body);
+    part.resize(part.len().div_ceil(8) * 8, 0);
+    let part = xzz_encrypt(&part, XZZ_KEY);
+
+    let mut blocks = Vec::new();
+    let mut block = |kind: u8, data: &[u8]| {
+        blocks.push(kind);
+        u32le(&mut blocks, data.len() as u32);
+        blocks.extend_from_slice(data);
+    };
+    for (layer, (x1, y1, x2, y2)) in [
+        (28, (100, 200, 1100, 200)),
+        (28, (1100, 200, 1100, 700)),
+        (28, (1100, 700, 100, 700)),
+        (28, (100, 700, 100, 200)),
+        (1, (0, 0, 5000, 5000)),
+    ] {
+        let mut l = Vec::new();
+        for v in [layer, mil(x1), mil(y1), mil(x2), mil(y2), 10_000, 0] {
+            u32le(&mut l, v);
+        }
+        block(0x05, &l);
+    }
+    block(0x07, &part);
+    block(0x02, &[0; 12]);
+    let mut pad = Vec::new();
+    for v in [7, mil(900), mil(600), 0, 0, 3] {
+        u32le(&mut pad, v);
+    }
+    pad.extend_from_slice(b"TP7");
+    pad.extend_from_slice(&[0; 4]);
+    u32le(&mut pad, 1);
+    block(0x09, &pad);
+
+    let mut file = b"XZZPCB V1.0".to_vec();
+    file.resize(0x40, 0);
+    let main_start = file.len();
+    u32le(&mut file, blocks.len() as u32);
+    file.extend(blocks);
+    let net_start = file.len();
+    u32le(&mut file, nets.len() as u32);
+    file.extend(nets);
+    file[0x20..0x24].copy_from_slice(&((main_start - 0x20) as u32).to_le_bytes());
+    file[0x28..0x2c].copy_from_slice(&((net_start - 0x20) as u32).to_le_bytes());
+    let marker = file.len();
+    file.extend_from_slice(b"v6v6555v6v6 trailing data");
+    if xor != 0 {
+        for b in &mut file[..marker] {
+            *b ^= xor;
+        }
+    }
+    file
+}
+
+fn check_xzz(b: &Board) {
+    assert_eq!(b.format, FormatId::Xzz);
+    let u1 = b.find_part("U1").unwrap();
+    let pins = b.part_pins(u1);
+    assert_eq!(pins.len(), 2);
+    // Moved so the outline starts at the origin.
+    assert_close(pins[0].x, 200.0);
+    assert_close(pins[0].y, 200.0);
+    assert_eq!(net_name(b, &pins[0]), "VCC");
+    assert_eq!(b.nets[pins[1].net as usize].kind, NetKind::Unconnected);
+    assert_eq!(pins[1].number, "2");
+    assert_eq!(b.test_points.len(), 1);
+    assert_eq!(b.test_points[0].name.as_deref(), Some("TP7"));
+    assert_eq!(b.nets[b.test_points[0].net as usize].name, "VCC");
+    assert_eq!(b.outline.len(), 1);
+    assert_eq!(b.outline[0].len(), 5);
+    assert_close(b.bounds.max_x, 1000.0);
+}
+
+fn xzz_options(key: u64) -> avero_formats::ParseOptions {
+    avero_formats::ParseOptions { xzz_key: Some(key) }
+}
+
+#[test]
+fn xzz_plain_and_xored() {
+    check_xzz(&avero_formats::parse_with(&xzz_fixture(0), Some("board.pcb"), xzz_options(XZZ_KEY)).unwrap());
+    check_xzz(
+        &avero_formats::parse_with(&xzz_fixture(0x5a), Some("board.pcb"), xzz_options(XZZ_KEY)).unwrap(),
+    );
+}
+
+#[test]
+fn xzz_key_errors() {
+    let file = xzz_fixture(0);
+    assert_eq!(parse(&file, Some("board.pcb")).unwrap_err(), ParseError::NeedsKey);
+    assert_eq!(avero_formats::parse_with(&file, None, xzz_options(0)).unwrap_err(), ParseError::InvalidKey);
+    // Plausible but wrong: the part data decrypts to garbage.
+    let wrong = 0x8003_0303_0303_0305;
+    assert!(avero_formats::formats::xzz_key_is_plausible(wrong));
+    match avero_formats::parse_with(&file, None, xzz_options(wrong)).unwrap_err() {
+        ParseError::Invalid { message, .. } => assert!(message.contains("key"), "{message}"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn truncated_xzz_is_an_error_not_a_panic() {
+    let file = xzz_fixture(0);
+    for len in [0x11, 0x2c, 0x60, file.len() / 2, file.len() - 30] {
+        let r = avero_formats::parse_with(&file[..len], None, xzz_options(XZZ_KEY));
+        assert!(r.is_err(), "len {len}");
+    }
 }

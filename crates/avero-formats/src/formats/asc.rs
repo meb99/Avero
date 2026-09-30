@@ -171,6 +171,7 @@ pub fn parse_sections(format: FormatId, sections: AscSections<'_>) -> Result<Raw
                 net: f.string().unwrap_or_default(),
                 probe: i32::try_from(probe).ok(),
                 radius: None,
+                name: None,
             });
         }
     }

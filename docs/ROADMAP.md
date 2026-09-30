@@ -35,12 +35,17 @@ Offen aus 0.3:
 - Volltextsuche über alle Schaltpläne der Bibliothek
 - Diodenwerte aus XZZ-Dateien als Referenz übernehmen (kommt mit dem XZZ-Format)
 
-## 0.4 Weitere Formate
+## 0.4 XZZ und eigene Bibliothek ✅
 
-- XinZhiZao `.pcb` (DES-verschlüsselte Bauteilblöcke, Schlüssel lokal hinterlegt), inklusive der darin enthaltenen Diodenwerte
-- ASUS `.fz` (Schlüssel lokal hinterlegt)
-- Teboview `.tvw`
+- XinZhiZao `.pcb` lesen (XOR-Kopf, DES-verschlüsselte Bauteile, Testpads mit Namen, Umriss aus Linien und Bögen); Schlüssel in den Einstellungen, Paritätsprüfung, klare Meldungen bei fehlendem oder falschem Schlüssel
+- Eigene Avero-Bibliothek: Import von Dateien, Ordnern und ZIP-Archiven per Drag & Drop oder Dialog, Sortierung nach Boardnummer oder Geräteordner, Duplikaterkennung, „Im Finder zeigen"
+
+Offen:
+- Diodenwerte aus XZZ-Dateien (Abschnitt nach `v6v6555v6v6`) als Referenzwerte übernehmen
+- ASUS `.fz` (Schlüssel lokal hinterlegt), Teboview `.tvw`
+- XZZ-Bauteile auf der Unterseite erkennen (bisher alles „Oben")
 - echte Pad-Formen und Bauteil-Silkscreen, wo das Format sie enthält
+- RAR-/7z-Archive importieren
 
 ## 0.5 Profi-Funktionen
 

@@ -47,6 +47,10 @@ pub enum ParseError {
     Invalid { format: &'static str, message: String },
     #[error("The file contains no parts or pins.")]
     NoContent,
+    #[error("This XZZ file is encrypted. Enter the XZZ key in the settings.")]
+    NeedsKey,
+    #[error("The XZZ key is not valid.")]
+    InvalidKey,
 }
 
 impl ParseError {
@@ -65,6 +69,8 @@ impl ParseError {
             ParseError::NeedsAscFiles => "needs-asc-files",
             ParseError::Invalid { .. } => "invalid",
             ParseError::NoContent => "no-content",
+            ParseError::NeedsKey => "needs-key",
+            ParseError::InvalidKey => "invalid-key",
         }
     }
 
@@ -77,9 +83,21 @@ impl ParseError {
     }
 }
 
+/// Settings some formats need.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ParseOptions {
+    /// DES key for XinZhiZao `.pcb` files. Avero does not ship one.
+    pub xzz_key: Option<u64>,
+}
+
 /// Reads a boardview file. `file_name` is used to resolve formats that can
 /// only be told apart by extension.
 pub fn parse(buf: &[u8], file_name: Option<&str>) -> Result<Board, ParseError> {
+    parse_with(buf, file_name, ParseOptions::default())
+}
+
+/// [`parse`] with format options such as the XZZ key.
+pub fn parse_with(buf: &[u8], file_name: Option<&str>, options: ParseOptions) -> Result<Board, ParseError> {
     if buf.is_empty() {
         return Err(ParseError::Empty);
     }
@@ -96,6 +114,7 @@ pub fn parse(buf: &[u8], file_name: Option<&str>) -> Result<Board, ParseError> {
             FormatId::Cad => formats::cad::parse(buf),
             FormatId::GenCad => formats::gencad::parse(buf),
             FormatId::Cst => formats::cst::parse(buf),
+            FormatId::Xzz => formats::xzz::parse(buf, options.xzz_key),
             FormatId::Asc | FormatId::Demo => Err(ParseError::Unrecognized),
         },
         Detected::AscBundle => Err(ParseError::NeedsAscFiles),
