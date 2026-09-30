@@ -316,6 +316,9 @@ export const en = {
   "compare.needsTabs": "Open a second board in another tab to compare.",
   "locked.title": "{n} parts of this XinZhiZao file are encrypted",
   "locked.text": "Without the XZZ key Avero shows what is readable without it: board outline, nets and test points (search, measurements and notes work on them). Parts and their pins need the key.",
+  "update.install": "Update now",
+  "update.installing": "Installing Avero {version}… Avero restarts by itself.",
+  "update.failedInstall": "The update could not be installed ({message}). The download page is open instead.",
 };
 
 export type MessageKey = keyof typeof en;

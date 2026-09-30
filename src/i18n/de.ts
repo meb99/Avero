@@ -318,4 +318,7 @@ export const de: Record<MessageKey, string> = {
   "compare.needsTabs": "Öffne ein zweites Board in einem weiteren Tab, um zu vergleichen.",
   "locked.title": "{n} Bauteile dieser XinZhiZao-Datei sind verschlüsselt",
   "locked.text": "Ohne XZZ-Schlüssel zeigt Avero, was ohne ihn lesbar ist: Umriss, Netze und Testpunkte (Suche, Messwerte und Notizen funktionieren damit). Bauteile und ihre Pins brauchen den Schlüssel.",
+  "update.install": "Jetzt aktualisieren",
+  "update.installing": "Avero {version} wird installiert … Avero startet danach neu.",
+  "update.failedInstall": "Das Update ließ sich nicht installieren ({message}). Stattdessen ist die Download-Seite geöffnet.",
 };

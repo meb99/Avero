@@ -1,8 +1,8 @@
-/** Checks GitHub for a newer Avero release, at most once a day. */
+/** Checks GitHub for a newer Avero release, at most once an hour. */
 
 const LATEST = "https://api.github.com/repos/meb99/Avero/releases/latest";
 const KEY = "avero.updateCheck.v1";
-const DAY_MS = 24 * 60 * 60 * 1000;
+const DAY_MS = 60 * 60 * 1000;
 
 export interface Update {
   version: string;

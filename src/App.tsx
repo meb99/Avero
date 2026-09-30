@@ -135,6 +135,7 @@ export function App() {
   // The "parts are encrypted" notice, dismissed per board.
   const [lockedDismissed, setLockedDismissed] = useState<BoardModel | null>(null);
   const [update, setUpdate] = useState<Update | null>(null);
+  const [installing, setInstalling] = useState(false);
   const [schematic, setSchematic] = useState<SchematicDocument | null>(null);
   const [schematicVisible, setSchematicVisible] = useState(true);
   // The schematic is shown in its own window instead of the split view.
@@ -671,6 +672,18 @@ export function App() {
     if (paths.length > 0) setLibraryDrop((d) => ({ paths, nonce: (d?.nonce ?? 0) + 1 }));
   }, [t]);
 
+  // Downloads the release, replaces the app and restarts it (see updater.rs).
+  const installUpdate = async (found: Update) => {
+    setInstalling(true);
+    try {
+      await invoke("install_update", { version: found.version });
+    } catch (e) {
+      setInstalling(false);
+      setToast(t("update.failedInstall", { message: String(e) }));
+      openExternal(found.url);
+    }
+  };
+
   const openExternal = (url: string) => void openUrl(url).catch(() => window.open(url, "_blank"));
 
   const actions: MenuActions = {
@@ -1138,19 +1151,17 @@ export function App() {
           )}
           {update && (
             <div className="update-banner" role="status">
-              <span>{t("update.available", { version: update.version })}</span>
-              <button
-                className="small primary"
-                onClick={() => {
-                  openExternal(update.url);
-                  setUpdate(null);
-                }}
-              >
-                {t("update.download")}
-              </button>
-              <button className="small" onClick={() => setUpdate(null)}>
-                {t("update.later")}
-              </button>
+              <span>{installing ? t("update.installing", { version: update.version }) : t("update.available", { version: update.version })}</span>
+              {!installing && (
+                <>
+                  <button className="small primary" onClick={() => void installUpdate(update)}>
+                    {t("update.install")}
+                  </button>
+                  <button className="small" onClick={() => setUpdate(null)}>
+                    {t("update.later")}
+                  </button>
+                </>
+              )}
             </div>
           )}
           {toast && (

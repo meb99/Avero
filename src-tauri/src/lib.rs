@@ -4,6 +4,7 @@
 mod import;
 mod library;
 mod notes;
+mod updater;
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -286,6 +287,12 @@ fn close_schematic_window(app: tauri::AppHandle) {
     }
 }
 
+/// Downloads a newer release, replaces the app and restarts into it.
+#[tauri::command]
+async fn install_update(app: tauri::AppHandle, version: String) -> Result<(), String> {
+    updater::install(&app, &version)
+}
+
 #[tauri::command]
 fn take_pending_paths(pending: tauri::State<'_, PendingPaths>) -> Vec<String> {
     pending.0.lock().map(|mut p| std::mem::take(&mut *p)).unwrap_or_default()
@@ -312,6 +319,7 @@ pub fn run() {
             remove_photo,
             load_text_index,
             save_text_index,
+            install_update,
             open_schematic_window,
             close_schematic_window,
             take_pending_paths
