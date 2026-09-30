@@ -19,8 +19,16 @@ import {
 } from "../workbench/library";
 import { LibraryText } from "./LibraryText";
 import { RenameFiles, type RenameTarget } from "./RenameFiles";
+import { CategoryDialog, CategoryFields, CategoryTree } from "./Categories";
+import {
+  buildTree,
+  categoryFolder,
+  isSorted,
+  UNSORTED,
+  type Category,
+} from "../workbench/catalog";
 import { Dialog } from "./Dialogs";
-import { CloseIcon, OpenIcon, RenameIcon } from "./Icons";
+import { CloseIcon, OpenIcon, RenameIcon, TagIcon } from "./Icons";
 import { VirtualList } from "./VirtualList";
 
 /** Paths dropped on the window while the library is open. */
@@ -47,7 +55,16 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
   const [query, setQuery] = useState("");
   // Search boards by name, or the text inside all schematics.
   const [mode, setMode] = useState<"boards" | "text">("boards");
-  const [device, setDevice] = useState("");
+  // Brand › family › model for imports; also the folder the files go to.
+  const [importCategory, setImportCategory] = useState<Category>({
+    brand: "",
+    family: "",
+    model: "",
+  });
+  const device = categoryFolder(importCategory);
+  // Selected branch of the category tree ("" = everything).
+  const [branch, setBranch] = useState("");
+  const [sorting, setSorting] = useState<LibraryEntry | null>(null);
   const [scanning, setScanning] = useState(false);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -76,7 +93,9 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
     void libraryRoot()
       .then((dir) => {
         setRoot(dir);
-        const stale = !library.scannedAt || Date.now() - Date.parse(library.scannedAt) > STALE_MS;
+        const stale =
+          !library.scannedAt ||
+          Date.now() - Date.parse(library.scannedAt) > STALE_MS;
         if (stale) void rescan(library.folders, dir);
       })
       .catch((e) => setError(String(e)));
@@ -92,7 +111,8 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
       setResult(imported);
       await rescan(library.folders);
       // Downloads often have meaningless names: offer to rename right away.
-      if (imported.imported.length > 0) setRenaming({ title: t("rename.imported"), paths: imported.imported });
+      if (imported.imported.length > 0)
+        setRenaming({ title: t("rename.imported"), paths: imported.imported });
     } catch (e) {
       setError(String(e));
     } finally {
@@ -108,75 +128,137 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
     // runImport reads the current device field; only a new drop triggers it.
   }, [drop]);
 
-  const entries = useMemo(() => filterEntries(library.scan?.entries ?? [], query), [library.scan, query]);
+  const all = library.scan?.entries ?? [];
+  const tree = useMemo(
+    () => buildTree(all.filter((e) => isSorted(e.folder)).map((e) => e.folder)),
+    [library.scan],
+  );
+  const unsorted = all.filter((e) => !isSorted(e.folder)).length;
+  const entries = useMemo(() => {
+    const b = branch.toLowerCase();
+    const inBranch = (e: LibraryEntry) =>
+      branch === UNSORTED
+        ? !isSorted(e.folder)
+        : !b ||
+          e.folder.toLowerCase() === b ||
+          e.folder.toLowerCase().startsWith(`${b}/`);
+    return filterEntries((library.scan?.entries ?? []).filter(inBranch), query);
+  }, [library.scan, query, branch]);
 
   const addFolder = async () => {
     const folder = await pickFolder(t("library.addFolder"));
-    if (folder && folder !== root && !library.folders.includes(folder)) await rescan([...library.folders, folder]);
+    if (folder && folder !== root && !library.folders.includes(folder))
+      await rescan([...library.folders, folder]);
   };
 
   const scannedAt = library.scannedAt
-    ? new Intl.DateTimeFormat(lang, { dateStyle: "short", timeStyle: "short" }).format(new Date(library.scannedAt))
+    ? new Intl.DateTimeFormat(lang, {
+        dateStyle: "short",
+        timeStyle: "short",
+      }).format(new Date(library.scannedAt))
     : null;
 
   const summary = result
     ? [
         t("library.imported", { n: result.imported.length }),
-        result.duplicates ? t("library.duplicates", { n: result.duplicates }) : "",
+        result.duplicates
+          ? t("library.duplicates", { n: result.duplicates })
+          : "",
         result.skipped ? t("library.skippedFiles", { n: result.skipped }) : "",
-        result.errors.length ? t("library.importErrors", { n: result.errors.length }) : "",
+        result.errors.length
+          ? t("library.importErrors", { n: result.errors.length })
+          : "",
       ]
         .filter(Boolean)
         .join(" · ")
     : null;
 
   return (
-    <Dialog title={t("library.title")} onClose={onClose} className="library-dialog">
+    <Dialog
+      title={t("library.title")}
+      onClose={onClose}
+      className="library-dialog"
+    >
       <div className="library-bar">
         <input
           type="search"
           autoFocus
-          placeholder={t(mode === "text" ? "library.searchText" : "library.search")}
+          placeholder={t(
+            mode === "text" ? "library.searchText" : "library.search",
+          )}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
-            if (mode === "boards" && e.key === "Enter" && entries[0] && entries[0].boards.length + entries[0].schematics.length > 0)
+            if (
+              mode === "boards" &&
+              e.key === "Enter" &&
+              entries[0] &&
+              entries[0].boards.length + entries[0].schematics.length > 0
+            )
               onOpen(entries[0]);
           }}
         />
         <div className="segmented" role="tablist">
-          <button role="tab" aria-selected={mode === "boards"} className={mode === "boards" ? "on" : undefined} onClick={() => setMode("boards")}>
+          <button
+            role="tab"
+            aria-selected={mode === "boards"}
+            className={mode === "boards" ? "on" : undefined}
+            onClick={() => setMode("boards")}
+          >
             {t("library.modeBoards")}
           </button>
-          <button role="tab" aria-selected={mode === "text"} className={mode === "text" ? "on" : undefined} onClick={() => setMode("text")}>
+          <button
+            role="tab"
+            aria-selected={mode === "text"}
+            className={mode === "text" ? "on" : undefined}
+            onClick={() => setMode("text")}
+          >
             {t("library.modeText")}
           </button>
         </div>
-        <button onClick={() => void addFolder()}>{t("library.addFolder")}</button>
-        <button onClick={() => void rescan(library.folders)} disabled={scanning}>
+        <button onClick={() => void addFolder()}>
+          {t("library.addFolder")}
+        </button>
+        <button
+          onClick={() => void rescan(library.folders)}
+          disabled={scanning}
+        >
           {scanning ? t("library.scanning") : t("library.rescan")}
         </button>
       </div>
 
       <div className="library-import">
-        <input
-          className="import-folder"
-          placeholder={t("library.importFolder")}
-          value={device}
-          onChange={(e) => setDevice(e.target.value)}
-          aria-label={t("library.importFolder")}
+        <CategoryFields
+          value={importCategory}
+          onChange={setImportCategory}
+          tree={tree}
         />
-        <button className="primary" disabled={importing} onClick={() => void pickImport(t("library.import"), BOARD_EXTENSIONS).then(runImport)}>
+        <button
+          className="primary"
+          disabled={importing}
+          onClick={() =>
+            void pickImport(t("library.import"), BOARD_EXTENSIONS).then(
+              runImport,
+            )
+          }
+        >
           {importing ? t("library.scanning") : t("library.import")}
         </button>
-        <p className="muted import-hint">{summary ?? t("library.importHint")}</p>
+        <p className="muted import-hint">
+          {summary ?? t("library.importHint")}
+        </p>
       </div>
 
       <div className="library-folders">
         {root && (
           <span className="folder-chip own" title={root}>
             {t("library.ownFolder")}
-            <button className="tool icon-only" onClick={() => void revealInFinder(root)} aria-label={t("library.reveal")} title={t("library.reveal")}>
+            <button
+              className="tool icon-only"
+              onClick={() => void revealInFinder(root)}
+              aria-label={t("library.reveal")}
+              title={t("library.reveal")}
+            >
               <OpenIcon />
             </button>
           </span>
@@ -186,7 +268,9 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
             {f.split("/").filter(Boolean).pop()}
             <button
               className="tool icon-only"
-              onClick={() => void rescan(library.folders.filter((x) => x !== f))}
+              onClick={() =>
+                void rescan(library.folders.filter((x) => x !== f))
+              }
               aria-label={t("library.removeFolder")}
               title={t("library.removeFolder")}
             >
@@ -195,12 +279,20 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
           </span>
         ))}
         <span className="muted library-meta">
-          {library.scan && t("library.count", { n: library.scan.entries.length, files: library.scan.files })}
+          {library.scan &&
+            t("library.count", {
+              n: library.scan.entries.length,
+              files: library.scan.files,
+            })}
           {scannedAt && ` · ${scannedAt}`}
         </span>
       </div>
 
-      {library.scan?.truncated && <p className="library-warn">{t("library.truncated", { files: library.scan.files })}</p>}
+      {library.scan?.truncated && (
+        <p className="library-warn">
+          {t("library.truncated", { files: library.scan.files })}
+        </p>
+      )}
       {library.scan?.missing.map((m) => (
         <p key={m} className="library-warn">
           {t("library.missing", { path: m })}
@@ -214,57 +306,118 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
       {error && <p className="library-warn">{error}</p>}
 
       {mode === "text" ? (
-        <LibraryText entries={library.scan?.entries ?? []} query={query} onOpen={onOpenText} />
+        <LibraryText
+          entries={library.scan?.entries ?? []}
+          query={query}
+          onOpen={onOpenText}
+        />
       ) : (library.scan?.entries.length ?? 0) === 0 && !scanning ? (
         <p className="library-empty">{t("library.empty")}</p>
       ) : entries.length === 0 && !scanning ? (
         <p className="library-empty">{t("library.noMatch")}</p>
       ) : (
-        <div className="library-list">
-          <VirtualList
-            items={entries}
-            rowHeight={54}
-            render={(e) => {
-              const usable = e.boards.length + e.schematics.length > 0;
-              const first = e.boards[0] ?? e.schematics[0] ?? e.unsupported[0];
-              return (
-                <div className="library-item">
-                  <button className="library-row" disabled={!usable} onClick={() => onOpen(e)} title={usable ? undefined : t("library.unsupported")}>
-                    <span className="library-title">{e.title}</span>
-                    <span className="library-folder">{e.folder || "/"}</span>
-                    <span className="library-files">
-                      {[...e.boards, ...e.schematics].map((f) => (
-                        <span key={f.path} className="file-badge" title={f.path}>
-                          {badge(f.name)}
-                        </span>
-                      ))}
-                      {e.unsupported.map((f) => (
-                        <span key={f.path} className="file-badge unsupported" title={`${f.path} · ${t("library.unsupported")}`}>
-                          {badge(f.name)}
-                        </span>
-                      ))}
-                    </span>
-                  </button>
-                  {first && (
-                    <button
-                      className="tool icon-only reveal"
-                      onClick={() => setRenaming({ title: e.title, paths: [...e.boards, ...e.schematics, ...e.unsupported].map((f) => f.path) })}
-                      aria-label={t("rename.action")}
-                      title={t("rename.action")}
-                    >
-                      <RenameIcon />
-                    </button>
-                  )}
-                  {first && (
-                    <button className="tool icon-only reveal" onClick={() => void revealInFinder(first.path)} aria-label={t("library.reveal")} title={t("library.reveal")}>
-                      <OpenIcon />
-                    </button>
-                  )}
-                </div>
-              );
-            }}
+        <div className="library-main">
+          <CategoryTree
+            tree={tree}
+            selected={branch}
+            total={all.length}
+            unsorted={unsorted}
+            onSelect={setBranch}
           />
+          <div className="library-list">
+            <VirtualList
+              items={entries}
+              rowHeight={54}
+              render={(e) => {
+                const usable = e.boards.length + e.schematics.length > 0;
+                const first =
+                  e.boards[0] ?? e.schematics[0] ?? e.unsupported[0];
+                return (
+                  <div className="library-item">
+                    <button
+                      className="library-row"
+                      disabled={!usable}
+                      onClick={() => onOpen(e)}
+                      title={usable ? undefined : t("library.unsupported")}
+                    >
+                      <span className="library-title">{e.title}</span>
+                      <span className="library-folder">{e.folder || "/"}</span>
+                      <span className="library-files">
+                        {[...e.boards, ...e.schematics].map((f) => (
+                          <span
+                            key={f.path}
+                            className="file-badge"
+                            title={f.path}
+                          >
+                            {badge(f.name)}
+                          </span>
+                        ))}
+                        {e.unsupported.map((f) => (
+                          <span
+                            key={f.path}
+                            className="file-badge unsupported"
+                            title={`${f.path} · ${t("library.unsupported")}`}
+                          >
+                            {badge(f.name)}
+                          </span>
+                        ))}
+                      </span>
+                    </button>
+                    {first && e.root === root && (
+                      <button
+                        className="tool icon-only reveal"
+                        onClick={() => setSorting(e)}
+                        aria-label={t("category.action")}
+                        title={t("category.action")}
+                      >
+                        <TagIcon />
+                      </button>
+                    )}
+                    {first && (
+                      <button
+                        className="tool icon-only reveal"
+                        onClick={() =>
+                          setRenaming({
+                            title: e.title,
+                            paths: [
+                              ...e.boards,
+                              ...e.schematics,
+                              ...e.unsupported,
+                            ].map((f) => f.path),
+                          })
+                        }
+                        aria-label={t("rename.action")}
+                        title={t("rename.action")}
+                      >
+                        <RenameIcon />
+                      </button>
+                    )}
+                    {first && (
+                      <button
+                        className="tool icon-only reveal"
+                        onClick={() => void revealInFinder(first.path)}
+                        aria-label={t("library.reveal")}
+                        title={t("library.reveal")}
+                      >
+                        <OpenIcon />
+                      </button>
+                    )}
+                  </div>
+                );
+              }}
+            />
+          </div>
         </div>
+      )}
+      {sorting && (
+        <CategoryDialog
+          entry={sorting}
+          tree={tree}
+          onDone={(changed) => {
+            setSorting(null);
+            if (changed) void rescan(library.folders);
+          }}
+        />
       )}
       {renaming && (
         <RenameFiles

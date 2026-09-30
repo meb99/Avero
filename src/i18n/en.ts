@@ -329,6 +329,16 @@ export const en = {
   "rename.hint": "Give downloads clear names, ideally with the board number (e.g. 820-02100): Avero groups files by it. The file extension stays if you leave it out.",
   "rename.save": "Rename",
   "library.inBoard": "parts and nets of the boardview",
+  "category.brand": "Brand",
+  "category.family": "Device",
+  "category.model": "Model",
+  "category.title": "Sort in: {name}",
+  "category.hint": "Avero moves the files into Brand › Device › Model in your library. It suggests a category from the file names; any text works.",
+  "category.save": "Sort in",
+  "category.action": "Sort into brand and device",
+  "category.tree": "Categories",
+  "category.all": "All",
+  "category.unsorted": "Not sorted yet",
 };
 
 export type MessageKey = keyof typeof en;

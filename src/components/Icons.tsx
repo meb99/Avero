@@ -160,3 +160,10 @@ export const RenameIcon = () => (
     <path d="M11 6l3 3" />
   </Icon>
 );
+
+export const TagIcon = () => (
+  <Icon>
+    <path d="M3 10.2V4a1 1 0 0 1 1-1h6.2L17 9.8 10.8 16z" />
+    <circle cx="7" cy="7" r="1.2" />
+  </Icon>
+);

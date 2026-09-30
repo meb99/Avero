@@ -185,6 +185,19 @@ fn library_root(app: tauri::AppHandle) -> Result<String, String> {
     library_dir(&app).map(|d| d.to_string_lossy().into_owned())
 }
 
+/// Sorts library files into a category folder such as `Sony/PlayStation/PS4`.
+#[tauri::command]
+fn move_library_files(
+    app: tauri::AppHandle,
+    paths: Vec<String>,
+    folder: String,
+) -> Result<Vec<String>, String> {
+    let root = library_dir(&app)?;
+    let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+    import::move_into(&root, &paths, &folder)
+        .map(|v| v.into_iter().map(|p| p.to_string_lossy().into_owned()).collect())
+}
+
 /// Renames a file of the library; returns the new path.
 #[tauri::command]
 fn rename_library_file(path: String, name: String) -> Result<String, String> {
@@ -352,6 +365,7 @@ pub fn run() {
             import_files,
             board_words,
             rename_library_file,
+            move_library_files,
             load_notes,
             save_notes,
             export_json,

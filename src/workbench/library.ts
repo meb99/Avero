@@ -69,6 +69,11 @@ export function libraryRoot(): Promise<string> {
 }
 
 /** Copies files, folders or ZIP archives into the library. */
+/** Moves library files into a category folder such as `Sony/PlayStation/PS4`. */
+export function moveLibraryFiles(paths: string[], folder: string): Promise<string[]> {
+  return invoke<string[]>("move_library_files", { paths, folder });
+}
+
 /** Renames a library file; resolves to its new path. */
 export function renameLibraryFile(path: string, name: string): Promise<string> {
   return invoke<string>("rename_library_file", { path, name });

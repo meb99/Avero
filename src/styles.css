@@ -1963,3 +1963,105 @@ button.danger {
   padding: 6px 10px;
   color: var(--text);
 }
+
+/* Library categories */
+
+.library-main {
+  display: flex;
+  gap: 10px;
+  min-height: 0;
+  flex: 1;
+}
+
+.library-main .library-list {
+  flex: 1;
+  min-width: 0;
+}
+
+.category-tree {
+  width: 200px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 0;
+}
+
+.category-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+}
+
+.tree-row.active {
+  background: var(--surface-3);
+}
+
+.tree-twisty {
+  width: 14px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.tree-name {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-count {
+  font-size: 11px;
+}
+
+.category-fields {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.category-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.category-field input {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 8px;
+  color: var(--text);
+  font-size: 13px;
+  min-width: 0;
+}
+
+.dialog.category-dialog {
+  width: min(620px, calc(100% - 32px));
+}
+
+.tree-row.unsorted .tree-name {
+  font-style: italic;
+  color: var(--text-muted);
+}

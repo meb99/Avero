@@ -293,6 +293,43 @@ fn free_name(dir: &Path, name: &str) -> PathBuf {
         .unwrap_or_else(|| dir.join(name))
 }
 
+/// Moves library files into `folder` (a category path such as
+/// `Sony/PlayStation/PS4`) inside the library root. Only files inside the
+/// root are moved; clashing names are numbered; folders left empty are
+/// removed. Returns the new paths.
+pub fn move_into(root: &Path, paths: &[PathBuf], folder: &str) -> Result<Vec<PathBuf>, String> {
+    let sub = sanitize_folder(folder).ok_or("no category given")?;
+    let root = root.canonicalize().map_err(|e| format!("{}: {e}", root.display()))?;
+    let target = root.join(sub);
+    std::fs::create_dir_all(&target).map_err(|e| format!("{}: {e}", target.display()))?;
+    let mut moved = Vec::new();
+    for path in paths {
+        let real = path.canonicalize().map_err(|e| format!("{}: {e}", path.display()))?;
+        if !real.starts_with(&root) || !real.is_file() {
+            return Err(format!("{}: only files in the Avero library can be sorted", path.display()));
+        }
+        let old_dir = real.parent().map(Path::to_path_buf);
+        if old_dir.as_deref() == Some(target.as_path()) {
+            moved.push(real);
+            continue;
+        }
+        let name = real.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let plain = target.join(&name);
+        let dest = if plain.exists() { free_name(&target, &name) } else { plain };
+        std::fs::rename(&real, &dest).map_err(|e| format!("{}: {e}", real.display()))?;
+        // Remove folders that are now empty, up to the library root.
+        let mut dir = old_dir;
+        while let Some(d) = dir {
+            if d == root || !d.starts_with(&root) || std::fs::remove_dir(&d).is_err() {
+                break;
+            }
+            dir = d.parent().map(Path::to_path_buf);
+        }
+        moved.push(dest);
+    }
+    Ok(moved)
+}
+
 pub fn import(root: &Path, paths: &[PathBuf], folder: Option<&str>) -> ImportResult {
     let mut result = ImportResult::default();
     let mut sources = Vec::new();
@@ -392,6 +429,34 @@ mod tests {
         assert!(changed.imported[0].ends_with("820-02100 (2).brd"), "{changed:?}");
 
         std::fs::remove_dir_all(&src).unwrap();
+        std::fs::remove_dir_all(&lib).unwrap();
+    }
+
+    #[test]
+    fn moves_files_into_categories() {
+        let lib = temp("move");
+        let old = lib.join("820-02100");
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::write(old.join("820-02100.brd"), b"x").unwrap();
+        std::fs::write(lib.join("taken.pdf"), b"a").unwrap();
+        let dest = lib.join("Apple/MacBook Pro");
+        std::fs::create_dir_all(&dest).unwrap();
+        std::fs::write(dest.join("taken.pdf"), b"b").unwrap();
+        let moved = move_into(&lib, &[old.join("820-02100.brd"), lib.join("taken.pdf")], "Apple/MacBook Pro")
+            .unwrap();
+        assert_eq!(
+            files_in(&lib),
+            [
+                "Apple/MacBook Pro/820-02100.brd",
+                "Apple/MacBook Pro/taken (2).pdf",
+                "Apple/MacBook Pro/taken.pdf"
+            ]
+        );
+        assert!(!old.exists(), "the emptied folder is removed");
+        assert_eq!(moved.len(), 2);
+        assert!(move_into(&lib, &[std::env::temp_dir().join("elsewhere.brd")], "X").is_err());
+        assert!(move_into(&lib, &[dest.join("taken.pdf")], "../../escape")
+            .is_ok_and(|p| p[0].starts_with(lib.canonicalize().unwrap())));
         std::fs::remove_dir_all(&lib).unwrap();
     }
 
