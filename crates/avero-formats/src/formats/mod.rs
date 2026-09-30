@@ -6,6 +6,7 @@ pub(crate) mod brd2;
 pub(crate) mod bvr;
 pub(crate) mod cad;
 pub(crate) mod cst;
+pub(crate) mod fz;
 pub(crate) mod gencad;
 pub(crate) mod xzz;
 
@@ -13,6 +14,10 @@ pub(crate) mod xzz;
 pub use asc::{decode_bdv, encode_bdv};
 /// Obfuscation used by some `.brd` files; exposed for tests and tooling.
 pub use brd::{decode as decode_brd, encode as encode_brd};
+/// FZ key handling; `fz_encrypt` builds test files.
+pub use fz::{
+    encrypt as fz_encrypt, key_is_plausible as fz_key_is_plausible, parse_key as parse_fz_key, FzKey,
+};
 /// XZZ key handling; `des_encrypt` builds test files.
 pub use xzz::{
     des_encrypt as xzz_encrypt, key_is_plausible as xzz_key_is_plausible, parse_key as parse_xzz_key,
@@ -49,7 +54,7 @@ pub fn detect(buf: &[u8], file_name: Option<&str>) -> Detected {
         return Detected::Pdf;
     }
     match ext.as_str() {
-        "fz" => return Detected::Unsupported("ASUS FZ"),
+        "fz" => return Detected::Supported(FormatId::Fz),
         "cae" => return Detected::Unsupported("CAE"),
         "tvw" => return Detected::Unsupported("Teboview TVW"),
         "asc" | "bom" => return Detected::AscBundle,
@@ -112,6 +117,7 @@ pub const SUPPORTED: &[FormatInfo] = &[
     FormatInfo { id: "gencad", name: "GenCAD 1.4", extensions: &["cad", "gcd", "gencad"] },
     FormatInfo { id: "cst", name: "IBM CST", extensions: &["cst"] },
     FormatInfo { id: "xzz", name: "XinZhiZao PCB", extensions: &["pcb"] },
+    FormatInfo { id: "fz", name: "ASUS FZ", extensions: &["fz"] },
 ];
 
 /// Every extension the open dialog should offer.

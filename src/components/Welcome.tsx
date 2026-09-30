@@ -9,7 +9,7 @@ interface Props {
   onClearRecent(): void;
 }
 
-const FORMATS = ["BRD", "BRD2", "BDV", "ASC", "BVR", "BVR3", "GenCAD", "CAD", "CST", "XZZ", "PDF"];
+const FORMATS = ["BRD", "BRD2", "BDV", "ASC", "BVR", "BVR3", "GenCAD", "CAD", "CST", "XZZ", "FZ", "PDF"];
 
 export function Welcome({ recent, onOpen, onDemo, onLibrary, onOpenRecent, onClearRecent }: Props) {
   const { t } = useI18n();

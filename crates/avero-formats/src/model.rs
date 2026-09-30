@@ -192,6 +192,7 @@ pub enum FormatId {
     GenCad,
     Cst,
     Xzz,
+    Fz,
     Demo,
 }
 
@@ -208,6 +209,7 @@ impl FormatId {
             FormatId::GenCad => "GenCAD",
             FormatId::Cst => "IBM CST",
             FormatId::Xzz => "XinZhiZao PCB",
+            FormatId::Fz => "ASUS FZ",
             FormatId::Demo => "Avero demo board",
         }
     }

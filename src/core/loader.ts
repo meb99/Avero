@@ -17,7 +17,7 @@ export interface Loaded {
 }
 
 /** Extensions offered in the open dialog. Keep in sync with avero_formats::formats::SUPPORTED. */
-export const BOARD_EXTENSIONS = ["brd", "bdv", "asc", "bvr", "bvr3", "cad", "gcd", "gencad", "cst", "pcb"];
+export const BOARD_EXTENSIONS = ["brd", "bdv", "asc", "bvr", "bvr3", "cad", "gcd", "gencad", "cst", "pcb", "fz"];
 
 async function load(command: string, args: Record<string, unknown>): Promise<LoadResult> {
   try {
@@ -29,9 +29,16 @@ async function load(command: string, args: Record<string, unknown>): Promise<Loa
 }
 
 /** Parses a file natively in Rust (which also resolves ASC companion files). */
-export async function loadPath(path: string, xzzKey?: string): Promise<Loaded> {
+/** Keys for encrypted formats, as typed in the settings. */
+export interface FormatKeys {
+  xzzKey?: string;
+  fzKey?: string;
+}
+
+export async function loadPath(path: string, keys: FormatKeys = {}): Promise<Loaded> {
   const name = path.split("/").pop() ?? path;
-  return { result: await load("open_board", { path, xzzKey: xzzKey || null }), source: { name, path } };
+  const args = { path, xzzKey: keys.xzzKey || null, fzKey: keys.fzKey || null };
+  return { result: await load("open_board", args), source: { name, path } };
 }
 
 export async function loadDemo(): Promise<Loaded> {

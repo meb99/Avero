@@ -58,7 +58,8 @@
           "bvr3",
           "cst",
           "gencad",
-          "gcd"
+          "gcd",
+          "fz"
         ],
         "name": "Boardview",
         "description": "Boardview file",

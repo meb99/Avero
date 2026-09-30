@@ -78,7 +78,7 @@ export async function pickImport(title: string, extensions: string[]): Promise<s
     title,
     multiple: true,
     directory: false,
-    filters: [{ name: "Boardview / PDF / ZIP", extensions: [...extensions, "pdf", "zip", "fz", "tvw"] }],
+    filters: [{ name: "Boardview / PDF / ZIP / 7z / RAR", extensions: [...extensions, "pdf", "zip", "7z", "rar", "tvw"] }],
   });
   return Array.isArray(picked) ? picked : typeof picked === "string" ? [picked] : [];
 }

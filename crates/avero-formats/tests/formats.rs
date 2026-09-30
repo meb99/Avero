@@ -469,7 +469,7 @@ fn errors() {
     assert_eq!(parse(b"hello world", Some("a.txt")).unwrap_err(), ParseError::Unrecognized);
     assert_eq!(parse(b"%PDF-1.7 ...", Some("a.pdf")).unwrap_err(), ParseError::Pdf);
     assert_eq!(parse(b"XZZPCB V1.0 ...", Some("a.pcb")).unwrap_err(), ParseError::NeedsKey);
-    assert_eq!(parse(b"\x00\x01", Some("a.fz")).unwrap_err().code(), "unsupported");
+    assert_eq!(parse(b"\x00\x01", Some("a.fz")).unwrap_err().code(), "invalid");
 }
 
 #[test]
@@ -647,7 +647,7 @@ fn check_xzz(b: &Board) {
 }
 
 fn xzz_options(key: u64) -> avero_formats::ParseOptions {
-    avero_formats::ParseOptions { xzz_key: Some(key) }
+    avero_formats::ParseOptions { xzz_key: Some(key), ..Default::default() }
 }
 
 #[test]
@@ -679,4 +679,122 @@ fn truncated_xzz_is_an_error_not_a_panic() {
         let r = avero_formats::parse_with(&file[..len], None, xzz_options(XZZ_KEY));
         assert!(r.is_err(), "len {len}");
     }
+}
+
+// --- ASUS FZ -----------------------------------------------------------------
+
+const FZ_CONTENT: &str = "A!REFDES!COMP_INSERTION_CODE!SYM_NAME!SYM_MIRROR!SYM_ROTATE!
+S!U1!!!NO!0!
+S!C5!!!YES!90!
+S!R7!!!NO!0!
+A!NET_NAME!REFDES!PIN_NUMBER!PIN_NAME!PIN_X!PIN_Y!TEST_POINT!RADIUS!
+S!PP3V3!U1!1!VCC!100.0!200.0!!6!
+S!GND!U1!2!GND!150,5!200.0!12!6!
+S!SATA_GP1!U1!0!AJ43!200!200!!7.48!
+S!PP3V3!C5!1!!100!300!!6!
+S!GND!C5!2!!140!300!!6!
+S!PP3V3!R7!1!!300!100!!6!
+S!EN!R7!2!!340!100!!6!
+S!EN!X9!1!!0!0!!6!
+A!TESTVIA!TESTVIA!REFDES!PIN_NUMBER!PIN_NAME!VIA_X!VIA_Y!TEST_POINT!RADIUS!
+S!Y!PP3V3!U1!1!VCC!120!220!T!10!
+S!Y!GND!C5!2!!130!320!B!10!
+";
+
+const FZ_DESCR: &str = "BOARD X541UA
+PARTNUMBER\tDESCRIPTION\tQTY\tLOCATION\tPARTNUMBER2
+0101-001\tRES 10K 1% 0402\t1\tR7\tabc
+0102-002\tCAP 10UF 0402\t2\tC5,X1\tdef
+s-skip\tUNUSED\t1\tU1\tx
+";
+
+/// Parity every FZ key word must have (published with OpenBoardView).
+const FZ_PARITY: [u32; 44] = [
+    0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0,
+    0, 0, 1, 0, 0, 1, 1, 0, 1,
+];
+
+/// A made-up key with the right parity; real keys are not part of Avero.
+fn fz_test_key(seed: u32) -> avero_formats::formats::FzKey {
+    std::array::from_fn(|i| {
+        let v = (i as u32 ^ seed).wrapping_mul(0x9e37_79b9) ^ 0x5bd1_e995;
+        if u32::from(v.count_ones().is_multiple_of(2)) == FZ_PARITY[i] {
+            v
+        } else {
+            v ^ 1
+        }
+    })
+}
+
+fn zlib(data: &[u8]) -> Vec<u8> {
+    use std::io::Write;
+    let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+    e.write_all(data).unwrap();
+    e.finish().unwrap()
+}
+
+/// Layout as OpenBoardView reads it: 4 bytes, content, part list, and a
+/// trailing length from which the part list's start is found.
+fn fz_fixture(content: &str) -> Vec<u8> {
+    let c = zlib(content.as_bytes());
+    let d = zlib(FZ_DESCR.as_bytes());
+    let mut file = (content.len() as u32).to_le_bytes().to_vec();
+    file.extend_from_slice(&c);
+    file.extend_from_slice(&d);
+    file.extend_from_slice(&((d.len() + 8) as u32).to_le_bytes());
+    file
+}
+
+fn check_fz(board: &Board, scale: f64) {
+    assert_eq!(board.format, FormatId::Fz);
+    assert_eq!(board.parts.len(), 3);
+    assert_eq!(board.pins.len(), 7);
+    let part = |name: &str| board.parts.iter().find(|p| p.name == name).unwrap();
+    assert_eq!(part("C5").side, Side::Bottom);
+    assert_eq!(part("U1").side, Side::Top);
+    assert_eq!(part("R7").device.as_deref(), Some("RES 10K 1% 0402"));
+    assert_eq!(part("C5").device.as_deref(), Some("CAP 10UF 0402"));
+    assert_eq!(part("U1").device, None);
+    let u1 = part("U1");
+    let pins = &board.pins[u1.first_pin as usize..(u1.first_pin + u1.pin_count) as usize];
+    assert_eq!(pins.iter().map(|p| p.number.as_str()).collect::<Vec<_>>(), ["1", "2", "AJ43"]);
+    assert_eq!(pins[0].name.as_deref(), Some("VCC"));
+    assert!((pins[1].x - 150.5 * scale).abs() < 1e-6, "decimal comma");
+    assert_eq!(board.test_points.len(), 2);
+    assert_eq!(board.test_points[1].side, Side::Bottom);
+    assert!(board.warnings.iter().any(|w| w.contains("not listed")));
+    assert_eq!(board.outline.len(), 1);
+}
+
+#[test]
+fn fz_plain() {
+    check_fz(&parse(&fz_fixture(FZ_CONTENT), Some("board.fz")).unwrap(), 1.0);
+}
+
+#[test]
+fn fz_in_millimeters() {
+    let content = format!("UNIT:millimeters\n{FZ_CONTENT}");
+    check_fz(&parse(&fz_fixture(&content), Some("board.fz")).unwrap(), 1000.0 / 25.4);
+}
+
+#[test]
+fn fz_encrypted() {
+    use avero_formats::formats::{fz_encrypt, fz_key_is_plausible};
+    let key = fz_test_key(1);
+    assert!(fz_key_is_plausible(&key));
+    let file = fz_encrypt(&fz_fixture(FZ_CONTENT), &key);
+    let with = |key| avero_formats::ParseOptions { fz_key: Some(key), ..Default::default() };
+
+    assert_eq!(parse(&file, Some("board.fz")).unwrap_err(), ParseError::NeedsFzKey);
+    let mut typo = key;
+    typo[3] ^= 1;
+    assert_eq!(
+        avero_formats::parse_with(&file, Some("board.fz"), with(typo)).unwrap_err(),
+        ParseError::InvalidFzKey
+    );
+    assert_eq!(
+        avero_formats::parse_with(&file, Some("board.fz"), with(fz_test_key(2))).unwrap_err(),
+        ParseError::InvalidFzKey
+    );
+    check_fz(&avero_formats::parse_with(&file, Some("board.fz"), with(key)).unwrap(), 1.0);
 }

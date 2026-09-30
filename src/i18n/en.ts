@@ -212,7 +212,7 @@ export const en = {
   "library.ownFolder": "Avero library",
   "library.import": "Import…",
   "library.importFolder": "Device / folder (optional)",
-  "library.importHint": "Drop files, folders or ZIP archives here, or use Import. Avero copies boardviews and schematics into its library and sorts them by board number.",
+  "library.importHint": "Drop files, folders or ZIP, 7z and RAR archives here, or use Import. Avero copies boardviews and schematics into its library and sorts them by board number.",
   "library.imported": "{n} files imported",
   "library.duplicates": "{n} already in the library",
   "library.skippedFiles": "{n} other files ignored",
@@ -304,6 +304,10 @@ export const en = {
   "library.stopIndex": "Stop",
   "library.textHint": "Type at least two characters. Indexed schematics are searched without opening them.",
   "library.pagesList": "pages {pages}",
+  "settings.fzKey": "FZ key",
+  "settings.fzKeyHint": "Most ASUS .fz files are encrypted with a key of 44 hexadecimal words (as in OpenBoardView's settings). Avero does not ship it. Unencrypted .fz files open without a key. Words entered: {n}.",
+  "error.needs-fz-key": "This ASUS .fz file is encrypted. Enter the FZ key in the settings.",
+  "error.invalid-fz-key": "The FZ key in the settings does not fit this file. Check it for typos.",
 };
 
 export type MessageKey = keyof typeof en;

@@ -22,9 +22,6 @@ Nachgereicht in 0.5:
 - Schaltplan in einem eigenen Fenster (zweiter Monitor), verbunden mit dem Board ✅
 - Suche im Schaltplan nach beliebigem Text, auch nach Wortteilen ✅
 
-Offen aus 0.2:
-- Pin-Nummern im Schaltplan dem Pin im Board zuordnen (nicht nur dem Bauteil)
-
 ## 0.3 Werkstatt ✅
 
 - **Bibliothek:** Ordner einlesen, Boardviews und Schaltpläne nach Boardnummer und Ordner gruppieren, Suche über Boardnummer, Gerät und Dateinamen, Board und Schaltplan mit einem Klick öffnen, nicht lesbare Formate ausgegraut
@@ -36,20 +33,14 @@ Nachgereicht in 0.5:
 - **Fotos** des echten Boards über die Boardview legen (zwei Punkte ausrichten) ✅
 - Volltextsuche über alle Schaltpläne der Bibliothek ✅
 
-Offen aus 0.3:
-- Diodenwerte aus XZZ-Dateien als Referenz übernehmen (braucht echte Beispieldateien, siehe 0.4)
-
 ## 0.4 XZZ und eigene Bibliothek ✅
 
 - XinZhiZao `.pcb` lesen (XOR-Kopf, DES-verschlüsselte Bauteile, Testpads mit Namen, Umriss aus Linien und Bögen); Schlüssel in den Einstellungen, Paritätsprüfung, klare Meldungen bei fehlendem oder falschem Schlüssel
 - Eigene Avero-Bibliothek: Import von Dateien, Ordnern und ZIP-Archiven per Drag & Drop oder Dialog, Sortierung nach Boardnummer oder Geräteordner, Duplikaterkennung, „Im Finder zeigen"
 
-Offen:
-- Diodenwerte aus XZZ-Dateien (Abschnitt nach `v6v6555v6v6`) als Referenzwerte übernehmen
-- ASUS `.fz` (Schlüssel lokal hinterlegt), Teboview `.tvw`
-- XZZ-Bauteile auf der Unterseite erkennen (bisher alles „Oben")
-- echte Pad-Formen und Bauteil-Silkscreen, wo das Format sie enthält
-- RAR-/7z-Archive importieren
+Nachgereicht in 0.5:
+- ASUS `.fz` lesen, verschlüsselt (Schlüssel in den Einstellungen) und unverschlüsselt ✅
+- 7z- und RAR-Archive importieren (über das in macOS eingebaute `bsdtar`) ✅
 
 ## 0.5 Mac-App und Profi-Funktionen ✅
 
@@ -61,5 +52,17 @@ Offen:
 - Ansicht als PNG exportieren (Drucken geht über das exportierte Bild in Vorschau)
 - mehrere Boards in Tabs, jeder mit eigenem Schaltplan, eigener Auswahl und Ansicht
 
-Offen:
+## Offen
+
+Diese Punkte brauchen **echte Beispieldateien**, die Avero nicht mitliefern darf. Wer eigene Dateien hat, kann sie lokal mit `avero-inspect` prüfen und die Ergebnisse (nicht die Dateien) als Issue melden:
+
+- Diodenwerte aus XZZ-Dateien (Abschnitt nach `v6v6555v6v6`) als Referenzwerte übernehmen – Aufbau des Abschnitts ist nicht öffentlich beschrieben
+- XZZ-Bauteile auf der Unterseite erkennen (bisher alles „Oben", wie bei OpenBoardView)
+- Teboview `.tvw` – keine freie Formatbeschreibung
+- `.fz`-Dateien mit echtem Schlüssel gegenprüfen (bisher mit synthetischen Dateien nach OpenBoardView getestet)
+
+Weitere Ideen:
 - zwei Boards nebeneinander vergleichen
+- Pin-Nummern im Schaltplan dem Pin im Board zuordnen
+- echte Pad-Formen und Bauteil-Silkscreen, wo das Format sie enthält
+- frei belegbare Tastenkürzel

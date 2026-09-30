@@ -51,6 +51,10 @@ pub enum ParseError {
     NeedsKey,
     #[error("The XZZ key is not valid.")]
     InvalidKey,
+    #[error("This FZ file is encrypted. Enter the FZ key in the settings.")]
+    NeedsFzKey,
+    #[error("The FZ key is not valid for this file.")]
+    InvalidFzKey,
 }
 
 impl ParseError {
@@ -71,6 +75,8 @@ impl ParseError {
             ParseError::NoContent => "no-content",
             ParseError::NeedsKey => "needs-key",
             ParseError::InvalidKey => "invalid-key",
+            ParseError::NeedsFzKey => "needs-fz-key",
+            ParseError::InvalidFzKey => "invalid-fz-key",
         }
     }
 
@@ -88,6 +94,8 @@ impl ParseError {
 pub struct ParseOptions {
     /// DES key for XinZhiZao `.pcb` files. Avero does not ship one.
     pub xzz_key: Option<u64>,
+    /// RC6 key schedule for ASUS `.fz` files. Avero does not ship one.
+    pub fz_key: Option<formats::FzKey>,
 }
 
 /// Reads a boardview file. `file_name` is used to resolve formats that can
@@ -115,6 +123,7 @@ pub fn parse_with(buf: &[u8], file_name: Option<&str>, options: ParseOptions) ->
             FormatId::GenCad => formats::gencad::parse(buf),
             FormatId::Cst => formats::cst::parse(buf),
             FormatId::Xzz => formats::xzz::parse(buf, options.xzz_key),
+            FormatId::Fz => formats::fz::parse(buf, options.fz_key.as_ref()),
             FormatId::Asc | FormatId::Demo => Err(ParseError::Unrecognized),
         },
         Detected::AscBundle => Err(ParseError::NeedsAscFiles),

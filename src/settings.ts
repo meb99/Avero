@@ -24,6 +24,8 @@ export interface Settings {
   tolerance: number;
   /** DES key for XinZhiZao .pcb files, as typed (hex). */
   xzzKey: string;
+  /** Key for encrypted ASUS .fz files: 44 hex words, as typed. */
+  fzKey: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -44,6 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
   schematicShare: 0.5,
   tolerance: 0.1,
   xzzKey: "",
+  fzKey: "",
 };
 
 const KEY = "avero.settings.v1";

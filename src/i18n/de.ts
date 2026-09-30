@@ -214,7 +214,7 @@ export const de: Record<MessageKey, string> = {
   "library.ownFolder": "Avero-Bibliothek",
   "library.import": "Importieren…",
   "library.importFolder": "Gerät / Ordner (optional)",
-  "library.importHint": "Dateien, Ordner oder ZIP-Archive hierher ziehen oder „Importieren…“ nutzen. Avero kopiert Boardviews und Schaltpläne in seine Bibliothek und sortiert sie nach Boardnummer.",
+  "library.importHint": "Dateien, Ordner oder ZIP-, 7z- und RAR-Archive hierher ziehen oder „Importieren…“ nutzen. Avero kopiert Boardviews und Schaltpläne in seine Bibliothek und sortiert sie nach Boardnummer.",
   "library.imported": "{n} Dateien importiert",
   "library.duplicates": "{n} schon vorhanden",
   "library.skippedFiles": "{n} andere Dateien ignoriert",
@@ -306,4 +306,8 @@ export const de: Record<MessageKey, string> = {
   "library.stopIndex": "Anhalten",
   "library.textHint": "Mindestens zwei Zeichen eingeben. Indizierte Schaltpläne werden durchsucht, ohne sie zu öffnen.",
   "library.pagesList": "Seiten {pages}",
+  "settings.fzKey": "FZ-Schlüssel",
+  "settings.fzKeyHint": "Die meisten ASUS-.fz-Dateien sind mit einem Schlüssel aus 44 hexadezimalen Wörtern verschlüsselt (wie in den Einstellungen von OpenBoardView). Avero liefert ihn nicht mit. Unverschlüsselte .fz-Dateien öffnen sich ohne Schlüssel. Eingegebene Wörter: {n}.",
+  "error.needs-fz-key": "Diese ASUS-.fz-Datei ist verschlüsselt. Trag den FZ-Schlüssel in den Einstellungen ein.",
+  "error.invalid-fz-key": "Der FZ-Schlüssel in den Einstellungen passt nicht zu dieser Datei. Prüf ihn auf Tippfehler.",
 };

@@ -7,6 +7,8 @@
 //! ```
 //!
 //! XinZhiZao files need the DES key: `--xzz-key 0x…` or `AVERO_XZZ_KEY`.
+//! Encrypted ASUS `.fz` files need the 44-word key: `--fz-key-file <file>`
+//! or `AVERO_FZ_KEY` (words separated by spaces or commas).
 
 use std::process::ExitCode;
 
@@ -24,8 +26,30 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let options = avero_formats::ParseOptions { xzz_key };
-    let path = args.iter().filter(|a| Some(*a) != key_arg.as_ref()).find(|a| !a.starts_with("--"));
+    let fz_file = args.iter().position(|a| a == "--fz-key-file").and_then(|i| args.get(i + 1)).cloned();
+    let fz_text = match &fz_file {
+        Some(file) => match std::fs::read_to_string(file) {
+            Ok(text) => Some(text),
+            Err(e) => {
+                eprintln!("{file}: {e}");
+                return ExitCode::from(2);
+            }
+        },
+        None => std::env::var("AVERO_FZ_KEY").ok(),
+    };
+    let fz_key = match fz_text.as_deref().map(avero_formats::formats::parse_fz_key) {
+        None => None,
+        Some(Some(k)) => Some(k),
+        Some(None) => {
+            eprintln!("FZ key: expected 44 hexadecimal words");
+            return ExitCode::from(2);
+        }
+    };
+    let options = avero_formats::ParseOptions { xzz_key, fz_key };
+    let path = args
+        .iter()
+        .filter(|a| Some(*a) != key_arg.as_ref() && Some(*a) != fz_file.as_ref())
+        .find(|a| !a.starts_with("--"));
 
     let board = if demo {
         avero_formats::demo::board()

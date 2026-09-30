@@ -106,12 +106,18 @@ struct PendingPaths(Mutex<Vec<String>>);
 
 // Commands are async so large files are parsed off the main thread.
 #[tauri::command]
-async fn open_board(path: String, xzz_key: Option<String>) -> Result<Board, LoadError> {
-    let xzz_key = match xzz_key.as_deref().map(str::trim).filter(|k| !k.is_empty()) {
-        None => None,
-        Some(text) => Some(avero_formats::formats::parse_xzz_key(text).ok_or(ParseError::InvalidKey)?),
-    };
-    load(Path::new(&path), ParseOptions { xzz_key })
+async fn open_board(
+    path: String,
+    xzz_key: Option<String>,
+    fz_key: Option<String>,
+) -> Result<Board, LoadError> {
+    use avero_formats::formats::{parse_fz_key, parse_xzz_key};
+    let given = |k: &Option<String>| k.as_deref().map(str::trim).filter(|k| !k.is_empty()).map(str::to_owned);
+    // A malformed key becomes one that fails the parity check, so only the
+    // files that need that key report it (and not every other file too).
+    let xzz_key = given(&xzz_key).map(|text| parse_xzz_key(&text).unwrap_or(0));
+    let fz_key = given(&fz_key).map(|text| parse_fz_key(&text).unwrap_or([0; 44]));
+    load(Path::new(&path), ParseOptions { xzz_key, fz_key })
 }
 
 #[tauri::command]

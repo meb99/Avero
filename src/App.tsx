@@ -392,7 +392,7 @@ export function App() {
         return;
       }
       setLoading(fileName(path));
-      const loaded = await loadPath(path, settings.xzzKey);
+      const loaded = await loadPath(path, { xzzKey: settings.xzzKey, fzKey: settings.fzKey });
       // An open board stays; the new one gets its own tab.
       const inNewTab = loaded.result.ok && live.current.model !== null;
       const shownSchematic = inNewTab ? undefined : live.current.schematic?.path;
@@ -402,7 +402,7 @@ export function App() {
       if (wanted && wanted !== shownSchematic) await openSchematicPath(wanted);
     },
     // switchTab and newTab only use refs and setters.
-    [finishLoad, openSchematicPath, settings.autoSchematic, settings.xzzKey],
+    [finishLoad, openSchematicPath, settings.autoSchematic, settings.xzzKey, settings.fzKey],
   );
 
   const openDialog = useCallback(async () => {
@@ -993,7 +993,7 @@ export function App() {
               <div>
                 <strong>{t("error.title", { name: error.name })}</strong>
                 <p>{errorText}</p>
-                {(error.error.code === "needs-key" || error.error.code === "invalid-key") && (
+                {["needs-key", "invalid-key", "needs-fz-key", "invalid-fz-key"].includes(error.error.code) && (
                   <button
                     className="small"
                     onClick={() => {
@@ -1083,7 +1083,7 @@ export function App() {
               setDialog(null);
               const retry = retryPath.current;
               retryPath.current = null;
-              if (retry && settings.xzzKey) void openPath(retry);
+              if (retry && (settings.xzzKey || settings.fzKey)) void openPath(retry);
             }}
           />
         )}

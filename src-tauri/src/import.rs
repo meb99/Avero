@@ -1,12 +1,13 @@
 //! Copies boardviews and schematics into Avero's own library folder.
 //!
-//! Accepts single files, whole folders and ZIP archives. Files are sorted
+//! Accepts single files, whole folders and ZIP, 7z and RAR archives. Files are sorted
 //! into one folder per board: the name the user typed, else the board number
 //! from the file or archive name, else the file name. Identical files are
 //! skipped; different files with the same name are numbered.
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use serde::Serialize;
 
@@ -75,6 +76,10 @@ fn collect(path: &Path, depth: usize, out: &mut Vec<Source>, result: &mut Import
         if let Err(e) = expand_zip(path, out, result) {
             result.errors.push(format!("{name}: {e}"));
         }
+    } else if [".7z", ".rar"].iter().any(|ext| name.to_ascii_lowercase().ends_with(ext)) {
+        if let Err(e) = expand_with_bsdtar(path, out, result) {
+            result.errors.push(format!("{name}: {e}"));
+        }
     } else if is_importable(&name, || head_of(path)) {
         out.push(Source { context: dir_name(path), name, data: Data::File(path.to_path_buf()) });
     } else {
@@ -115,6 +120,77 @@ fn expand_zip(path: &Path, out: &mut Vec<Source>, result: &mut ImportResult) -> 
         }
     }
     Ok(())
+}
+
+/// libarchive's `bsdtar`, which reads 7z and RAR. macOS ships it as `tar`.
+fn bsdtar() -> Option<&'static str> {
+    let works = |tool: &str| Command::new(tool).arg("--version").output().is_ok_and(|o| o.status.success());
+    ["bsdtar", "/usr/bin/bsdtar"]
+        .into_iter()
+        .find(|tool| works(tool))
+        .or(cfg!(target_os = "macos").then_some("/usr/bin/tar"))
+}
+
+/// Unpacks a 7z or RAR archive into a temporary folder and reads the
+/// usable files from it. bsdtar refuses absolute paths and `..` in archive
+/// entries; symbolic links from the archive are not followed either.
+fn expand_with_bsdtar(path: &Path, out: &mut Vec<Source>, result: &mut ImportResult) -> Result<(), String> {
+    let tool = bsdtar().ok_or("7z and RAR archives need bsdtar (part of macOS)")?;
+    let stamp =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let tmp = std::env::temp_dir().join(format!("avero-unpack-{}-{stamp}", std::process::id()));
+    std::fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
+    let unpacked = Command::new(tool)
+        .arg("-x")
+        .arg("-f")
+        .arg(path)
+        .arg("-C")
+        .arg(&tmp)
+        .output()
+        .map_err(|e| e.to_string())
+        .and_then(|o| {
+            if o.status.success() {
+                Ok(())
+            } else {
+                let message = String::from_utf8_lossy(&o.stderr);
+                Err(message.lines().last().unwrap_or("could not unpack").trim().to_string())
+            }
+        });
+    if unpacked.is_ok() {
+        let archive_name =
+            path.file_name().map(|n| stem(&n.to_string_lossy()).to_string()).unwrap_or_default();
+        read_unpacked(&tmp, &archive_name, 0, out, result);
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
+    unpacked
+}
+
+/// Reads files from an unpacked archive into memory (the folder is removed
+/// right after).
+fn read_unpacked(dir: &Path, context: &str, depth: usize, out: &mut Vec<Source>, result: &mut ImportResult) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Ok(meta) = std::fs::symlink_metadata(&path) else { continue };
+        if name.starts_with('.') || name == "__MACOSX" || meta.file_type().is_symlink() {
+            continue;
+        }
+        if meta.is_dir() {
+            if depth < MAX_DEPTH {
+                read_unpacked(&path, &name, depth + 1, out, result);
+            }
+        } else if meta.len() > avero_formats::MAX_FILE_SIZE as u64 {
+            result.errors.push(format!("{name}: too large"));
+        } else if is_importable(&name, || head_of(&path)) {
+            match std::fs::read(&path) {
+                Ok(data) => out.push(Source { name, context: context.to_string(), data: Data::Bytes(data) }),
+                Err(e) => result.errors.push(format!("{name}: {e}")),
+            }
+        } else {
+            result.skipped += 1;
+        }
+    }
 }
 
 /// Keeps a user-typed folder path inside the library: no `..`, no
@@ -282,6 +358,36 @@ mod tests {
         let changed = import(&lib, &paths[..1], None);
         assert!(changed.imported[0].ends_with("820-02100 (2).brd"), "{changed:?}");
 
+        std::fs::remove_dir_all(&src).unwrap();
+        std::fs::remove_dir_all(&lib).unwrap();
+    }
+
+    #[test]
+    fn unpacks_7z_archives_with_bsdtar() {
+        // Runs where bsdtar is installed (always on macOS).
+        let Some(tool) = bsdtar() else { return };
+        let src = temp("7z");
+        let lib = temp("7zlib");
+        let content = src.join("content");
+        std::fs::create_dir_all(content.join("board")).unwrap();
+        std::fs::write(content.join("board/820-02100.brd"), b"str_length:").unwrap();
+        std::fs::write(content.join("J413 820-02100.pdf"), b"%PDF").unwrap();
+        std::fs::write(content.join("readme.txt"), b"hi").unwrap();
+        let archive = src.join("iPhone 13 Pro.7z");
+        let made = Command::new(tool)
+            .args(["--format", "7zip", "-c", "-f"])
+            .arg(&archive)
+            .arg("-C")
+            .arg(&content)
+            .arg(".")
+            .status()
+            .unwrap();
+        assert!(made.success());
+
+        let r = import(&lib, &[archive], None);
+        assert!(r.errors.is_empty(), "{r:?}");
+        assert_eq!(r.skipped, 1);
+        assert_eq!(files_in(&lib), ["820-02100/820-02100.brd", "820-02100/J413 820-02100.pdf"]);
         std::fs::remove_dir_all(&src).unwrap();
         std::fs::remove_dir_all(&lib).unwrap();
     }

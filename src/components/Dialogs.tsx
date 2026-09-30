@@ -123,6 +123,21 @@ export function SettingsDialog({ settings, onChange, onClose }: SettingsProps) {
         />
       </div>
       <p className="muted setting-hint">{t("settings.xzzKeyHint")}</p>
+      <div className="form-grid">
+        <label htmlFor="set-fz">{t("settings.fzKey")}</label>
+        <textarea
+          id="set-fz"
+          className="key-input"
+          rows={3}
+          spellCheck={false}
+          autoComplete="off"
+          placeholder="0x… 0x… (44)"
+          value={settings.fzKey}
+          onChange={(e) => set("fzKey", e.target.value)}
+          aria-invalid={settings.fzKey.trim() !== "" && fzWords(settings.fzKey) !== 44}
+        />
+      </div>
+      <p className="muted setting-hint">{t("settings.fzKeyHint", { n: fzWords(settings.fzKey) })}</p>
       <h3>{t("schematic.title")}</h3>
       <div className="checks">{check("autoSchematic", t("settings.autoSchematic"))}</div>
       <h3>Avero</h3>
@@ -134,6 +149,12 @@ export function SettingsDialog({ settings, onChange, onClose }: SettingsProps) {
       </footer>
     </Dialog>
   );
+}
+
+/** Number of hexadecimal words in a typed FZ key. */
+function fzWords(text: string): number {
+  const words = text.split(/[\s,;]+/).filter(Boolean);
+  return words.every((w) => /^(0x)?[0-9a-f]{1,8}$/i.test(w)) ? words.length : -1;
 }
 
 export function HelpDialog({ onClose }: { onClose(): void }) {

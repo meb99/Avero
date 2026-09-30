@@ -85,7 +85,7 @@ fn classify(name: &str, head: impl FnOnce() -> Vec<u8>) -> Option<Kind> {
         // An ASC board is three files; pins.asc stands for the set.
         "asc" => (name == "pins.asc").then_some(Kind::Board),
         "pcb" => is_xzz_head(&head()).then_some(Kind::Board),
-        "fz" | "tvw" | "cae" => Some(Kind::Unsupported),
+        "tvw" | "cae" => Some(Kind::Unsupported),
         _ if avero_formats::formats::extensions().contains(&ext) => Some(Kind::Board),
         _ => None,
     }
@@ -301,6 +301,7 @@ mod tests {
         let root = tree(&[
             "Apple/iPhone 13 Pro/820-02100.brd",
             "Apple/iPhone 13 Pro/820-02100.fz",
+            "Apple/iPhone 13 Pro/820-02100.tvw",
             "Apple/Schematics/J413 820-02100 schematic.pdf",
             "Lenovo/X1C6 NM-B481/pins.asc",
             "Lenovo/X1C6 NM-B481/format.asc",
@@ -312,13 +313,13 @@ mod tests {
         ]);
         let scan = scan(std::slice::from_ref(&root));
         assert!(!scan.truncated);
-        assert_eq!(scan.files, 7);
+        assert_eq!(scan.files, 8);
 
         let by_title: HashMap<&str, &LibraryEntry> =
             scan.entries.iter().map(|e| (e.title.as_str(), e)).collect();
         let apple = by_title["820-02100"];
-        assert_eq!(names(&apple.boards), ["820-02100.brd"]);
-        assert_eq!(names(&apple.unsupported), ["820-02100.fz"]);
+        assert_eq!(names(&apple.boards), ["820-02100.brd", "820-02100.fz"]);
+        assert_eq!(names(&apple.unsupported), ["820-02100.tvw"]);
         assert_eq!(names(&apple.schematics), ["J413 820-02100 schematic.pdf"]);
         assert_eq!(apple.folder, "Apple/iPhone 13 Pro");
 

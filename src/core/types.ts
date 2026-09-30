@@ -86,6 +86,8 @@ export type LoadErrorCode =
   | "schematic"
   | "needs-key"
   | "invalid-key"
+  | "needs-fz-key"
+  | "invalid-fz-key"
   | "internal";
 
 export interface LoadError {
