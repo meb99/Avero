@@ -231,6 +231,9 @@ pub struct Board {
     pub nets: Vec<Net>,
     /// Problems that did not prevent loading, such as skipped lines.
     pub warnings: Vec<String>,
+    /// Parts left out because they are encrypted and no key was given
+    /// (XinZhiZao without key): the board shows outline and test points only.
+    pub locked_parts: u32,
 }
 
 impl Board {

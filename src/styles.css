@@ -1916,3 +1916,7 @@ button.danger {
 .compare-pane .board-view {
   flex: 1;
 }
+
+.error-banner.info-banner {
+  border-color: var(--accent);
+}

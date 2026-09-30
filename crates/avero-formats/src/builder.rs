@@ -61,6 +61,7 @@ pub(crate) struct RawBoard {
     pub parts: Vec<RawPart>,
     pub test_points: Vec<RawTestPoint>,
     pub warnings: Vec<String>,
+    pub locked_parts: u32,
 }
 
 impl RawBoard {
@@ -72,6 +73,7 @@ impl RawBoard {
             parts: Vec::new(),
             test_points: Vec::new(),
             warnings: Vec::new(),
+            locked_parts: 0,
         }
     }
 
@@ -209,6 +211,7 @@ impl RawBoard {
             test_points,
             nets: nets.finish(),
             warnings: self.warnings,
+            locked_parts: self.locked_parts,
         }
     }
 }

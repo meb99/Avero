@@ -20,7 +20,7 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 
 **Boardview**
 - Liest Test_Link `.brd` (auch verschleierte Dateien), BRD2, Honhan `.bdv`, ASUS `.asc` und `.fz`, BoardViewer `.bvr` / BVR3, GenCAD, Panel-CAD, IBM `.cst` und XinZhiZao `.pcb`.
-- XinZhiZao- und die meisten ASUS-`.fz`-Dateien sind verschlüsselt: Die Schlüssel trägst du einmal in den Einstellungen ein (Avero liefert sie nicht mit, genau wie OpenBoardView). Ohne Schlüssel sagt Avero das klar und öffnet die Datei nach dem Eintragen automatisch. Unverschlüsselte `.fz`-Dateien öffnen sich direkt.
+- XinZhiZao- und die meisten ASUS-`.fz`-Dateien sind verschlüsselt: Die Schlüssel trägst du einmal in den Einstellungen ein (Avero liefert sie nicht mit, genau wie OpenBoardView). XZZ-Dateien öffnen sich auch ohne Schlüssel mit allem, was nicht verschlüsselt ist (Umriss, Netze, Testpunkte); nur die Bauteile brauchen ihn. Unverschlüsselte `.fz`-Dateien öffnen sich direkt.
 - Flüssige Darstellung per GPU (WebGL 2), auch bei zehntausenden Pins.
 - Oberseite / Unterseite (gespiegelt wie ein umgedrehtes Board), Drehen in 90°-Schritten.
 - Klick auf einen Pin hebt das ganze Netz hervor. Pins desselben Netzes auf der anderen Seite bleiben schwach sichtbar, damit man sieht, wohin das Signal geht.

@@ -143,7 +143,7 @@ pub fn parse_asc(format: Option<&[u8]>, pins: &[u8], nails: Option<&[u8]>) -> Re
 
 fn finish(raw: builder::RawBoard) -> Result<Board, ParseError> {
     let board = raw.build();
-    if board.parts.is_empty() && board.pins.is_empty() {
+    if board.parts.is_empty() && board.pins.is_empty() && board.test_points.is_empty() {
         return Err(ParseError::NoContent);
     }
     Ok(board)

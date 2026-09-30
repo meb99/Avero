@@ -13,6 +13,8 @@
 //! - Coordinates are `u32` in 1/10000 mil.
 //!
 //! The DES key is not part of Avero; users enter it in the settings.
+//! Without it, everything but the parts is still readable: outline, nets
+//! and named test pads.
 
 use des::cipher::{Block, BlockCipherDecrypt, KeyInit};
 use des::Des;
@@ -137,8 +139,7 @@ fn point(x: u32, y: u32) -> Point {
 }
 
 pub fn parse(input: &[u8], key: Option<u64>) -> Result<RawBoard, ParseError> {
-    let key = key.ok_or(ParseError::NeedsKey)?;
-    if !key_is_plausible(key) {
+    if key.is_some_and(|k| !key_is_plausible(k)) {
         return Err(ParseError::InvalidKey);
     }
 
@@ -199,9 +200,12 @@ pub fn parse(input: &[u8], key: Option<u64>) -> Result<RawBoard, ParseError> {
                     outline.push((point(x1?, y1?), point(x2?, y2?)));
                 }
             }
-            0x07 => match parse_part(&des_decrypt(body, key), &net_name) {
-                Ok(part) => board.parts.push(part),
-                Err(_) => failed_parts += 1,
+            0x07 => match key {
+                Some(key) => match parse_part(&des_decrypt(body, key), &net_name) {
+                    Ok(part) => board.parts.push(part),
+                    Err(_) => failed_parts += 1,
+                },
+                None => board.locked_parts += 1,
             },
             0x09 => board.test_points.push(parse_test_pad(body, &net_name)?),
             // Vias and text are not needed for a boardview.
@@ -210,6 +214,10 @@ pub fn parse(input: &[u8], key: Option<u64>) -> Result<RawBoard, ParseError> {
         }
     }
 
+    // Without a key, only a board with test pads is worth showing.
+    if key.is_none() && board.test_points.is_empty() {
+        return Err(ParseError::NeedsKey);
+    }
     if board.parts.is_empty() && failed_parts > 0 {
         return Err(ParseError::invalid(
             FormatId::Xzz,

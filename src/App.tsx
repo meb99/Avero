@@ -132,6 +132,8 @@ export function App() {
   const [dragOver, setDragOver] = useState(false);
   const [recent, setRecent] = useState<string[]>(loadRecent);
   const [toast, setToast] = useState<string | null>(null);
+  // The "parts are encrypted" notice, dismissed per board.
+  const [lockedDismissed, setLockedDismissed] = useState<BoardModel | null>(null);
   const [update, setUpdate] = useState<Update | null>(null);
   const [schematic, setSchematic] = useState<SchematicDocument | null>(null);
   const [schematicVisible, setSchematicVisible] = useState(true);
@@ -1061,6 +1063,20 @@ export function App() {
             </>
           )}
 
+          {!error && model && (model.board.lockedParts ?? 0) > 0 && lockedDismissed !== model && (
+            <div className="error-banner info-banner" role="status">
+              <div>
+                <strong>{t("locked.title", { n: model.board.lockedParts ?? 0 })}</strong>
+                <p>{t("locked.text")}</p>
+                <button className="small" onClick={() => setDialog("settings")}>
+                  {t("error.openSettings")}
+                </button>
+              </div>
+              <button className="tool icon-only" onClick={() => setLockedDismissed(model)} aria-label={t("error.dismiss")}>
+                <CloseIcon />
+              </button>
+            </div>
+          )}
           {error && (
             <div className="error-banner" role="alert">
               <div>

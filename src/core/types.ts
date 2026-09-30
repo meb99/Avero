@@ -71,6 +71,8 @@ export interface Board {
   testPoints: TestPoint[];
   nets: Net[];
   warnings: string[];
+  /** Encrypted parts left out (XinZhiZao without key). */
+  lockedParts?: number;
 }
 
 export type LoadErrorCode =

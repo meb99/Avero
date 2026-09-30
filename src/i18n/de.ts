@@ -316,4 +316,6 @@ export const de: Record<MessageKey, string> = {
   "compare.title": "Verglichen mit",
   "compare.missing": "auf diesem Board nicht vorhanden",
   "compare.needsTabs": "Öffne ein zweites Board in einem weiteren Tab, um zu vergleichen.",
+  "locked.title": "{n} Bauteile dieser XinZhiZao-Datei sind verschlüsselt",
+  "locked.text": "Ohne XZZ-Schlüssel zeigt Avero, was ohne ihn lesbar ist: Umriss, Netze und Testpunkte (Suche, Messwerte und Notizen funktionieren damit). Bauteile und ihre Pins brauchen den Schlüssel.",
 };

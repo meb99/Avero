@@ -468,7 +468,7 @@ fn errors() {
     assert_eq!(parse(b"", Some("a.brd")).unwrap_err(), ParseError::Empty);
     assert_eq!(parse(b"hello world", Some("a.txt")).unwrap_err(), ParseError::Unrecognized);
     assert_eq!(parse(b"%PDF-1.7 ...", Some("a.pdf")).unwrap_err(), ParseError::Pdf);
-    assert_eq!(parse(b"XZZPCB V1.0 ...", Some("a.pcb")).unwrap_err(), ParseError::NeedsKey);
+    assert!(matches!(parse(b"XZZPCB V1.0 ...", Some("a.pcb")), Err(ParseError::Invalid { .. })));
     assert_eq!(parse(b"\x00\x01", Some("a.fz")).unwrap_err().code(), "invalid");
 }
 
@@ -661,7 +661,6 @@ fn xzz_plain_and_xored() {
 #[test]
 fn xzz_key_errors() {
     let file = xzz_fixture(0);
-    assert_eq!(parse(&file, Some("board.pcb")).unwrap_err(), ParseError::NeedsKey);
     assert_eq!(avero_formats::parse_with(&file, None, xzz_options(0)).unwrap_err(), ParseError::InvalidKey);
     // Plausible but wrong: the part data decrypts to garbage.
     let wrong = 0x8003_0303_0303_0305;
@@ -670,6 +669,17 @@ fn xzz_key_errors() {
         ParseError::Invalid { message, .. } => assert!(message.contains("key"), "{message}"),
         other => panic!("{other:?}"),
     }
+}
+
+#[test]
+fn xzz_without_key_shows_outline_and_test_pads() {
+    let b = parse(&xzz_fixture(0x5a), Some("board.pcb")).unwrap();
+    assert!(b.parts.is_empty());
+    assert_eq!(b.locked_parts, 1);
+    assert_eq!(b.test_points.len(), 1);
+    assert_eq!(b.test_points[0].name.as_deref(), Some("TP7"));
+    assert_eq!(b.nets[b.test_points[0].net as usize].name, "VCC");
+    assert_eq!(b.outline.len(), 1);
 }
 
 #[test]
