@@ -9,7 +9,7 @@ Alle Parser liegen in `crates/avero-formats/src/formats`. Erkannt wird zuerst am
 | Honhan BDV | `.bdv` | verschleierter Kopf `dd:1.3?,r?-=bb` | Zoll | Pro Byte `Schlüssel − Wert`, Schlüssel beginnt bei 160 und steigt pro CRLF-Zeile, von 286 zurück auf 159. Inhalt = ASC-Abschnitte. |
 | ASUS ASC | `.asc` | Endung | Zoll | Drei Dateien im selben Ordner: `format.asc`, `pins.asc`, `nails.asc` (Groß-/Kleinschreibung egal). Kopfzeilen werden an der Zeilenform erkannt statt an einer festen Anzahl. |
 | BoardViewer BVR | `.bvr` | `BVRAW_FORMAT_1` | Zoll | Abschnitte `<<Layout>>`, `<<Pin>>`, `<<Nail>>`. |
-| BoardViewer BVR3 | `.bvr` | `BVRAW_FORMAT_3` | mil | Zeilenweise `SCHLÜSSEL Wert`. Pin-Radius und Bauteilumriss werden übernommen. |
+| BoardViewer BVR3 | `.bvr` | `BVRAW_FORMAT_3` | mil | Zeilenweise `SCHLÜSSEL Wert`. Pin-Radius und Bauteilumriss werden übernommen. `PIN_ORIGIN` ist je nach Programm relativ zum Bauteil oder absolut; Avero erkennt das pro Datei daran, welche Lesart die Pins näher an ihr Bauteil legt. |
 | GenCAD 1.4 | `.cad`, `.gcd` | `GENCAD` + `$HEADER` | laut `UNITS` | Liest Umriss, Pads/Padstacks (Größe, Seite, Bohrung), Shapes (Pins, Umriss), Komponenten, Devices (Wert), Signale, Vias. |
 | Panel-CAD | `.cad` | `###Panel Added` + `C_PIN` | Zoll | Kein Umriss in der Datei, er wird aus den Pins erzeugt. |
 | IBM CST | `.cst` | Endung | unbekannt | Binär. Nur Bauteile, Netze und Pins; Umriss wird aus den Pins erzeugt. |

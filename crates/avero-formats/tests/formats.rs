@@ -918,3 +918,17 @@ fn eagle_boards() {
     // The curved edge bulges 15 mm to the left.
     assert!((b.bounds.min_x + 15.0 * MIL).abs() < 5.0, "{}", b.bounds.min_x);
 }
+
+#[test]
+fn bvr3_with_absolute_pin_origins() {
+    // Some writers store PIN_ORIGIN absolute (seen in real files), others
+    // relative to PART_ORIGIN; the reader tells them apart per file.
+    let file = "BVRAW_FORMAT_3\r\n\r\nPART_NAME U1\r\n\tPART_SIDE T\r\n\tPART_ORIGIN 2000 1500\r\n\tPART_MOUNT SMD\r\n\
+        \tPIN_ID U1-1\r\n\t\tPIN_NUMBER 1\r\n\t\tPIN_SIDE T\r\n\t\tPIN_ORIGIN 1990 1500\r\n\t\tPIN_NET GND\r\n\tPIN_END\r\n\
+        \tPIN_ID U1-2\r\n\t\tPIN_NUMBER 2\r\n\t\tPIN_SIDE T\r\n\t\tPIN_ORIGIN 2010 1500\r\n\t\tPIN_NET VCC\r\n\tPIN_END\r\n\
+        PART_END\r\n\r\nOUTLINE_POINTS 0 0 4000 0 4000 3000 0 3000 0 0\r\n";
+    let b = parse(file.as_bytes(), Some("board.bvr")).unwrap();
+    assert_close(b.pins[0].x, 1990.0);
+    assert_close(b.pins[1].x, 2010.0);
+    assert_close(b.bounds.max_x, 4000.0);
+}

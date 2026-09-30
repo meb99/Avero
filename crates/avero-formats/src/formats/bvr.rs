@@ -118,8 +118,27 @@ pub fn parse_v1(buf: &[u8]) -> Result<RawBoard, ParseError> {
     Ok(board)
 }
 
+/// BVR3 writers disagree on `PIN_ORIGIN`: some store it relative to the
+/// part origin (as OpenBoardView reads it), others absolute. Whichever
+/// reading keeps pins closer to their part origin is the right one.
+fn pins_are_absolute(parts: &[(RawPart, Point)]) -> bool {
+    let (mut absolute, mut relative) = (Vec::new(), Vec::new());
+    for (part, origin) in parts {
+        for pin in &part.pins {
+            absolute.push(((pin.pos.x - origin.x).powi(2) + (pin.pos.y - origin.y).powi(2)).sqrt());
+            relative.push((pin.pos.x.powi(2) + pin.pos.y.powi(2)).sqrt());
+        }
+    }
+    let median = |v: &mut Vec<f64>| {
+        v.sort_by(f64::total_cmp);
+        v.get(v.len() / 2).copied().unwrap_or(0.0)
+    };
+    !absolute.is_empty() && median(&mut absolute) < median(&mut relative)
+}
+
 pub fn parse_v3(buf: &[u8]) -> Result<RawBoard, ParseError> {
     let mut board = RawBoard::new(FormatId::Bvr3);
+    let mut done: Vec<(RawPart, Point)> = Vec::new();
     let mut part: Option<(RawPart, Point)> = None;
     let mut pin = RawPin::default();
     let mut pin_side: Option<Side> = None;
@@ -167,9 +186,9 @@ pub fn parse_v3(buf: &[u8]) -> Result<RawBoard, ParseError> {
             b"PIN_NAME" => pin.name = f.string(),
             b"PIN_SIDE" => pin_side = f.string().map(|s| side_letter(&s)),
             b"PIN_ORIGIN" => {
+                // As written; resolved against the part origin at the end.
                 if let (Some(x), Some(y)) = (f.float(), f.float()) {
-                    let origin = part.as_ref().map_or(Point::default(), |(_, o)| *o);
-                    pin.pos = Point::new(x + origin.x, y + origin.y);
+                    pin.pos = Point::new(x, y);
                 }
             }
             b"PIN_RADIUS" => pin.radius = f.float(),
@@ -183,8 +202,8 @@ pub fn parse_v3(buf: &[u8]) -> Result<RawBoard, ParseError> {
                 }
             }
             b"PART_END" => {
-                if let Some((p, _)) = part.take() {
-                    board.parts.push(p);
+                if let Some(finished) = part.take() {
+                    done.push(finished);
                 }
             }
             b"OUTLINE_POINTS" => board.outline_path.extend(read_points(&mut f)),
@@ -194,6 +213,16 @@ pub fn parse_v3(buf: &[u8]) -> Result<RawBoard, ParseError> {
             }
             _ => {}
         }
+    }
+
+    let absolute = pins_are_absolute(&done);
+    for (mut p, origin) in done {
+        if !absolute {
+            for pin in &mut p.pins {
+                pin.pos = Point::new(pin.pos.x + origin.x, pin.pos.y + origin.y);
+            }
+        }
+        board.parts.push(p);
     }
 
     if board.parts.is_empty() && board.outline_path.is_empty() && board.outline_segments.is_empty() {
