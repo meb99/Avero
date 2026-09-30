@@ -189,7 +189,7 @@ pub fn parse_v3(buf: &[u8]) -> Result<RawBoard, ParseError> {
             b"OUTLINE_POINTS" => board.outline_path.extend(read_points(&mut f)),
             b"OUTLINE_SEGMENTED" => {
                 let pts = read_points(&mut f);
-                board.outline_segments.extend(pts.chunks_exact(2).map(|c| (c[0], c[1])));
+                board.outline_segments.extend(pts.as_chunks::<2>().0.iter().map(|[a, b]| (*a, *b)));
             }
             _ => {}
         }
