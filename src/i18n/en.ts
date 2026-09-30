@@ -308,6 +308,12 @@ export const en = {
   "settings.fzKeyHint": "Most ASUS .fz files are encrypted with a key of 44 hexadecimal words (as in OpenBoardView's settings). Avero does not ship it. Unencrypted .fz files open without a key. Words entered: {n}.",
   "error.needs-fz-key": "This ASUS .fz file is encrypted. Enter the FZ key in the settings.",
   "error.invalid-fz-key": "The FZ key in the settings does not fit this file. Check it for typos.",
+  "compare.menu": "Compare with Another Tab",
+  "compare.prefix": "Compare with:",
+  "compare.stop": "Stop Comparing",
+  "compare.title": "Compared with",
+  "compare.missing": "not on this board",
+  "compare.needsTabs": "Open a second board in another tab to compare.",
 };
 
 export type MessageKey = keyof typeof en;

@@ -1885,3 +1885,34 @@ button.danger {
   width: 110px;
   accent-color: var(--accent);
 }
+
+/* Board comparison */
+
+.compare-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+}
+
+.compare-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 6px 0 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.compare-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compare-pane .board-view {
+  flex: 1;
+}

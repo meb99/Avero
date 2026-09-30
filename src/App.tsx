@@ -15,6 +15,7 @@ import { Toolbar } from "./components/Toolbar";
 import { Welcome } from "./components/Welcome";
 import { BoardModel, type ViewSide } from "./core/board";
 import type { Command } from "./core/commands";
+import { mapSelection } from "./core/compare";
 import {
   BOARD_EXTENSIONS,
   loadDemo,
@@ -145,6 +146,10 @@ export function App() {
   const [tabs, setTabs] = useState<Tab[]>(() => [emptyTab(0)]);
   const [activeTab, setActiveTab] = useState(0);
   const [initialView, setInitialView] = useState<ViewState | undefined>(undefined);
+  // Another tab's board shown next to this one for comparison.
+  const [compareTab, setCompareTab] = useState<number | null>(null);
+  const compareViewRef = useRef<BoardViewHandle>(null);
+  const [paletteQuery, setPaletteQuery] = useState("");
   const nextTabId = useRef(1);
   const live = useRef<Tab>(emptyTab(0));
   live.current = { id: activeTab, model, source, side, rotation, selection, schematic, schematicVisible };
@@ -164,7 +169,13 @@ export function App() {
   const { t } = i18n;
   const theme = useTheme(settings);
   const palette = theme === "dark" ? DARK : LIGHT;
-  const showSchematic = schematic !== null && schematicVisible && !detached;
+  const compared = compareTab !== null && compareTab !== activeTab ? tabs.find((t) => t.id === compareTab) : undefined;
+  const compareModel = compared?.model ?? null;
+  const showSchematic = schematic !== null && schematicVisible && !detached && !compareModel;
+  const compareSelection = useMemo(
+    () => (model && compareModel ? mapSelection(model, compareModel, selection) : NONE),
+    [model, compareModel, selection],
+  );
   const { notes, update: updateNotes, error: notesError } = useBoardNotes(source);
 
   // --- board photos ----------------------------------------------------------
@@ -323,6 +334,7 @@ export function App() {
   const restoreTab = (tab: Tab) => {
     setActiveTab(tab.id);
     setTextQuery(null);
+    setCompareTab(null);
     setModel(tab.model);
     setSource(tab.source);
     setSide(tab.side);
@@ -596,6 +608,25 @@ export function App() {
     };
   }, [openPath]);
 
+  // --- comparison ----------------------------------------------------------
+
+  // The compared board follows the selection.
+  useEffect(() => {
+    const bounds = compareModel?.selectionBounds(compareSelection);
+    if (bounds) compareViewRef.current?.zoomTo(bounds);
+  }, [compareModel, compareSelection]);
+
+  const comparable = tabs.filter((t) => t.id !== activeTab && t.model !== null);
+
+  const toggleCompare = () => {
+    if (compareModel) setCompareTab(null);
+    else if (comparable.length === 1) setCompareTab(comparable[0].id);
+    else if (comparable.length > 1) {
+      setPaletteQuery(t("compare.prefix"));
+      setDialog("palette");
+    } else setToast(t("compare.needsTabs"));
+  };
+
   // --- app actions: menu bar, command palette ------------------------------
 
   const tabInfos: TabInfo[] = tabs.map((tab) => {
@@ -677,6 +708,7 @@ export function App() {
     toggleRatsnest: () => setSettings((s) => ({ ...s, ratsnest: !s.ratsnest })),
     addPhoto: () => void addPhoto(),
     togglePhoto: () => setShowPhoto((v) => !v),
+    compare: toggleCompare,
     shortcuts: () => setDialog("help"),
     checkUpdates: () => void checkUpdates(true),
     website: () => openExternal(WEBSITE),
@@ -730,6 +762,12 @@ export function App() {
       { id: "shortcuts", label: t("menu.shortcuts"), shortcut: "⌘/", run: a.shortcuts },
       { id: "updates", label: t("menu.checkUpdates"), run: a.checkUpdates },
       { id: "website", label: t("menu.website"), run: a.website },
+      ...(compareModel ? [{ id: "compare-stop", label: t("compare.stop"), run: () => setCompareTab(null) }] : []),
+      ...comparable.map((tab) => ({
+        id: `compare-${tab.id}`,
+        label: `${t("compare.prefix")} ${tabInfos.find((i) => i.id === tab.id)?.title ?? ""}`,
+        run: () => setCompareTab(tab.id),
+      })),
       ...tabInfos
         .filter((tab) => tab.id !== activeTab)
         .map((tab) => ({ id: `tab-${tab.id}`, label: `${t("tabs.tab")}: ${tab.title}`, run: () => switchTab(tab.id) })),
@@ -947,6 +985,41 @@ export function App() {
                 ) : (
                   !showSchematic && <div className="board-placeholder">{t("welcome.open")}</div>
                 )}
+                {model && compareModel && compared && (
+                  <>
+                    <Splitter
+                      container={workAreaRef}
+                      share={share}
+                      onDrag={setShare}
+                      onDone={(s) => setSettings((old) => ({ ...old, schematicShare: s }))}
+                    />
+                    <div className="compare-pane" style={{ width: `${share * 100}%` }}>
+                      <header className="compare-bar">
+                        <span className="compare-name" title={compared.source?.path}>
+                          {t("compare.title")}: <strong>{compared.source?.name}</strong>
+                        </span>
+                        {selection.kind !== "none" && compareSelection.kind === "none" && (
+                          <span className="muted">{t("compare.missing")}</span>
+                        )}
+                        <span className="schematic-spacer" />
+                        <button className="tool icon-only" onClick={() => setCompareTab(null)} aria-label={t("compare.stop")} title={t("compare.stop")}>
+                          <CloseIcon />
+                        </button>
+                      </header>
+                      <BoardView
+                        ref={compareViewRef}
+                        model={compareModel}
+                        side={side}
+                        rotation={rotation}
+                        selection={compareSelection}
+                        settings={settings}
+                        palette={palette}
+                        initialView={compared.view}
+                        onSelect={(sel, zoom) => select(mapSelection(compareModel, model, sel), zoom)}
+                      />
+                    </div>
+                  </>
+                )}
                 {schematic && showSchematic && (
                   <>
                     {model && (
@@ -1097,7 +1170,16 @@ export function App() {
           />
         )}
         {dialog === "palette" && (
-          <CommandPalette commands={paletteCommands()} model={model} onPick={(sel) => select(sel, true)} onClose={() => setDialog(null)} />
+          <CommandPalette
+            commands={paletteCommands()}
+            model={model}
+            initialQuery={paletteQuery}
+            onPick={(sel) => select(sel, true)}
+            onClose={() => {
+              setDialog(null);
+              setPaletteQuery("");
+            }}
+          />
         )}
         {dialog === "library" && <LibraryDialog drop={libraryDrop} onOpen={openLibraryEntry} onOpenText={(e, f, q) => void openLibraryText(e, f, q)} onClose={() => setDialog(null)} />}
       </div>

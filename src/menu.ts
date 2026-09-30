@@ -29,6 +29,7 @@ export interface MenuActions {
   toggleRatsnest(): void;
   addPhoto(): void;
   togglePhoto(): void;
+  compare(): void;
   shortcuts(): void;
   checkUpdates(): void;
   website(): void;
@@ -142,6 +143,7 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
         SEP,
         item("photo-add", t("photo.add"), (a) => a.addPhoto()),
         item("photo-toggle", t("photo.toggle"), (a) => a.togglePhoto()),
+        item("compare", t("compare.menu"), (a) => a.compare()),
         SEP,
         { item: "Fullscreen" },
       ],

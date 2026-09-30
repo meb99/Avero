@@ -51,6 +51,7 @@ Nachgereicht in 0.5:
 - Netze über 0-Ω-Widerstände, Spulen, Ferrite, Sicherungen und Jumper hinweg verfolgen („Weiter über")
 - Ansicht als PNG exportieren (Drucken geht über das exportierte Bild in Vorschau)
 - mehrere Boards in Tabs, jeder mit eigenem Schaltplan, eigener Auswahl und Ansicht
+- zwei Boards nebeneinander vergleichen, Auswahl nach Namen gespiegelt
 
 ## Offen
 
@@ -62,7 +63,6 @@ Diese Punkte brauchen **echte Beispieldateien**, die Avero nicht mitliefern darf
 - `.fz`-Dateien mit echtem Schlüssel gegenprüfen (bisher mit synthetischen Dateien nach OpenBoardView getestet)
 
 Weitere Ideen:
-- zwei Boards nebeneinander vergleichen
 - Pin-Nummern im Schaltplan dem Pin im Board zuordnen
 - echte Pad-Formen und Bauteil-Silkscreen, wo das Format sie enthält
 - frei belegbare Tastenkürzel

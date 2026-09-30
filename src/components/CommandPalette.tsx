@@ -9,6 +9,8 @@ import { ChipIcon, NetIcon, PinIcon, SearchIcon } from "./Icons";
 interface Props {
   commands: Command[];
   model: BoardModel | null;
+  /** Text the search starts with, e.g. to offer only the compare commands. */
+  initialQuery?: string;
   onPick(selection: Selection): void;
   onClose(): void;
 }
@@ -18,9 +20,9 @@ type Row =
   | { kind: "part" | "net" | "pin"; label: string; detail: string; selection: Selection };
 
 /** ⌘K: every command and every part, net and pin of the board in one list. */
-export function CommandPalette({ commands, model, onPick, onClose }: Props) {
+export function CommandPalette({ commands, model, initialQuery = "", onPick, onClose }: Props) {
   const { t } = useI18n();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
   const ref = useRef<HTMLDialogElement>(null);

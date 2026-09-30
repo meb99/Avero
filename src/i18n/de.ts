@@ -310,4 +310,10 @@ export const de: Record<MessageKey, string> = {
   "settings.fzKeyHint": "Die meisten ASUS-.fz-Dateien sind mit einem Schlüssel aus 44 hexadezimalen Wörtern verschlüsselt (wie in den Einstellungen von OpenBoardView). Avero liefert ihn nicht mit. Unverschlüsselte .fz-Dateien öffnen sich ohne Schlüssel. Eingegebene Wörter: {n}.",
   "error.needs-fz-key": "Diese ASUS-.fz-Datei ist verschlüsselt. Trag den FZ-Schlüssel in den Einstellungen ein.",
   "error.invalid-fz-key": "Der FZ-Schlüssel in den Einstellungen passt nicht zu dieser Datei. Prüf ihn auf Tippfehler.",
+  "compare.menu": "Mit anderem Tab vergleichen",
+  "compare.prefix": "Vergleichen mit:",
+  "compare.stop": "Vergleich beenden",
+  "compare.title": "Verglichen mit",
+  "compare.missing": "auf diesem Board nicht vorhanden",
+  "compare.needsTabs": "Öffne ein zweites Board in einem weiteren Tab, um zu vergleichen.",
 };

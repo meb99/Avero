@@ -31,6 +31,7 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - **Netze verfolgen** über Spulen, Ferrite, Sicherungen, Jumper und 0-Ω-Widerstände: Das Detailpanel zeigt „Weiter über", z. B. `PP1V8_SW` → `PP1V8` über `L3001`.
 - Ansicht als PNG exportieren (`⇧⌘E`), mit allen Beschriftungen.
 - **Tabs**: Jedes weitere Board öffnet sich in einem eigenen Tab, mit eigenem Schaltplan, eigener Auswahl und Ansicht. Eine schon offene Datei springt zu ihrem Tab.
+- **Zwei Boards vergleichen** (Darstellung → „Mit anderem Tab vergleichen"): das Board eines anderen Tabs daneben, Auswahl nach Namen gespiegelt – Bauteil, Pin und Netz werden auf beiden Boards gezeigt, etwa bei zwei Revisionen.
 - Detailpanel mit Wert, Seite, Position und allen verbundenen Bauteilen und Pins, dazu Listen aller Bauteile und Netze.
 
 **Schaltplan**
