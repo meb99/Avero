@@ -1928,3 +1928,38 @@ button.danger {
 .error-banner.info-banner {
   border-color: var(--accent);
 }
+
+/* Renaming library files */
+
+.dialog.rename-dialog {
+  width: min(620px, calc(100% - 32px));
+}
+
+.rename-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.rename-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rename-old {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rename-row input {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  color: var(--text);
+}

@@ -193,6 +193,8 @@ pub enum FormatId {
     Cst,
     Xzz,
     Fz,
+    KiCad,
+    Eagle,
     Demo,
 }
 
@@ -210,6 +212,8 @@ impl FormatId {
             FormatId::Cst => "IBM CST",
             FormatId::Xzz => "XinZhiZao PCB",
             FormatId::Fz => "ASUS FZ",
+            FormatId::KiCad => "KiCad",
+            FormatId::Eagle => "EAGLE / Fusion 360",
             FormatId::Demo => "Avero demo board",
         }
     }

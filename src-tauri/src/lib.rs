@@ -158,6 +158,12 @@ fn library_root(app: tauri::AppHandle) -> Result<String, String> {
     library_dir(&app).map(|d| d.to_string_lossy().into_owned())
 }
 
+/// Renames a file of the library; returns the new path.
+#[tauri::command]
+fn rename_library_file(path: String, name: String) -> Result<String, String> {
+    import::rename_file(Path::new(&path), &name).map(|p| p.to_string_lossy().into_owned())
+}
+
 /// Copies files, folders or ZIP archives into the library.
 #[tauri::command]
 async fn import_files(
@@ -317,6 +323,7 @@ pub fn run() {
             scan_library,
             library_root,
             import_files,
+            rename_library_file,
             load_notes,
             save_notes,
             export_json,

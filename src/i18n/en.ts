@@ -323,6 +323,11 @@ export const en = {
   "update.installing": "Installing Avero {version}… Avero restarts by itself.",
   "update.failedInstall": "The update could not be installed ({message}). The download page is open instead.",
   "error.xzz-all-locked": "Everything useful in this XinZhiZao file is encrypted (parts with pins, no open test points). Without the key there is nothing to show but the outline. The same board as .brd, .bdv, .asc or .fz opens without a key.",
+  "rename.action": "Rename files",
+  "rename.title": "Rename: {name}",
+  "rename.imported": "imported files",
+  "rename.hint": "Give downloads clear names, ideally with the board number (e.g. 820-02100): Avero groups files by it. The file extension stays if you leave it out.",
+  "rename.save": "Rename",
 };
 
 export type MessageKey = keyof typeof en;

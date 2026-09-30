@@ -6,8 +6,10 @@ pub(crate) mod brd2;
 pub(crate) mod bvr;
 pub(crate) mod cad;
 pub(crate) mod cst;
+pub(crate) mod eagle;
 pub(crate) mod fz;
 pub(crate) mod gencad;
+pub(crate) mod kicad;
 pub(crate) mod xzz;
 
 /// Obfuscation used by `.bdv` files; exposed for tests and tooling.
@@ -59,6 +61,12 @@ pub fn detect(buf: &[u8], file_name: Option<&str>) -> Detected {
         "tvw" => return Detected::Unsupported("Teboview TVW"),
         "asc" | "bom" => return Detected::AscBundle,
         _ => {}
+    }
+    if kicad::detect(buf) {
+        return Detected::Supported(FormatId::KiCad);
+    }
+    if eagle::detect(buf) {
+        return Detected::Supported(FormatId::Eagle);
     }
     if gencad::detect(buf) {
         return Detected::Supported(FormatId::GenCad);
@@ -118,6 +126,8 @@ pub const SUPPORTED: &[FormatInfo] = &[
     FormatInfo { id: "cst", name: "IBM CST", extensions: &["cst"] },
     FormatInfo { id: "xzz", name: "XinZhiZao PCB", extensions: &["pcb"] },
     FormatInfo { id: "fz", name: "ASUS FZ", extensions: &["fz"] },
+    FormatInfo { id: "kicad", name: "KiCad", extensions: &["kicad_pcb"] },
+    FormatInfo { id: "eagle", name: "EAGLE / Fusion 360", extensions: &["brd"] },
 ];
 
 /// Every extension the open dialog should offer.

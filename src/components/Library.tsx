@@ -18,8 +18,9 @@ import {
   type LibraryState,
 } from "../workbench/library";
 import { LibraryText } from "./LibraryText";
+import { RenameFiles, type RenameTarget } from "./RenameFiles";
 import { Dialog } from "./Dialogs";
-import { CloseIcon, OpenIcon } from "./Icons";
+import { CloseIcon, OpenIcon, RenameIcon } from "./Icons";
 import { VirtualList } from "./VirtualList";
 
 /** Paths dropped on the window while the library is open. */
@@ -51,6 +52,7 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<RenameTarget | null>(null);
   const handledDrop = useRef(drop?.nonce ?? 0);
 
   const rescan = async (folders: string[], own = root) => {
@@ -86,8 +88,11 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
     setImporting(true);
     setError(null);
     try {
-      setResult(await importFiles(paths, device));
+      const imported = await importFiles(paths, device);
+      setResult(imported);
       await rescan(library.folders);
+      // Downloads often have meaningless names: offer to rename right away.
+      if (imported.imported.length > 0) setRenaming({ title: t("rename.imported"), paths: imported.imported });
     } catch (e) {
       setError(String(e));
     } finally {
@@ -241,6 +246,16 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
                     </span>
                   </button>
                   {first && (
+                    <button
+                      className="tool icon-only reveal"
+                      onClick={() => setRenaming({ title: e.title, paths: [...e.boards, ...e.schematics, ...e.unsupported].map((f) => f.path) })}
+                      aria-label={t("rename.action")}
+                      title={t("rename.action")}
+                    >
+                      <RenameIcon />
+                    </button>
+                  )}
+                  {first && (
                     <button className="tool icon-only reveal" onClick={() => void revealInFinder(first.path)} aria-label={t("library.reveal")} title={t("library.reveal")}>
                       <OpenIcon />
                     </button>
@@ -250,6 +265,15 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
             }}
           />
         </div>
+      )}
+      {renaming && (
+        <RenameFiles
+          target={renaming}
+          onDone={(changed) => {
+            setRenaming(null);
+            if (changed) void rescan(library.folders);
+          }}
+        />
       )}
     </Dialog>
   );

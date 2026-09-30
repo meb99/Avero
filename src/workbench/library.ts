@@ -69,6 +69,11 @@ export function libraryRoot(): Promise<string> {
 }
 
 /** Copies files, folders or ZIP archives into the library. */
+/** Renames a library file; resolves to its new path. */
+export function renameLibraryFile(path: string, name: string): Promise<string> {
+  return invoke<string>("rename_library_file", { path, name });
+}
+
 export function importFiles(paths: string[], folder: string): Promise<ImportResult> {
   return invoke<ImportResult>("import_files", { paths, folder: folder.trim() || null });
 }

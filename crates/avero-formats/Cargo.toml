@@ -9,6 +9,7 @@ authors.workspace = true
 
 [dependencies]
 des = "0.9"
+quick-xml = "0.42"
 flate2 = { version = "1.1", default-features = false, features = ["zlib-rs"] }
 serde.workspace = true
 serde_json.workspace = true

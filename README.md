@@ -19,7 +19,7 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 ## Stand (0.5)
 
 **Boardview**
-- Liest Test_Link `.brd` (auch verschleierte Dateien), BRD2, Honhan `.bdv`, ASUS `.asc` und `.fz`, BoardViewer `.bvr` / BVR3, GenCAD, Panel-CAD, IBM `.cst` und XinZhiZao `.pcb`.
+- Liest Test_Link `.brd` (auch verschleierte Dateien), BRD2, Honhan `.bdv`, ASUS `.asc` und `.fz`, BoardViewer `.bvr` / BVR3, GenCAD, Panel-CAD, IBM `.cst`, XinZhiZao `.pcb`, KiCad `.kicad_pcb` und EAGLE / Fusion 360 `.brd` (XML).
 - XinZhiZao- und die meisten ASUS-`.fz`-Dateien sind verschlüsselt: Die Schlüssel trägst du einmal in den Einstellungen ein (Avero liefert sie nicht mit, genau wie OpenBoardView). XZZ-Dateien öffnen sich auch ohne Schlüssel mit allem, was nicht verschlüsselt ist (Umriss, Netze, Testpunkte); nur die Bauteile brauchen ihn. Unverschlüsselte `.fz`-Dateien öffnen sich direkt.
 - Flüssige Darstellung per GPU (WebGL 2), auch bei zehntausenden Pins.
 - Oberseite / Unterseite (gespiegelt wie ein umgedrehtes Board), Drehen in 90°-Schritten.
@@ -43,7 +43,7 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - **Eigenes Fenster** für den zweiten Monitor: Der Schaltplan folgt weiter der Auswahl im Board, Klicks im Schaltplan wählen im Board aus.
 
 **Werkstatt**
-- **Bibliothek** (`⌘L`): eigene Avero-Bibliothek unter `~/Dokumente/Avero/Bibliothek`. Dateien, Ordner oder ZIP-, 7z- und RAR-Archive ins Bibliotheksfenster ziehen oder „Importieren…" – Avero kopiert Boardviews und Schaltpläne hinein, sortiert sie nach Boardnummer oder in einen Geräteordner deiner Wahl (`Apple/iPhone 13 Pro`) und überspringt Duplikate. Zusätzlich lassen sich bestehende Ordner einbinden. Alles ist nach Boardnummer, Gerät und Dateiname durchsuchbar; ein Klick öffnet Board und Schaltplan zusammen. Noch nicht lesbare Formate (`.tvw`) werden ausgegraut angezeigt. 7z und RAR entpackt Avero mit dem in macOS eingebauten `bsdtar`; passwortgeschützte Archive gehen nicht.
+- **Bibliothek** (`⌘L`): eigene Avero-Bibliothek unter `~/Dokumente/Avero/Bibliothek`. Dateien, Ordner oder ZIP-, 7z- und RAR-Archive ins Bibliotheksfenster ziehen oder „Importieren…" – Avero kopiert Boardviews und Schaltpläne hinein, sortiert sie nach Boardnummer oder in einen Geräteordner deiner Wahl (`Apple/iPhone 13 Pro`) und überspringt Duplikate. Nach dem Import – und jederzeit über den Stift an jedem Eintrag – lassen sich die Dateien umbenennen, etwa `download (3).pdf` in `J413 820-02100.pdf`. Zusätzlich lassen sich bestehende Ordner einbinden. Alles ist nach Boardnummer, Gerät und Dateiname durchsuchbar; ein Klick öffnet Board und Schaltplan zusammen. Noch nicht lesbare Formate (`.tvw`) werden ausgegraut angezeigt. 7z und RAR entpackt Avero mit dem in macOS eingebauten `bsdtar`; passwortgeschützte Archive gehen nicht.
 - **Messwerte pro Netz**: Diodenmodus, Spannung, Widerstand. Eingaben wie `0,452`, `452` (mV), `4k7`, `OL` werden verstanden.
 - **Referenz und Reparaturfälle**: Werte vom guten Board als Referenz, jedes Gerät auf dem Tisch als eigener Fall. Abweichungen über der Toleranz (Standard ± 10 %) werden rot markiert, auch als Punkt direkt an den Pins auf dem Board.
 - **Notizen** pro Board und pro Fall, Export/Import als JSON (z. B. Referenzwerte weitergeben).

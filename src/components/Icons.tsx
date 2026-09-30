@@ -153,3 +153,10 @@ export const PopOutIcon = () => (
     <path d="M14 12v3.5a1 1 0 0 1-1 1H4.5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1H8" />
   </Icon>
 );
+
+export const RenameIcon = () => (
+  <Icon>
+    <path d="M12.5 4.5 15.5 7.5 7 16H4v-3z" />
+    <path d="M11 6l3 3" />
+  </Icon>
+);

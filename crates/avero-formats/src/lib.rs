@@ -127,6 +127,8 @@ pub fn parse_with(buf: &[u8], file_name: Option<&str>, options: ParseOptions) ->
             FormatId::Cst => formats::cst::parse(buf),
             FormatId::Xzz => formats::xzz::parse(buf, options.xzz_key),
             FormatId::Fz => formats::fz::parse(buf, options.fz_key.as_ref()),
+            FormatId::KiCad => formats::kicad::parse(buf),
+            FormatId::Eagle => formats::eagle::parse(buf),
             FormatId::Asc | FormatId::Demo => Err(ParseError::Unrecognized),
         },
         Detected::AscBundle => Err(ParseError::NeedsAscFiles),

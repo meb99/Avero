@@ -193,6 +193,39 @@ fn read_unpacked(dir: &Path, context: &str, depth: usize, out: &mut Vec<Source>,
     }
 }
 
+/// Renames a library file in place. The new name may not leave the folder,
+/// keeps the old extension when none is given, and never overwrites.
+pub fn rename_file(path: &Path, new_name: &str) -> Result<PathBuf, String> {
+    let name = new_name.trim();
+    let bad = name.is_empty()
+        || name.starts_with('.')
+        || name.contains(['/', '\\', ':'])
+        || name.chars().any(char::is_control);
+    if bad {
+        return Err(format!("invalid name: {new_name}"));
+    }
+    if !path.is_file() {
+        return Err(format!("{}: not a file", path.display()));
+    }
+    let ext = path.extension().map(|e| e.to_string_lossy().into_owned());
+    let has_ext = match &ext {
+        Some(e) => name.to_ascii_lowercase().ends_with(&format!(".{}", e.to_ascii_lowercase())),
+        None => true,
+    };
+    let file = if has_ext { name.to_string() } else { format!("{name}.{}", ext.unwrap_or_default()) };
+    let target = path.with_file_name(&file);
+    if target == path {
+        return Ok(target);
+    }
+    // Only a change of upper/lower case may point at the same file.
+    let same_file = target.to_string_lossy().to_lowercase() == path.to_string_lossy().to_lowercase();
+    if target.exists() && !same_file {
+        return Err(format!("{file} already exists"));
+    }
+    std::fs::rename(path, &target).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(target)
+}
+
 /// Keeps a user-typed folder path inside the library: no `..`, no
 /// characters Finder or other systems choke on.
 pub fn sanitize_folder(folder: &str) -> Option<PathBuf> {
@@ -360,6 +393,22 @@ mod tests {
 
         std::fs::remove_dir_all(&src).unwrap();
         std::fs::remove_dir_all(&lib).unwrap();
+    }
+
+    #[test]
+    fn renames_files_safely() {
+        let dir = temp("rename");
+        std::fs::write(dir.join("download (3).pdf"), b"%PDF").unwrap();
+        std::fs::write(dir.join("taken.pdf"), b"%PDF").unwrap();
+        let renamed = rename_file(&dir.join("download (3).pdf"), "J413 820-02100").unwrap();
+        assert_eq!(renamed.file_name().unwrap(), "J413 820-02100.pdf");
+        assert!(rename_file(&renamed, "taken").is_err(), "never overwrites");
+        assert!(rename_file(&renamed, "../escape").is_err());
+        assert!(rename_file(&renamed, ".hidden").is_err());
+        assert!(rename_file(&renamed, "  ").is_err());
+        let same = rename_file(&renamed, "J413 820-02100.PDF").unwrap();
+        assert_eq!(same.file_name().unwrap(), "J413 820-02100.PDF");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

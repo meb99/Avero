@@ -808,3 +808,113 @@ fn fz_encrypted() {
     );
     check_fz(&avero_formats::parse_with(&file, Some("board.fz"), with(key)).unwrap(), 1.0);
 }
+
+// --- KiCad and EAGLE ---------------------------------------------------------
+
+const KICAD: &str = r#"(kicad_pcb (version 20240108) (generator "pcbnew")
+  (net 0 "")
+  (net 1 "GND")
+  (net 2 "PP3V3")
+  (gr_rect (start 0 0) (end 50 30) (stroke (width 0.1) (type default)) (layer "Edge.Cuts"))
+  (gr_line (start 0 0) (end 10 10) (layer "F.SilkS"))
+  (footprint "Resistor_SMD:R_0402" (layer "F.Cu") (at 10 10 90)
+    (property "Reference" "R1" (at 0 0 0) (layer "F.SilkS"))
+    (property "Value" "10k" (at 0 0 0) (layer "F.Fab"))
+    (pad "1" smd roundrect (at -0.5 0 90) (size 0.6 0.5) (layers "F.Cu") (net 2 "PP3V3"))
+    (pad "2" smd roundrect (at 0.5 0 90) (size 0.6 0.5) (layers "F.Cu") (net 1 "GND")))
+  (footprint "Connector:Pin" (layer "B.Cu") (at 40 20)
+    (property "Reference" "J1")
+    (pad "1" thru_hole circle (at 0 0) (size 1.7 1.7) (drill 1) (layers "*.Cu") (net 1 "GND"))
+    (pad "" np_thru_hole circle (at 3 0) (size 2 2) (drill 2) (layers "*.Cu")))
+  (module R2 (layer B.Cu) (at 20 20 180) (fp_text reference R2 (at 0 0)) (fp_text value 1k (at 0 0))
+    (pad 1 smd rect (at 1 0) (size 1 1) (layers B.Cu) (net 2 PP3V3)))
+  (via (at 25 15) (size 0.6) (drill 0.3) (layers "F.Cu" "B.Cu") (net 1))
+)"#;
+
+const MIL: f64 = 1000.0 / 25.4;
+
+#[test]
+fn kicad_boards() {
+    let b = parse(KICAD.as_bytes(), Some("board.kicad_pcb")).unwrap();
+    assert_eq!(b.format, FormatId::KiCad);
+    let part = |name: &str| b.parts.iter().find(|p| p.name == name).unwrap();
+    let pins = |name: &str| {
+        let p = part(name);
+        &b.pins[p.first_pin as usize..(p.first_pin + p.pin_count) as usize]
+    };
+    assert_eq!(part("R1").device.as_deref(), Some("10k"));
+    assert_eq!(part("R1").side, Side::Top);
+    // Pad 1 at (-0.5, 0), footprint turned 90° at (10, 10): (10, 10.5) mm, Y flipped.
+    assert_close(pins("R1")[0].x, 10.0 * MIL);
+    assert_close(pins("R1")[0].y, -10.5 * MIL);
+    assert_eq!(b.nets[pins("R1")[0].net as usize].name, "PP3V3");
+    // Through-hole parts are reachable from both sides.
+    assert_eq!(part("J1").side, Side::Both);
+    assert_eq!(part("J1").mount, Mount::ThroughHole);
+    assert_eq!(pins("J1").len(), 1, "the unnamed mounting hole is not a pin");
+    // KiCad 5 syntax.
+    assert_eq!(part("R2").device.as_deref(), Some("1k"));
+    assert_eq!(part("R2").side, Side::Bottom);
+    assert_close(pins("R2")[0].x, 19.0 * MIL);
+    assert_eq!(b.test_points.len(), 1);
+    assert_eq!(b.test_points[0].kind, TestPointKind::Via);
+    assert_eq!(b.nets[b.test_points[0].net as usize].name, "GND");
+    assert_eq!(b.outline.len(), 1);
+    assert_close(b.bounds.max_x, 50.0 * MIL);
+}
+
+const EAGLE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE eagle SYSTEM "eagle.dtd">
+<eagle version="9.6.2"><drawing><board>
+<plain>
+<wire x1="0" y1="0" x2="50" y2="0" width="0" layer="20"/>
+<wire x1="50" y1="0" x2="50" y2="30" width="0" layer="20"/>
+<wire x1="50" y1="30" x2="0" y2="30" width="0" layer="20"/>
+<wire x1="0" y1="30" x2="0" y2="0" width="0" layer="20" curve="180"/>
+<wire x1="5" y1="5" x2="6" y2="6" width="0.2" layer="21"/>
+</plain>
+<libraries>
+<library name="rcl"><packages><package name="R0402">
+<smd name="1" x="-0.5" y="0" dx="0.6" dy="0.5" layer="1"/>
+<smd name="2" x="0.5" y="0" dx="0.6" dy="0.5" layer="1"/>
+</package></packages></library>
+<library name="con"><packages><package name="PIN">
+<pad name="1" x="1" y="0" drill="1" diameter="1.7"/>
+</package></packages></library>
+</libraries>
+<elements>
+<element name="R1" library="rcl" package="R0402" value="10k" x="10" y="10" rot="R90"/>
+<element name="J1" library="con" package="PIN" value="" x="40" y="20" rot="MR0"/>
+<element name="X9" library="gone" package="NONE" value="" x="1" y="1"/>
+</elements>
+<signals>
+<signal name="GND"><contactref element="R1" pad="2"/><contactref element="J1" pad="1"/>
+<via x="25" y="15" extent="1-16" drill="0.3" diameter="0.6"/></signal>
+<signal name="PP3V3"><contactref element="R1" pad="1"/></signal>
+</signals>
+</board></drawing></eagle>"#;
+
+#[test]
+fn eagle_boards() {
+    let b = parse(EAGLE.as_bytes(), Some("board.brd")).unwrap();
+    assert_eq!(b.format, FormatId::Eagle);
+    let part = |name: &str| b.parts.iter().find(|p| p.name == name).unwrap();
+    let pins = |name: &str| {
+        let p = part(name);
+        &b.pins[p.first_pin as usize..(p.first_pin + p.pin_count) as usize]
+    };
+    assert_eq!(part("R1").device.as_deref(), Some("10k"));
+    // Pad 1 at (-0.5, 0) turned 90° counter-clockwise around (10, 10): (10, 9.5) mm.
+    assert_close(pins("R1")[0].x, 10.0 * MIL);
+    assert_close(pins("R1")[0].y, 9.5 * MIL);
+    assert_eq!(b.nets[pins("R1")[0].net as usize].name, "PP3V3");
+    // Mirrored: the pad's x is flipped (through-hole, so both sides).
+    assert_eq!(part("J1").side, Side::Both);
+    assert_close(pins("J1")[0].x, 39.0 * MIL);
+    assert_eq!(b.nets[pins("J1")[0].net as usize].name, "GND");
+    assert_eq!(b.parts.len(), 2);
+    assert!(b.warnings.iter().any(|w| w.contains("packages")));
+    assert_eq!(b.test_points.len(), 1);
+    // The curved edge bulges 15 mm to the left.
+    assert!((b.bounds.min_x + 15.0 * MIL).abs() < 5.0, "{}", b.bounds.min_x);
+}
