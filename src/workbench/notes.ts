@@ -1,0 +1,180 @@
+import { compareReadings, hasValues, type Comparison, type Quantity, type Reading, type Value } from "./measure";
+
+/** One device on the bench. */
+export interface RepairCase {
+  id: string;
+  title: string;
+  created: string;
+  notes: string;
+  /** Readings by net name. */
+  readings: Record<string, Reading>;
+}
+
+/**
+ * Everything Avero remembers about a board: reference readings from a known
+ * good board, repair cases and free notes. Stored per board key.
+ */
+export interface BoardNotes {
+  version: 1;
+  key: string;
+  name: string;
+  notes: string;
+  reference: Record<string, Reading>;
+  cases: RepairCase[];
+  activeCase: string | null;
+  updated: string;
+}
+
+/** Where a reading goes: the reference or a repair case. */
+export type Target = "reference" | { caseId: string };
+
+/** Board number in a file name (`820-02100`, `nm-b481`), as in the Rust library code. */
+export function idTokens(name: string): string[] {
+  return name
+    .toLowerCase()
+    .split(/[^a-z0-9-]+/)
+    .filter((t) => t.length >= 5 && /\d/.test(t));
+}
+
+/**
+ * Key under which notes for a board are stored. Files of the same board in
+ * different formats share it through the board number.
+ */
+export function boardKey(source: { name: string; path?: string }): string {
+  if (!source.path) return source.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const parts = source.path.split("/");
+  const file = parts.pop() ?? "";
+  const stem = file.replace(/\.[^.]+$/, "");
+  const token = idTokens(stem)[0] ?? idTokens(parts.pop() ?? "")[0];
+  return token ?? stem.toLowerCase();
+}
+
+export function emptyNotes(key: string, name: string): BoardNotes {
+  return { version: 1, key, name, notes: "", reference: {}, cases: [], activeCase: null, updated: new Date(0).toISOString() };
+}
+
+function now(): string {
+  return new Date().toISOString();
+}
+
+function newId(): string {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+export function addCase(notes: BoardNotes, title: string): BoardNotes {
+  const c: RepairCase = { id: newId(), title, created: now(), notes: "", readings: {} };
+  return { ...notes, cases: [...notes.cases, c], activeCase: c.id, updated: now() };
+}
+
+export function updateCase(notes: BoardNotes, id: string, change: Partial<Pick<RepairCase, "title" | "notes">>): BoardNotes {
+  return { ...notes, cases: notes.cases.map((c) => (c.id === id ? { ...c, ...change } : c)), updated: now() };
+}
+
+export function removeCase(notes: BoardNotes, id: string): BoardNotes {
+  const cases = notes.cases.filter((c) => c.id !== id);
+  return { ...notes, cases, activeCase: notes.activeCase === id ? (cases.at(-1)?.id ?? null) : notes.activeCase, updated: now() };
+}
+
+export function activeCase(notes: BoardNotes): RepairCase | undefined {
+  return notes.cases.find((c) => c.id === notes.activeCase);
+}
+
+export function readingsFor(notes: BoardNotes, target: Target): Record<string, Reading> {
+  if (target === "reference") return notes.reference;
+  return notes.cases.find((c) => c.id === target.caseId)?.readings ?? {};
+}
+
+function withReading(readings: Record<string, Reading>, net: string, change: Partial<Reading>): Record<string, Reading> {
+  // An explicit timestamp (from an import) wins over "now".
+  const next: Reading = { ...readings[net], updated: now(), ...change };
+  for (const key of Object.keys(change) as (keyof Reading)[]) {
+    if (change[key] === undefined) delete next[key];
+  }
+  const out = { ...readings };
+  if (hasValues(next) || next.note) out[net] = next;
+  else delete out[net];
+  return out;
+}
+
+/** Sets (or clears, with `undefined`) one quantity for a net. */
+export function setValue(notes: BoardNotes, target: Target, net: string, q: Quantity, value: Value | undefined): BoardNotes {
+  return setReading(notes, target, net, { [q]: value });
+}
+
+export function setReading(notes: BoardNotes, target: Target, net: string, change: Partial<Reading>): BoardNotes {
+  if (target === "reference") return { ...notes, reference: withReading(notes.reference, net, change), updated: now() };
+  return {
+    ...notes,
+    cases: notes.cases.map((c) => (c.id === target.caseId ? { ...c, readings: withReading(c.readings, net, change) } : c)),
+    updated: now(),
+  };
+}
+
+export type NetStatus = Comparison | "measured" | "reference";
+
+/**
+ * State of each measured net for the active case: compared with the
+ * reference where both exist, otherwise just "measured" (case only) or
+ * "reference" (reference only).
+ */
+export function netStatuses(notes: BoardNotes, tolerance: number): Map<string, NetStatus> {
+  const out = new Map<string, NetStatus>();
+  const current = activeCase(notes)?.readings ?? {};
+  for (const [net, r] of Object.entries(notes.reference)) if (hasValues(r)) out.set(net, "reference");
+  for (const [net, r] of Object.entries(current)) {
+    if (!hasValues(r)) continue;
+    out.set(net, compareReadings(notes.reference[net], r, tolerance) ?? "measured");
+  }
+  return out;
+}
+
+/** Validates stored or imported JSON. */
+export function parseNotes(json: string): BoardNotes | null {
+  try {
+    const d = JSON.parse(json) as Partial<BoardNotes>;
+    if (d.version !== 1 || typeof d.key !== "string" || typeof d.reference !== "object" || !Array.isArray(d.cases)) return null;
+    return {
+      version: 1,
+      key: d.key,
+      name: typeof d.name === "string" ? d.name : d.key,
+      notes: typeof d.notes === "string" ? d.notes : "",
+      reference: d.reference ?? {},
+      cases: d.cases.filter((c): c is RepairCase => !!c && typeof c.id === "string" && typeof c.readings === "object"),
+      activeCase: typeof d.activeCase === "string" ? d.activeCase : null,
+      updated: typeof d.updated === "string" ? d.updated : new Date(0).toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function mergeReadings(a: Record<string, Reading>, b: Record<string, Reading>): Record<string, Reading> {
+  const out = { ...a };
+  for (const [net, r] of Object.entries(b)) {
+    const mine = out[net];
+    if (!mine || (r.updated ?? "") > (mine.updated ?? "")) out[net] = r;
+  }
+  return out;
+}
+
+/**
+ * Merges an import (e.g. reference values from a colleague) into existing
+ * notes: newer readings win, cases are matched by id, notes are appended.
+ */
+export function mergeNotes(mine: BoardNotes, theirs: BoardNotes): BoardNotes {
+  const cases = [...mine.cases];
+  for (const c of theirs.cases) {
+    const i = cases.findIndex((x) => x.id === c.id);
+    if (i < 0) cases.push(c);
+    else cases[i] = { ...cases[i], readings: mergeReadings(cases[i].readings, c.readings) };
+  }
+  const notes = theirs.notes && !mine.notes.includes(theirs.notes) ? [mine.notes, theirs.notes].filter(Boolean).join("\n\n") : mine.notes;
+  return {
+    ...mine,
+    notes,
+    reference: mergeReadings(mine.reference, theirs.reference),
+    cases,
+    activeCase: mine.activeCase ?? theirs.activeCase,
+    updated: now(),
+  };
+}

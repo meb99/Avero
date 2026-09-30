@@ -4,13 +4,14 @@ interface Props {
   recent: string[];
   onOpen(): void;
   onDemo(): void;
+  onLibrary(): void;
   onOpenRecent(path: string): void;
   onClearRecent(): void;
 }
 
 const FORMATS = ["BRD", "BRD2", "BDV", "ASC", "BVR", "BVR3", "GenCAD", "CAD", "CST", "PDF"];
 
-export function Welcome({ recent, onOpen, onDemo, onOpenRecent, onClearRecent }: Props) {
+export function Welcome({ recent, onOpen, onDemo, onLibrary, onOpenRecent, onClearRecent }: Props) {
   const { t } = useI18n();
   return (
     <div className="welcome">
@@ -22,6 +23,7 @@ export function Welcome({ recent, onOpen, onDemo, onOpenRecent, onClearRecent }:
           <button className="primary" onClick={onOpen}>
             {t("welcome.open")}
           </button>
+          <button onClick={onLibrary}>{t("welcome.library")}</button>
           <button onClick={onDemo}>{t("welcome.demo")}</button>
         </div>
         <p className="muted">{t("welcome.drop")}</p>

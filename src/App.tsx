@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BoardView, type BoardViewHandle } from "./components/BoardView";
 import { HelpDialog, SettingsDialog } from "./components/Dialogs";
+import { LibraryDialog } from "./components/Library";
 import { CloseIcon } from "./components/Icons";
 import { Sidebar } from "./components/Sidebar";
 import { Splitter } from "./components/Splitter";
@@ -27,6 +28,9 @@ import type { SchematicDocument } from "./schematic/document";
 import { SchematicView, type SchematicFocus, type SchematicViewHandle, type WordTarget } from "./schematic/SchematicView";
 import type { Word } from "./schematic/textIndex";
 import { clearRecent, loadRecent, loadSettings, rememberRecent, saveSettings, type Settings } from "./settings";
+import type { LibraryEntry } from "./workbench/library";
+import { netStatuses, type NetStatus } from "./workbench/notes";
+import { useBoardNotes } from "./workbench/store";
 
 const NONE: Selection = { kind: "none" };
 const DEMO_SCHEMATIC = `${import.meta.env.BASE_URL}demo/avero-demo-schematic.pdf`;
@@ -78,7 +82,7 @@ export function App() {
   const [selection, setSelection] = useState<Selection>(NONE);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<{ name: string; error: LoadError } | null>(null);
-  const [dialog, setDialog] = useState<"settings" | "help" | null>(null);
+  const [dialog, setDialog] = useState<"settings" | "help" | "library" | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [recent, setRecent] = useState<string[]>(loadRecent);
   const [schematic, setSchematic] = useState<SchematicDocument | null>(null);
@@ -100,6 +104,18 @@ export function App() {
   const theme = settings.theme === "system" ? (prefersDark ? "dark" : "light") : settings.theme;
   const palette = theme === "dark" ? DARK : LIGHT;
   const showSchematic = schematic !== null && schematicVisible;
+  const { notes, update: updateNotes, error: notesError } = useBoardNotes(source);
+
+  // Measurement state by net index for the board overlay.
+  const measured = useMemo(() => {
+    const out = new Map<number, NetStatus>();
+    if (!model || !notes) return out;
+    for (const [name, status] of netStatuses(notes, settings.tolerance)) {
+      const net = model.findNet(name);
+      if (net !== undefined) out.set(net, status);
+    }
+    return out;
+  }, [model, notes, settings.tolerance]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -159,14 +175,18 @@ export function App() {
     return true;
   }, []);
 
+  /** Opens a board or PDF. `schematicPath` overrides the automatic schematic lookup. */
   const openPath = useCallback(
-    async (path: string) => {
+    async (path: string, schematicPath?: string) => {
       if (isPdf(path)) {
         await openSchematicPath(path);
         return;
       }
       setLoading(fileName(path));
-      if (finishLoad(await loadPath(path)) && settings.autoSchematic) {
+      if (!finishLoad(await loadPath(path))) return;
+      if (schematicPath) {
+        if (schematicPath !== schematic?.path) await openSchematicPath(schematicPath);
+      } else if (settings.autoSchematic) {
         const [best] = await schematicsFor(path).catch(() => []);
         if (best && best !== schematic?.path) await openSchematicPath(best);
       }
@@ -178,6 +198,17 @@ export function App() {
     const path = await pickPath(t("welcome.open"), "any");
     if (path) await openPath(path);
   }, [openPath, t]);
+
+  const openLibraryEntry = useCallback(
+    (entry: LibraryEntry) => {
+      setDialog(null);
+      const board = entry.boards[0]?.path;
+      const pdf = entry.schematics[0]?.path;
+      if (board) void openPath(board, pdf);
+      else if (pdf) void openSchematicPath(pdf);
+    },
+    [openPath, openSchematicPath],
+  );
 
   const openDemo = useCallback(async () => {
     setLoading("Avero Demo");
@@ -298,6 +329,11 @@ export function App() {
         void toggleSchematic();
         return;
       }
+      if (mod && key === "l") {
+        e.preventDefault();
+        setDialog((d) => (d === "library" ? null : "library"));
+        return;
+      }
       if (mod && key === "i") {
         e.preventDefault();
         setSettings((s) => ({ ...s, showSidebar: !s.showSidebar }));
@@ -406,6 +442,7 @@ export function App() {
           onFit={() => viewRef.current?.fit()}
           onZoom={(f) => viewRef.current?.zoomBy(f)}
           onSchematic={() => void toggleSchematic()}
+          onLibrary={() => setDialog("library")}
           onSidebar={() => setSettings((s) => ({ ...s, showSidebar: !s.showSidebar }))}
           onSettings={() => setDialog("settings")}
           onHelp={() => setDialog("help")}
@@ -419,6 +456,7 @@ export function App() {
               recent={recent}
               onOpen={() => void openDialog()}
               onDemo={() => void openDemo()}
+              onLibrary={() => setDialog("library")}
               onOpenRecent={(p) => void openPath(p)}
               onClearRecent={() => {
                 clearRecent();
@@ -437,6 +475,7 @@ export function App() {
                     selection={selection}
                     settings={settings}
                     palette={palette}
+                    measured={measured}
                     onSelect={select}
                   />
                 ) : (
@@ -467,7 +506,17 @@ export function App() {
                 )}
               </div>
               {model && settings.showSidebar && (
-                <Sidebar model={model} selection={selection} side={side} settings={settings} onSelect={select} />
+                <Sidebar
+                  model={model}
+                  selection={selection}
+                  side={side}
+                  settings={settings}
+                  notes={notes}
+                  notesError={notesError}
+                  updateNotes={updateNotes}
+                  onTolerance={(tolerance) => setSettings((s) => ({ ...s, tolerance }))}
+                  onSelect={select}
+                />
               )}
             </>
           )}
@@ -491,6 +540,7 @@ export function App() {
 
         {dialog === "settings" && <SettingsDialog settings={settings} onChange={setSettings} onClose={() => setDialog(null)} />}
         {dialog === "help" && <HelpDialog onClose={() => setDialog(null)} />}
+        {dialog === "library" && <LibraryDialog onOpen={openLibraryEntry} onClose={() => setDialog(null)} />}
       </div>
     </I18nContext.Provider>
   );

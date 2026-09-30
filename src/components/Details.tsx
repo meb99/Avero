@@ -4,12 +4,16 @@ import type { NetKind, Selection, Side } from "../core/types";
 import { formatLength, formatSize } from "../format";
 import { useI18n, type MessageKey } from "../i18n";
 import type { Settings } from "../settings";
+import type { BoardNotes } from "../workbench/notes";
+import { MeasureBlock } from "./MeasureBlock";
 
 interface Props {
   model: BoardModel;
   selection: Selection;
   side: ViewSide;
   settings: Settings;
+  notes: BoardNotes | null;
+  updateNotes(change: (n: BoardNotes) => BoardNotes): void;
   onSelect(selection: Selection, zoom: boolean): void;
 }
 
@@ -30,7 +34,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export function Details({ model, selection, side, settings, onSelect }: Props) {
+export function Details({ model, selection, side, settings, notes, updateNotes, onSelect }: Props) {
   const { t } = useI18n();
   const u = settings.units;
 
@@ -42,6 +46,11 @@ export function Details({ model, selection, side, settings, onSelect }: Props) {
       </button>
     );
   };
+
+  const measure = (net: number) =>
+    notes && model.nets[net].kind !== "unconnected" ? (
+      <MeasureBlock key={model.nets[net].name} net={model.nets[net].name} notes={notes} update={updateNotes} tolerance={settings.tolerance} />
+    ) : null;
 
   const netMembers = (net: number, currentPin?: number) => {
     const n = model.nets[net];
@@ -171,6 +180,7 @@ export function Details({ model, selection, side, settings, onSelect }: Props) {
             </Row>
             {pin.probe !== undefined && <Row label={t("details.probe")}>{pin.probe}</Row>}
           </dl>
+          {measure(pin.net)}
           {netMembers(pin.net, selection.pin)}
         </div>
       );
@@ -191,6 +201,7 @@ export function Details({ model, selection, side, settings, onSelect }: Props) {
               {formatLength(tp.x, u)}, {formatLength(tp.y, u)}
             </Row>
           </dl>
+          {measure(tp.net)}
           {netMembers(tp.net)}
         </div>
       );
@@ -208,6 +219,7 @@ export function Details({ model, selection, side, settings, onSelect }: Props) {
             <Row label={t("details.kind")}>{t(kindKey[net.kind])}</Row>
             <Row label={t("details.pins")}>{net.pins.length}</Row>
           </dl>
+          {measure(selection.net)}
           {netMembers(selection.net)}
         </div>
       );

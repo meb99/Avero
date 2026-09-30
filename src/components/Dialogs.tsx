@@ -3,7 +3,17 @@ import { useI18n } from "../i18n";
 import type { Settings } from "../settings";
 import { CloseIcon } from "./Icons";
 
-function Dialog({ title, onClose, children }: { title: string; onClose(): void; children: ReactNode }) {
+export function Dialog({
+  title,
+  onClose,
+  children,
+  className,
+}: {
+  title: string;
+  onClose(): void;
+  children: ReactNode;
+  className?: string;
+}) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const d = ref.current;
@@ -12,7 +22,7 @@ function Dialog({ title, onClose, children }: { title: string; onClose(): void; 
   return (
     <dialog
       ref={ref}
-      className="dialog"
+      className={`dialog${className ? ` ${className}` : ""}`}
       onClose={onClose}
       onCancel={(e) => {
         e.preventDefault();
@@ -112,6 +122,7 @@ export function HelpDialog({ onClose }: { onClose(): void }) {
     ["help.search", "help.searchLabel"],
     ["help.open", "help.openLabel"],
     ["help.schematic", "help.schematicLabel"],
+    ["help.library", "help.libraryLabel"],
     ["help.pages", "help.pagesLabel"],
     ["help.hits", "help.hitsLabel"],
     ["help.clear", "help.clearLabel"],

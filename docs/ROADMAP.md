@@ -23,13 +23,17 @@ Offen aus 0.2:
 - Suche im Schaltplan nach beliebigem Text, nicht nur nach Board-Namen
 - Pin-Nummern im Schaltplan dem Pin im Board zuordnen (nicht nur dem Bauteil)
 
-## 0.3 Werkstatt
+## 0.3 Werkstatt ✅
 
-- **Bibliothek:** Ordner einlesen, nach Gerät und Boardnummer sortieren (`iPhone 13 Pro → 820-02100`), Boardview, Schaltplan und Fotos automatisch verknüpfen, Volltextsuche über alles
-- **Messwerte pro Netz:** Diodenmodus, Spannung, Widerstand speichern; beim nächsten gleichen Board werden die Normwerte angezeigt, Abweichungen farbig markiert
-- **Notizen und Fehlerfälle** pro Board, mit Verlauf der Reparaturen
+- **Bibliothek:** Ordner einlesen, Boardviews und Schaltpläne nach Boardnummer und Ordner gruppieren, Suche über Boardnummer, Gerät und Dateinamen, Board und Schaltplan mit einem Klick öffnen, nicht lesbare Formate ausgegraut
+- **Messwerte pro Netz:** Diodenmodus, Spannung, Widerstand; Referenz (gutes Board) und Reparaturfälle getrennt; Abweichungen über der Toleranz rot, auch als Punkte auf dem Board
+- **Notizen** pro Board und pro Fall
+- Export/Import der Messwerte und Notizen als JSON, gespeichert pro Board im App-Ordner
+
+Offen aus 0.3:
 - **Fotos** des echten Boards über die Boardview legen (zwei Punkte ausrichten)
-- Export/Import der eigenen Messwerte und Notizen
+- Volltextsuche über alle Schaltpläne der Bibliothek
+- Diodenwerte aus XZZ-Dateien als Referenz übernehmen (kommt mit dem XZZ-Format)
 
 ## 0.4 Weitere Formate
 

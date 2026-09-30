@@ -137,3 +137,11 @@ export const SidebarIcon = () => (
     <path d="M12.5 4v12" />
   </Icon>
 );
+
+export const LibraryIcon = () => (
+  <Icon>
+    <rect x="3" y="3.5" width="3.5" height="13" rx="0.8" />
+    <rect x="8" y="3.5" width="3.5" height="13" rx="0.8" />
+    <path d="m13.2 4.6 3.3-.9 2.6 12.3-3.3.8z" />
+  </Icon>
+);

@@ -1,6 +1,7 @@
 import { visibleFrom, type BoardModel, type ViewSide } from "../core/board";
 import type { Camera } from "../core/camera";
 import type { Selection } from "../core/types";
+import type { NetStatus } from "../workbench/notes";
 import type { Palette } from "./palette";
 
 export interface LabelOptions {
@@ -57,6 +58,7 @@ export function drawLabels(
   options: LabelOptions,
   palette: Palette,
   dpr: number,
+  measured?: ReadonlyMap<number, NetStatus>,
 ): void {
   const { width, height } = ctx.canvas;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -157,7 +159,57 @@ export function drawLabels(
     }
   }
 
+  if (measured && measured.size > 0) drawMeasured(ctx, model, camera, view, visible, measured);
   drawSelectionRing(ctx, model, camera, selection, palette);
+}
+
+const STATUS_COLOR: Record<NetStatus, string> = {
+  ok: "#43a047",
+  deviation: "#e53935",
+  measured: "#1e88e5",
+  reference: "#8d9aa6",
+};
+const MAX_DOTS = 4000;
+
+/** Small status dots on pins and test points of measured nets. */
+function drawMeasured(
+  ctx: CanvasRenderingContext2D,
+  model: BoardModel,
+  camera: Camera,
+  view: ViewSide,
+  visible: ReturnType<Camera["visibleBounds"]>,
+  measured: ReadonlyMap<number, NetStatus>,
+): void {
+  let count = 0;
+  const dot = (x: number, y: number, radius: number, status: NetStatus) => {
+    if (count++ > MAX_DOTS) return;
+    const p = camera.toScreen({ x, y });
+    const r = Math.max(radius * camera.scale, 1.2);
+    const size = Math.min(Math.max(r * 0.38, 2.5), 5);
+    ctx.beginPath();
+    ctx.arc(p.x + r * 0.72, p.y - r * 0.72, size, 0, Math.PI * 2);
+    ctx.fillStyle = STATUS_COLOR[status];
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.stroke();
+  };
+  const seen = new Set<number>();
+  model.pinIndex.query(visible, (i) => {
+    if (seen.has(i)) return;
+    seen.add(i);
+    const pin = model.pins[i];
+    const status = measured.get(pin.net);
+    if (status && visibleFrom(pin.side, view)) dot(pin.x, pin.y, pin.radius, status);
+  });
+  seen.clear();
+  model.testPointIndex.query(visible, (i) => {
+    if (seen.has(i)) return;
+    seen.add(i);
+    const tp = model.testPoints[i];
+    const status = measured.get(tp.net);
+    if (status && visibleFrom(tp.side, view)) dot(tp.x, tp.y, tp.radius, status);
+  });
 }
 
 function drawSelectionRing(

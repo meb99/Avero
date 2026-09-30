@@ -9,6 +9,7 @@ import { BoardRenderer } from "../render/renderer";
 import { computeStyle } from "../render/style";
 import type { Settings } from "../settings";
 import { formatLength } from "../format";
+import type { NetStatus } from "../workbench/notes";
 
 export interface BoardViewHandle {
   fit(): void;
@@ -24,6 +25,8 @@ interface Props {
   selection: Selection;
   settings: Settings;
   palette: Palette;
+  /** Measurement state by net index, drawn as dots on pins. */
+  measured?: ReadonlyMap<number, NetStatus>;
   onSelect(selection: Selection, zoom: boolean): void;
   ref?: Ref<BoardViewHandle>;
 }
@@ -49,7 +52,7 @@ function hitToSelection(hit: Hit | undefined): Selection {
   }
 }
 
-export function BoardView({ model, side, rotation, selection, settings, palette, onSelect, ref }: Props) {
+export function BoardView({ model, side, rotation, selection, settings, palette, measured, onSelect, ref }: Props) {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const glRef = useRef<HTMLCanvasElement>(null);
@@ -61,7 +64,15 @@ export function BoardView({ model, side, rotation, selection, settings, palette,
   const dprRef = useRef(1);
   // A new board is fitted once the view has a real size.
   const needsFitRef = useRef(true);
-  const stateRef = useRef({ model, side, selection, settings, palette, highlightedNet: undefined as number | undefined });
+  const stateRef = useRef({
+    model,
+    side,
+    selection,
+    settings,
+    palette,
+    measured,
+    highlightedNet: undefined as number | undefined,
+  });
   const [hover, setHover] = useState<Hover | null>(null);
   const [cursor, setCursor] = useState<Point | null>(null);
   const [glError, setGlError] = useState(false);
@@ -84,6 +95,7 @@ export function BoardView({ model, side, rotation, selection, settings, palette,
       { partNames: s.settings.partNames, pinNumbers: s.settings.pinNumbers, netNames: s.settings.netNames },
       s.palette,
       dprRef.current,
+      s.measured,
     );
   }, []);
 
@@ -223,6 +235,11 @@ export function BoardView({ model, side, rotation, selection, settings, palette,
     rendererRef.current?.setStyle(style, palette);
     requestDraw();
   }, [model, side, selection, settings, palette, requestDraw, rendererVersion]);
+
+  useEffect(() => {
+    stateRef.current.measured = measured;
+    requestDraw();
+  }, [measured, requestDraw]);
 
   useEffect(() => () => cancelAnimationFrame(animRef.current), []);
 

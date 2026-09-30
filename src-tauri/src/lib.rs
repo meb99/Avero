@@ -1,6 +1,9 @@
 //! Desktop shell. Parsing runs natively through `avero-formats`; the web UI
 //! receives the finished board as JSON.
 
+mod library;
+mod notes;
+
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -122,6 +125,35 @@ async fn read_file(path: String) -> Result<tauri::ipc::Response, LoadError> {
     Ok(tauri::ipc::Response::new(read(Path::new(&path))?))
 }
 
+/// Scans the library folders. Runs on a worker thread; large libraries take
+/// a moment.
+#[tauri::command]
+async fn scan_library(folders: Vec<String>) -> library::LibraryScan {
+    let roots: Vec<PathBuf> = folders.into_iter().map(PathBuf::from).collect();
+    library::scan(&roots)
+}
+
+fn notes_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    use tauri::Manager;
+    app.path().app_data_dir().map(|d| d.join("boards")).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn load_notes(app: tauri::AppHandle, key: String) -> Result<Option<String>, String> {
+    notes::load(&notes_dir(&app)?, &key)
+}
+
+#[tauri::command]
+fn save_notes(app: tauri::AppHandle, key: String, data: String) -> Result<(), String> {
+    notes::save(&notes_dir(&app)?, &key, &data)
+}
+
+/// Writes a JSON export to a path the user picked in a save panel.
+#[tauri::command]
+fn export_json(path: String, data: String) -> Result<(), String> {
+    notes::write_json(Path::new(&path), &data)
+}
+
 #[tauri::command]
 fn take_pending_paths(pending: tauri::State<'_, PendingPaths>) -> Vec<String> {
     pending.0.lock().map(|mut p| std::mem::take(&mut *p)).unwrap_or_default()
@@ -136,6 +168,10 @@ pub fn run() {
             open_demo,
             schematics_for,
             read_file,
+            scan_library,
+            load_notes,
+            save_notes,
+            export_json,
             take_pending_paths
         ])
         .build(tauri::generate_context!())

@@ -16,6 +16,8 @@ export interface Settings {
   showSidebar: boolean;
   /** Width of the schematic panel as a share of the space next to the sidebar. */
   schematicShare: number;
+  /** Allowed relative deviation from reference readings (0.1 = 10 %). */
+  tolerance: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -32,6 +34,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoSchematic: true,
   showSidebar: true,
   schematicShare: 0.5,
+  tolerance: 0.1,
 };
 
 const KEY = "avero.settings.v1";

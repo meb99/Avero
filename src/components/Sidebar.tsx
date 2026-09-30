@@ -3,20 +3,26 @@ import type { BoardModel, ViewSide } from "../core/board";
 import type { Selection } from "../core/types";
 import { useI18n } from "../i18n";
 import type { Settings } from "../settings";
+import type { BoardNotes } from "../workbench/notes";
+import { Workbench } from "./Workbench";
 import { Details } from "./Details";
 import { VirtualList } from "./VirtualList";
 
-type Tab = "details" | "parts" | "nets";
+type Tab = "details" | "parts" | "nets" | "measure";
 
 interface Props {
   model: BoardModel;
   selection: Selection;
   side: ViewSide;
   settings: Settings;
+  notes: BoardNotes | null;
+  notesError: string | null;
+  updateNotes(change: (n: BoardNotes) => BoardNotes): void;
+  onTolerance(t: number): void;
   onSelect(selection: Selection, zoom: boolean): void;
 }
 
-export function Sidebar({ model, selection, side, settings, onSelect }: Props) {
+export function Sidebar({ model, selection, side, settings, notes, notesError, updateNotes, onTolerance, onSelect }: Props) {
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("details");
   const [partFilter, setPartFilter] = useState("");
@@ -44,7 +50,7 @@ export function Sidebar({ model, selection, side, settings, onSelect }: Props) {
   return (
     <aside className="sidebar">
       <nav className="tabs" role="tablist">
-        {(["details", "parts", "nets"] as const).map((id) => (
+        {(["details", "parts", "nets", "measure"] as const).map((id) => (
           <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? "on" : ""} onClick={() => setTab(id)}>
             {t(`tab.${id}`)}
             {id === "parts" && <span className="count">{model.parts.length}</span>}
@@ -55,7 +61,29 @@ export function Sidebar({ model, selection, side, settings, onSelect }: Props) {
 
       {tab === "details" && (
         <div className="panel scroll">
-          <Details model={model} selection={selection} side={side} settings={settings} onSelect={onSelect} />
+          <Details
+            model={model}
+            selection={selection}
+            side={side}
+            settings={settings}
+            notes={notes}
+            updateNotes={updateNotes}
+            onSelect={onSelect}
+          />
+        </div>
+      )}
+
+      {tab === "measure" && notes && (
+        <div className="panel scroll">
+          <Workbench
+            model={model}
+            notes={notes}
+            update={updateNotes}
+            tolerance={settings.tolerance}
+            onTolerance={onTolerance}
+            onSelect={onSelect}
+            error={notesError}
+          />
         </div>
       )}
 

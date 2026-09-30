@@ -7,6 +7,7 @@ import {
   FitIcon,
   FlipIcon,
   HelpIcon,
+  LibraryIcon,
   OpenIcon,
   RotateIcon,
   SchematicIcon,
@@ -30,6 +31,7 @@ interface Props {
   onFit(): void;
   onZoom(factor: number): void;
   onSchematic(): void;
+  onLibrary(): void;
   onSidebar(): void;
   onSettings(): void;
   onHelp(): void;
@@ -99,6 +101,9 @@ export function Toolbar(p: Props) {
 
       <div className="toolbar-spacer" data-tauri-drag-region />
       <div className="toolbar-group">
+        <button className="tool icon-only" onClick={p.onLibrary} title={t("library.toggle")} aria-label={t("library.toggle")}>
+          <LibraryIcon />
+        </button>
         <button
           className={`tool icon-only${p.schematicVisible ? " active" : ""}`}
           onClick={p.onSchematic}

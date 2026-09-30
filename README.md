@@ -16,7 +16,7 @@
 
 Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ein Signal über beide Seiten der Platine. Das Ziel ist ein Werkzeug auf dem Niveau von FlexBV und XinZhiZao: Boardview, Schaltplan und Werkstattwissen in einer App. Alles läuft lokal, ohne Konto und ohne Telemetrie.
 
-## Stand (0.2)
+## Stand (0.3)
 
 **Boardview**
 - Liest Test_Link `.brd` (auch verschleierte Dateien), BRD2, Honhan `.bdv`, ASUS `.asc`, BoardViewer `.bvr` / BVR3, GenCAD, Panel-CAD und IBM `.cst`.
@@ -32,6 +32,13 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - Bauteil, Pin oder Netz im Board wählen → der Schaltplan springt zur Fundstelle und markiert alle Vorkommen; mit `[` / `]` durch die Fundstellen.
 - Bauteil- oder Netznamen im Schaltplan anklicken → das Board zeigt sie.
 - Scharf bei jeder Zoomstufe, Seitennavigation und Lesezeichen (Abschnitte) des PDFs.
+
+**Werkstatt**
+- **Bibliothek** (`⌘L`): Ordner mit deiner Sammlung hinzufügen; Avero findet Boardviews und Schaltpläne, fasst sie nach Boardnummer zusammen (`820-02100`, `NM-B481`) und öffnet beides mit einem Klick. Noch nicht lesbare Formate (XZZ `.pcb`, `.fz`, `.tvw`) werden ausgegraut angezeigt.
+- **Messwerte pro Netz**: Diodenmodus, Spannung, Widerstand. Eingaben wie `0,452`, `452` (mV), `4k7`, `OL` werden verstanden.
+- **Referenz und Reparaturfälle**: Werte vom guten Board als Referenz, jedes Gerät auf dem Tisch als eigener Fall. Abweichungen über der Toleranz (Standard ± 10 %) werden rot markiert, auch als Punkt direkt an den Pins auf dem Board.
+- **Notizen** pro Board und pro Fall, Export/Import als JSON (z. B. Referenzwerte weitergeben).
+- Gespeichert wird lokal unter `~/Library/Application Support/dev.meb99.avero/boards/`, eine Datei pro Board. Alle Dateien desselben Boards (etwa `.brd` und `.bdv`) teilen sich die Messwerte über die Boardnummer.
 
 **Mac**
 - Toolbar als Titelleiste mit den Fenster-Ampeln, ⌘O / ⌘F, Hell- und Dunkelmodus nach Systemeinstellung.
@@ -56,6 +63,7 @@ Ein Demo-Board mit passendem Demo-Schaltplan ist eingebaut, damit man alles ohne
 | Öffnen (Boardview oder PDF) | `⌘O` |
 | Schaltplan ein/aus | `⌘E` |
 | Seitenleiste ein/aus | `⌘I` |
+| Bibliothek | `⌘L` |
 | Schaltplan: Seite zurück/vor | `Bild ↑` / `Bild ↓` |
 | Schaltplan: Fundstelle zurück/vor | `[` / `]` |
 | Auswahl aufheben | `Esc` |
@@ -101,10 +109,13 @@ crates/avero-formats     Rust: Dateiformate → einheitliches Board-Modell (mil,
   src/builder.rs         Netze, Pin-Größen, Bauteilumrisse, Board-Umriss
   src/demo.rs            synthetisches Demo-Board
   tests/formats.rs       handgeschriebene Mini-Boards pro Format
-src-tauri                Mac-App: Befehle open_board / open_demo, Finder-Integration
+src-tauri                Mac-App: Dateien lesen, Finder-Integration
+  src/library.rs         Bibliothek: Ordner durchsuchen, nach Boardnummer gruppieren
+  src/notes.rs           Messwerte und Notizen speichern
 src                      Oberfläche (React + TypeScript)
   core/                  Board-Modell, Kamera, Raster-Index, Suche, Tauri-Anbindung
   schematic/             PDF-Viewer (pdf.js), Wortindex, Querverweise
+  workbench/             Messwerte, Reparaturfälle, Notizen, Bibliothek
   render/                WebGL-2-Renderer, Beschriftungen, Farben
   components/            Toolbar, Suche, Seitenleiste, Dialoge
   i18n/                  Deutsch und Englisch
@@ -119,7 +130,7 @@ Boardviews und Schaltpläne sind fast immer Eigentum der Hersteller. **Sie gehö
 
 ## Weiter geht's
 
-Die nächsten Schritte stehen in [docs/ROADMAP.md](docs/ROADMAP.md): Bibliothek, Messwerte pro Netz, dann XZZ `.pcb`, `.fz` und `.tvw`.
+Die nächsten Schritte stehen in [docs/ROADMAP.md](docs/ROADMAP.md): XZZ `.pcb`, `.fz` und `.tvw`, Fotos über dem Board, Profi-Funktionen.
 
 ## Dank
 
