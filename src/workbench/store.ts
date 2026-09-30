@@ -42,6 +42,8 @@ export function useBoardNotes(source: BoardSource | null): {
       return;
     }
     let cancelled = false;
+    // Never show one board's notes on another while loading.
+    setNotes(null);
     const key = boardKey(source);
     loadNotes(key, source.name)
       .then((n) => !cancelled && setNotes(n))

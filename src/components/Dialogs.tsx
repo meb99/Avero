@@ -148,6 +148,7 @@ export function HelpDialog({ onClose }: { onClose(): void }) {
     ["help.fit", "help.fitLabel"],
     ["help.search", "help.searchLabel"],
     ["help.palette", "help.paletteLabel"],
+    ["help.tabs", "help.tabsLabel"],
     ["help.ratsnest", "help.ratsnestLabel"],
     ["help.open", "help.openLabel"],
     ["help.schematic", "help.schematicLabel"],

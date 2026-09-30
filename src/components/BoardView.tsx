@@ -11,6 +11,13 @@ import type { Settings } from "../settings";
 import { formatLength } from "../format";
 import type { NetStatus } from "../workbench/notes";
 
+/** Where the view looks, to bring a tab back as it was left. */
+export interface ViewState {
+  centerX: number;
+  centerY: number;
+  scale: number;
+}
+
 export interface BoardViewHandle {
   fit(): void;
   zoomBy(factor: number): void;
@@ -18,6 +25,7 @@ export interface BoardViewHandle {
   zoomTo(bounds: Bounds): void;
   /** The current view with labels as a PNG. */
   snapshot(): Promise<Blob>;
+  viewState(): ViewState;
 }
 
 interface Props {
@@ -29,6 +37,8 @@ interface Props {
   palette: Palette;
   /** Measurement state by net index, drawn as dots on pins. */
   measured?: ReadonlyMap<number, NetStatus>;
+  /** View to show a newly set board with, instead of fitting it. */
+  initialView?: ViewState;
   onSelect(selection: Selection, zoom: boolean): void;
   ref?: Ref<BoardViewHandle>;
 }
@@ -54,7 +64,7 @@ function hitToSelection(hit: Hit | undefined): Selection {
   }
 }
 
-export function BoardView({ model, side, rotation, selection, settings, palette, measured, onSelect, ref }: Props) {
+export function BoardView({ model, side, rotation, selection, settings, palette, measured, initialView, onSelect, ref }: Props) {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const glRef = useRef<HTMLCanvasElement>(null);
@@ -79,6 +89,8 @@ export function BoardView({ model, side, rotation, selection, settings, palette,
   const [cursor, setCursor] = useState<Point | null>(null);
   const [glError, setGlError] = useState(false);
   const [rendererVersion, setRendererVersion] = useState(0);
+  const initialViewRef = useRef(initialView);
+  initialViewRef.current = initialView;
 
   const draw = useCallback(() => {
     frameRef.current = 0;
@@ -171,6 +183,10 @@ export function BoardView({ model, side, rotation, selection, settings, palette,
           out.toBlob((b) => (b ? resolve(b) : reject(new Error("PNG encoding failed"))), "image/png"),
         );
       },
+      viewState() {
+        const { centerX, centerY, scale } = cameraRef.current;
+        return { centerX, centerY, scale };
+      },
     }),
     [draw, flyTo, requestDraw],
   );
@@ -224,7 +240,9 @@ export function BoardView({ model, side, rotation, selection, settings, palette,
     const renderer = rendererRef.current;
     if (!renderer) return;
     renderer.setBoard(model, stateRef.current.palette);
-    needsFitRef.current = true;
+    const view = initialViewRef.current;
+    if (view) Object.assign(cameraRef.current, view);
+    needsFitRef.current = !view;
     fitIfNeeded();
     requestDraw();
   }, [model, requestDraw, fitIfNeeded, rendererVersion]);

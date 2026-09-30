@@ -226,7 +226,6 @@ export const en = {
   "menu.library": "Library…",
   "menu.import": "Import to Library…",
   "menu.exportImage": "Export View as Image…",
-  "menu.closeBoard": "Close Board",
   "menu.settings": "Settings…",
   "menu.checkUpdates": "Check for Updates…",
   "menu.demo": "Open Demo Board",
@@ -266,6 +265,14 @@ export const en = {
   "details.series": "Continues through",
   "details.seriesHint": "Nets connected through coils, fuses and 0 Ω resistors",
   "details.through": "via",
+  "tabs.new": "New Tab",
+  "tabs.close": "Close Tab",
+  "tabs.next": "Show Next Tab",
+  "tabs.prev": "Show Previous Tab",
+  "tabs.empty": "New Tab",
+  "tabs.tab": "Tab",
+  "help.tabs": "⌘T, ⌘W, ⌘1 … 9, ⌃⇥",
+  "help.tabsLabel": "Tabs: new, close, switch",
 };
 
 export type MessageKey = keyof typeof en;

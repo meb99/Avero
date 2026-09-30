@@ -9,6 +9,9 @@ export interface MenuActions {
   library(): void;
   importToLibrary(): void;
   closeBoard(): void;
+  newTab(): void;
+  nextTab(): void;
+  prevTab(): void;
   exportImage(): void;
   settings(): void;
   search(): void;
@@ -87,6 +90,7 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
     {
       text: t("menu.file"),
       items: [
+        item("new-tab", t("tabs.new"), (a) => a.newTab(), "CmdOrCtrl+T"),
         item("open", t("menu.open"), (a) => a.open(), "CmdOrCtrl+O"),
         { text: t("menu.recent"), items: recentItems },
         SEP,
@@ -95,8 +99,7 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
         SEP,
         item("export-image", t("menu.exportImage"), (a) => a.exportImage(), "CmdOrCtrl+Shift+E"),
         SEP,
-        item("close-board", t("menu.closeBoard"), (a) => a.closeBoard(), "CmdOrCtrl+Shift+W"),
-        { item: "CloseWindow" },
+        item("close-tab", t("tabs.close"), (a) => a.closeBoard(), "CmdOrCtrl+W"),
       ],
     },
     {
@@ -136,7 +139,16 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
     },
     {
       text: t("menu.window"),
-      items: [{ item: "Minimize" }, { item: "Maximize" }, SEP, { item: "BringAllToFront" }],
+      items: [
+        { item: "Minimize" },
+        { item: "Maximize" },
+        SEP,
+        // ⌃⇥ / ⌃⇧⇥ are handled by the web view; menus cannot take Tab.
+        item("next-tab", `${t("tabs.next")}  ⌃⇥`, (a) => a.nextTab()),
+        item("prev-tab", `${t("tabs.prev")}  ⌃⇧⇥`, (a) => a.prevTab()),
+        SEP,
+        { item: "BringAllToFront" },
+      ],
     },
     {
       text: t("menu.help"),

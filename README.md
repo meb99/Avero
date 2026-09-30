@@ -30,6 +30,7 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - **Verbindungslinien** (Ratsnest) zwischen den Pins des gewählten Netzes, jeweils zum nächsten Nachbarn.
 - **Netze verfolgen** über Spulen, Ferrite, Sicherungen, Jumper und 0-Ω-Widerstände: Das Detailpanel zeigt „Weiter über", z. B. `PP1V8_SW` → `PP1V8` über `L3001`.
 - Ansicht als PNG exportieren (`⇧⌘E`), mit allen Beschriftungen.
+- **Tabs**: Jedes weitere Board öffnet sich in einem eigenen Tab, mit eigenem Schaltplan, eigener Auswahl und Ansicht. Eine schon offene Datei springt zu ihrem Tab.
 - Detailpanel mit Wert, Seite, Position und allen verbundenen Bauteilen und Pins, dazu Listen aller Bauteile und Netze.
 
 **Schaltplan**
@@ -71,6 +72,8 @@ Ein Demo-Board mit passendem Demo-Schaltplan ist eingebaut, damit man alles ohne
 | Verbindungslinien ein/aus | `⇧⌘R` |
 | Ansicht als Bild exportieren | `⇧⌘E` |
 | Einstellungen | `⌘,` |
+| Neuer Tab / Tab schließen | `⌘T` / `⌘W` |
+| Tab wechseln | `⌘1` … `⌘9`, `⌃⇥` / `⌃⇧⇥` |
 | Öffnen (Boardview oder PDF) | `⌘O` |
 | Schaltplan ein/aus | `⌘E` |
 | Seitenleiste ein/aus | `⌘I` |

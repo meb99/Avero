@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { BoardView, type BoardViewHandle } from "./components/BoardView";
+import { BoardView, type BoardViewHandle, type ViewState } from "./components/BoardView";
 import { CommandPalette } from "./components/CommandPalette";
 import { HelpDialog, SettingsDialog } from "./components/Dialogs";
 import { LibraryDialog, type LibraryDrop } from "./components/Library";
@@ -8,6 +8,7 @@ import { CloseIcon } from "./components/Icons";
 import { Sidebar } from "./components/Sidebar";
 import { Splitter } from "./components/Splitter";
 import { StatusBar } from "./components/StatusBar";
+import { TabBar, type TabInfo } from "./components/TabBar";
 import { Toolbar } from "./components/Toolbar";
 import { Welcome } from "./components/Welcome";
 import { BoardModel, type ViewSide } from "./core/board";
@@ -43,6 +44,30 @@ const NONE: Selection = { kind: "none" };
 const DEMO_SCHEMATIC = `${import.meta.env.BASE_URL}demo/avero-demo-schematic.pdf`;
 const WEBSITE = "https://github.com/meb99/Avero";
 const TOAST_MS = 4000;
+
+/** Everything that belongs to one tab. */
+interface Tab {
+  id: number;
+  model: BoardModel | null;
+  source: BoardSource | null;
+  side: ViewSide;
+  rotation: number;
+  selection: Selection;
+  schematic: SchematicDocument | null;
+  schematicVisible: boolean;
+  view?: ViewState;
+}
+
+const emptyTab = (id: number): Tab => ({
+  id,
+  model: null,
+  source: null,
+  side: "top",
+  rotation: 0,
+  selection: NONE,
+  schematic: null,
+  schematicVisible: true,
+});
 
 function usePrefersDark(): boolean {
   const query = "(prefers-color-scheme: dark)";
@@ -104,6 +129,16 @@ export function App() {
   const [schematic, setSchematic] = useState<SchematicDocument | null>(null);
   const [schematicVisible, setSchematicVisible] = useState(true);
   const [focus, setFocus] = useState<SchematicFocus | null>(null);
+  // The active tab lives in the states above; `tabs` keeps the other tabs as
+  // they were left (its entry for the active tab is stale).
+  const [tabs, setTabs] = useState<Tab[]>(() => [emptyTab(0)]);
+  const [activeTab, setActiveTab] = useState(0);
+  const [initialView, setInitialView] = useState<ViewState | undefined>(undefined);
+  const nextTabId = useRef(1);
+  const live = useRef<Tab>(emptyTab(0));
+  live.current = { id: activeTab, model, source, side, rotation, selection, schematic, schematicVisible };
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
   const viewRef = useRef<BoardViewHandle>(null);
   const schematicViewRef = useRef<SchematicViewHandle>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -187,9 +222,68 @@ export function App() {
     setSelection(NONE);
     setSide("top");
     setRotation(0);
+    setInitialView(undefined);
     if (source.path) setRecent(rememberRecent(source.path));
     return true;
   }, []);
+
+  // --- tabs ----------------------------------------------------------------
+  // These only use refs and state setters, so any render's copy works.
+
+  const restoreTab = (tab: Tab) => {
+    setActiveTab(tab.id);
+    setModel(tab.model);
+    setSource(tab.source);
+    setSide(tab.side);
+    setRotation(tab.rotation);
+    setSelection(tab.selection);
+    setSchematic(tab.schematic);
+    setSchematicVisible(tab.schematicVisible);
+    setInitialView(tab.view);
+    setError(null);
+  };
+
+  const saveActiveTab = (): Tab => {
+    const saved = { ...live.current, view: viewRef.current?.viewState() };
+    setTabs((ts) => ts.map((t) => (t.id === saved.id ? saved : t)));
+    return saved;
+  };
+
+  const switchTab = (id: number) => {
+    const target = tabsRef.current.find((t) => t.id === id);
+    if (!target || id === live.current.id) return;
+    saveActiveTab();
+    restoreTab(target);
+  };
+
+  const cycleTab = (step: number) => {
+    const list = tabsRef.current;
+    const i = list.findIndex((t) => t.id === live.current.id);
+    if (list.length > 1) switchTab(list[(i + step + list.length) % list.length].id);
+  };
+
+  const newTab = () => {
+    saveActiveTab();
+    const tab = emptyTab(nextTabId.current++);
+    setTabs((ts) => [...ts, tab]);
+    restoreTab(tab);
+  };
+
+  const closeTab = (id: number) => {
+    const all = tabsRef.current;
+    const index = all.findIndex((t) => t.id === id);
+    if (index < 0) return;
+    const active = id === live.current.id;
+    (active ? live.current : all[index]).schematic?.destroy();
+    const rest = all.filter((t) => t.id !== id);
+    if (!active) {
+      setTabs(rest);
+      return;
+    }
+    const next = rest[Math.min(index, rest.length - 1)] ?? emptyTab(nextTabId.current++);
+    setTabs(rest.length > 0 ? rest : [next]);
+    restoreTab(next);
+  };
 
   /** Opens a board or PDF. `schematicPath` overrides the automatic schematic lookup. */
   const openPath = useCallback(
@@ -198,16 +292,24 @@ export function App() {
         await openSchematicPath(path);
         return;
       }
-      setLoading(fileName(path));
-      if (!finishLoad(await loadPath(path, settings.xzzKey))) return;
-      if (schematicPath) {
-        if (schematicPath !== schematic?.path) await openSchematicPath(schematicPath);
-      } else if (settings.autoSchematic) {
-        const [best] = await schematicsFor(path).catch(() => []);
-        if (best && best !== schematic?.path) await openSchematicPath(best);
+      // Already open in a tab: show that tab.
+      const openIn = tabsRef.current.find((t) => (t.id === live.current.id ? live.current : t).source?.path === path);
+      if (openIn) {
+        switchTab(openIn.id);
+        return;
       }
+      setLoading(fileName(path));
+      const loaded = await loadPath(path, settings.xzzKey);
+      // An open board stays; the new one gets its own tab.
+      const inNewTab = loaded.result.ok && live.current.model !== null;
+      const shownSchematic = inNewTab ? undefined : live.current.schematic?.path;
+      if (inNewTab) newTab();
+      if (!finishLoad(loaded)) return;
+      const wanted = schematicPath ?? (settings.autoSchematic ? (await schematicsFor(path).catch(() => []))[0] : undefined);
+      if (wanted && wanted !== shownSchematic) await openSchematicPath(wanted);
     },
-    [finishLoad, openSchematicPath, settings.autoSchematic, settings.xzzKey, schematic],
+    // switchTab and newTab only use refs and setters.
+    [finishLoad, openSchematicPath, settings.autoSchematic, settings.xzzKey],
   );
 
   const openDialog = useCallback(async () => {
@@ -228,7 +330,9 @@ export function App() {
 
   const openDemo = useCallback(async () => {
     setLoading("Avero Demo");
-    if (!finishLoad(await loadDemo())) return;
+    const loaded = await loadDemo();
+    if (loaded.result.ok && live.current.model !== null) newTab();
+    if (!finishLoad(loaded)) return;
     try {
       const response = await fetch(DEMO_SCHEMATIC);
       if (response.ok) await openSchematicBytes(new Uint8Array(await response.arrayBuffer()), "Avero Demo.pdf");
@@ -237,11 +341,7 @@ export function App() {
     }
   }, [finishLoad, openSchematicBytes]);
 
-  const closeBoard = useCallback(() => {
-    setModel(null);
-    setSource(null);
-    setSelection(NONE);
-  }, []);
+  const closeBoard = () => closeTab(live.current.id);
 
   const closeSchematic = useCallback(() => {
     setSchematic((old) => {
@@ -320,7 +420,10 @@ export function App() {
         return;
       }
       // A board and its schematic dropped together: open both.
-      for (const p of [...paths.filter((p) => !isPdf(p)).slice(0, 1), ...paths.filter(isPdf).slice(0, 1)]) void openPath(p);
+      const board = paths.find((p) => !isPdf(p));
+      const pdf = paths.find(isPdf);
+      if (board) void openPath(board, pdf);
+      else if (pdf) void openPath(pdf);
     };
     const subscriptions = [onFileDrop(open, setDragOver), onFinderOpen(open)];
     return () => {
@@ -329,6 +432,11 @@ export function App() {
   }, [openPath]);
 
   // --- app actions: menu bar, command palette ------------------------------
+
+  const tabInfos: TabInfo[] = tabs.map((tab) => {
+    const shown = tab.id === activeTab ? live.current : tab;
+    return { id: tab.id, title: shown.source?.name ?? shown.schematic?.name ?? t("tabs.empty"), detail: shown.source?.path };
+  });
 
   const exportImage = useCallback(async () => {
     const view = viewRef.current;
@@ -377,6 +485,9 @@ export function App() {
     library: () => setDialog((d) => (d === "library" ? null : "library")),
     importToLibrary: () => void importToLibrary(),
     closeBoard,
+    newTab,
+    nextTab: () => cycleTab(1),
+    prevTab: () => cycleTab(-1),
     exportImage: () => void exportImage(),
     settings: () => setDialog("settings"),
     search: () => {
@@ -434,11 +545,15 @@ export function App() {
       { id: "schematic", label: t("menu.schematic"), shortcut: "⌘E", run: a.toggleSchematic },
       { id: "sidebar", label: t("menu.sidebar"), shortcut: "⌘I", enabled: board, run: a.toggleSidebar },
       { id: "export", label: t("menu.exportImage"), shortcut: "⇧⌘E", enabled: board, run: a.exportImage },
-      { id: "close", label: t("menu.closeBoard"), shortcut: "⇧⌘W", enabled: board, run: a.closeBoard },
+      { id: "new-tab", label: t("tabs.new"), shortcut: "⌘T", run: a.newTab },
+      { id: "close", label: t("tabs.close"), shortcut: "⌘W", enabled: board || schematic !== null, run: a.closeBoard },
       { id: "settings", label: t("menu.settings"), shortcut: "⌘,", run: a.settings },
       { id: "shortcuts", label: t("menu.shortcuts"), shortcut: "⌘/", run: a.shortcuts },
       { id: "updates", label: t("menu.checkUpdates"), run: a.checkUpdates },
       { id: "website", label: t("menu.website"), run: a.website },
+      ...tabInfos
+        .filter((tab) => tab.id !== activeTab)
+        .map((tab) => ({ id: `tab-${tab.id}`, label: `${t("tabs.tab")}: ${tab.title}`, run: () => switchTab(tab.id) })),
       ...recent.map((path, i) => ({ id: `recent-${i}`, label: `${t("menu.recent")}: ${fileName(path)}`, run: () => a.openRecent(path) })),
     ];
   };
@@ -449,6 +564,19 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
+      // Tabs: ⌃⇥ / ⌃⇧⇥ and ⌘1 … ⌘9 (⌘9 is the last tab), as in browsers.
+      if (e.ctrlKey && e.key === "Tab") {
+        e.preventDefault();
+        cycleTab(e.shiftKey ? -1 : 1);
+        return;
+      }
+      if (e.metaKey && !e.shiftKey && !e.altKey && /^[1-9]$/.test(e.key)) {
+        e.preventDefault();
+        const list = tabsRef.current;
+        const target = e.key === "9" ? list[list.length - 1] : list[Number(e.key) - 1];
+        if (target) switchTab(target.id);
+        return;
+      }
       if (mod && (e.key === "+" || e.key === "=")) {
         e.preventDefault();
         viewRef.current?.zoomBy(1.5);
@@ -576,7 +704,7 @@ export function App() {
 
   return (
     <I18nContext.Provider value={i18n}>
-      <div className="app">
+      <div className={`app${tabs.length > 1 ? " has-tabs" : ""}`}>
         <Toolbar
           model={model}
           side={side}
@@ -597,6 +725,8 @@ export function App() {
           onPick={(sel) => select(sel, true)}
           searchRef={searchRef}
         />
+
+        {tabs.length > 1 && <TabBar tabs={tabInfos} active={activeTab} onSwitch={switchTab} onClose={closeTab} onNew={newTab} />}
 
         <main className="workspace">
           {welcome ? (
@@ -624,6 +754,7 @@ export function App() {
                     settings={settings}
                     palette={palette}
                     measured={measured}
+                    initialView={initialView}
                     onSelect={select}
                   />
                 ) : (

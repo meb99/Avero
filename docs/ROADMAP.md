@@ -55,6 +55,7 @@ Offen:
 - Verbindungslinien (Ratsnest) zwischen den Pins eines Netzes
 - Netze über 0-Ω-Widerstände, Spulen, Ferrite, Sicherungen und Jumper hinweg verfolgen („Weiter über")
 - Ansicht als PNG exportieren (Drucken geht über das exportierte Bild in Vorschau)
+- mehrere Boards in Tabs, jeder mit eigenem Schaltplan, eigener Auswahl und Ansicht
 
 Offen:
-- mehrere Boards in Tabs, zwei Boards vergleichen
+- zwei Boards nebeneinander vergleichen
