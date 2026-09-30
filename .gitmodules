@@ -1,0 +1,3 @@
+[submodule "tools/xzz-pcb-to-gencad"]
+	path = tools/xzz-pcb-to-gencad
+	url = https://github.com/thanhluan119/xzz-pcb-to-gencad.git
