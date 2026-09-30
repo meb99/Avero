@@ -15,6 +15,7 @@ export interface MenuActions {
   exportImage(): void;
   settings(): void;
   search(): void;
+  searchSchematic(): void;
   palette(): void;
   flip(): void;
   rotate(): void;
@@ -23,6 +24,7 @@ export interface MenuActions {
   zoomIn(): void;
   zoomOut(): void;
   toggleSchematic(): void;
+  popOutSchematic(): void;
   toggleSidebar(): void;
   toggleRatsnest(): void;
   shortcuts(): void;
@@ -114,6 +116,7 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
         { item: "SelectAll" },
         SEP,
         item("search", t("menu.find"), (a) => a.search(), "CmdOrCtrl+F"),
+        item("search-schematic", t("menu.findSchematic"), (a) => a.searchSchematic(), "CmdOrCtrl+Alt+F"),
         item("palette", t("menu.palette"), (a) => a.palette(), "CmdOrCtrl+K"),
       ],
     },
@@ -132,6 +135,7 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
         SEP,
         item("ratsnest", t("menu.ratsnest"), (a) => a.toggleRatsnest(), "CmdOrCtrl+Shift+R"),
         item("schematic", t("menu.schematic"), (a) => a.toggleSchematic(), "CmdOrCtrl+E"),
+        item("schematic-window", t("menu.popOut"), (a) => a.popOutSchematic()),
         item("sidebar", t("menu.sidebar"), (a) => a.toggleSidebar(), "CmdOrCtrl+I"),
         SEP,
         { item: "Fullscreen" },

@@ -18,9 +18,11 @@ Ziel: ein Mac-Werkzeug, das Boardview, Schaltplan und Werkstattwissen zusammenbr
 - Schaltplan automatisch neben der Boardview-Datei finden (gleicher Name oder gleiche Boardnummer)
 - Seitennavigation und PDF-Lesezeichen, Demo-Schaltplan zum Demo-Board
 
+Nachgereicht in 0.5:
+- Schaltplan in einem eigenen Fenster (zweiter Monitor), verbunden mit dem Board ✅
+- Suche im Schaltplan nach beliebigem Text, auch nach Wortteilen ✅
+
 Offen aus 0.2:
-- Schaltplan in einem eigenen Fenster (zweiter Monitor)
-- Suche im Schaltplan nach beliebigem Text, nicht nur nach Board-Namen
 - Pin-Nummern im Schaltplan dem Pin im Board zuordnen (nicht nur dem Bauteil)
 
 ## 0.3 Werkstatt ✅

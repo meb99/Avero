@@ -28,13 +28,16 @@ import {
   type Loaded,
 } from "./core/loader";
 import type { LoadError, Selection, Side } from "./core/types";
+import { emitTo, listen } from "@tauri-apps/api/event";
 import { I18nContext, systemLanguage, translator, type MessageKey } from "./i18n";
 import { installMenu, nativeMenuActive, type MenuActions } from "./menu";
+import { closeSchematicWindow, LINK, openSchematicWindow, type LinkedDoc } from "./schematic/link";
 import { DARK, LIGHT } from "./render/palette";
 import type { SchematicDocument } from "./schematic/document";
 import { SchematicView, type SchematicFocus, type SchematicViewHandle, type WordTarget } from "./schematic/SchematicView";
 import type { Word } from "./schematic/textIndex";
 import { clearRecent, loadRecent, loadSettings, rememberRecent, saveSettings, type Settings } from "./settings";
+import { useTheme } from "./theme";
 import { dailyCheck, fetchUpdate, type Update } from "./updates";
 import { pickImport, type LibraryEntry } from "./workbench/library";
 import { netStatuses, type NetStatus } from "./workbench/notes";
@@ -68,19 +71,6 @@ const emptyTab = (id: number): Tab => ({
   schematic: null,
   schematicVisible: true,
 });
-
-function usePrefersDark(): boolean {
-  const query = "(prefers-color-scheme: dark)";
-  const [dark, setDark] = useState(() => window.matchMedia?.(query).matches ?? true);
-  useEffect(() => {
-    const mq = window.matchMedia?.(query);
-    if (!mq) return;
-    const listener = (e: MediaQueryListEvent) => setDark(e.matches);
-    mq.addEventListener("change", listener);
-    return () => mq.removeEventListener("change", listener);
-  }, []);
-  return dark;
-}
 
 function isTyping(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
@@ -128,6 +118,8 @@ export function App() {
   const [update, setUpdate] = useState<Update | null>(null);
   const [schematic, setSchematic] = useState<SchematicDocument | null>(null);
   const [schematicVisible, setSchematicVisible] = useState(true);
+  // The schematic is shown in its own window instead of the split view.
+  const [detached, setDetached] = useState(false);
   const [focus, setFocus] = useState<SchematicFocus | null>(null);
   // The active tab lives in the states above; `tabs` keeps the other tabs as
   // they were left (its entry for the active tab is stale).
@@ -151,10 +143,9 @@ export function App() {
   const lang = settings.language === "auto" ? systemLanguage() : settings.language;
   const i18n = useMemo(() => ({ t: translator(lang), lang }), [lang]);
   const { t } = i18n;
-  const prefersDark = usePrefersDark();
-  const theme = settings.theme === "system" ? (prefersDark ? "dark" : "light") : settings.theme;
+  const theme = useTheme(settings);
   const palette = theme === "dark" ? DARK : LIGHT;
-  const showSchematic = schematic !== null && schematicVisible;
+  const showSchematic = schematic !== null && schematicVisible && !detached;
   const { notes, update: updateNotes, error: notesError } = useBoardNotes(source);
 
   // Measurement state by net index for the board overlay.
@@ -351,13 +342,17 @@ export function App() {
   }, []);
 
   const toggleSchematic = useCallback(async () => {
+    if (detached) {
+      await closeSchematicWindow();
+      return;
+    }
     if (schematic) {
       setSchematicVisible((v) => !v);
       return;
     }
     const path = await pickPath(t("schematic.open"), "pdf");
     if (path) await openSchematicPath(path);
-  }, [schematic, openSchematicPath, t]);
+  }, [detached, schematic, openSchematicPath, t]);
 
   // --- selection -----------------------------------------------------------
 
@@ -398,11 +393,11 @@ export function App() {
     [model],
   );
 
-  const pickWord = useCallback(
-    (word: Word) => {
+  const pickName = useCallback(
+    (name: string) => {
       if (!model) return;
-      const part = model.findPart(word.key);
-      const net = model.findNet(word.key);
+      const part = model.findPart(name);
+      const net = model.findNet(name);
       pickedInSchematic.current = true;
       if (part !== undefined) select({ kind: "part", part }, true);
       else if (net !== undefined) select({ kind: "net", net }, true);
@@ -410,6 +405,57 @@ export function App() {
     },
     [model, select],
   );
+  const pickWord = useCallback((word: Word) => pickName(word.key), [pickName]);
+
+  // --- schematic window ----------------------------------------------------
+
+  const linkedDoc = useMemo((): LinkedDoc | null => {
+    if (!schematic) return null;
+    return {
+      name: schematic.name,
+      path: schematic.path,
+      // Only the demo schematic comes without a path.
+      url: schematic.path ? undefined : DEMO_SCHEMATIC,
+      parts: model ? model.parts.map((p) => p.name.toUpperCase()) : [],
+      nets: model ? model.nets.filter((n) => n.kind !== "unconnected").map((n) => n.name.toUpperCase()) : [],
+    };
+  }, [schematic, model]);
+  const linkRef = useRef({ linkedDoc, focus, pickName });
+  linkRef.current = { linkedDoc, focus, pickName };
+
+  const sendToWindow = (event: string, payload: unknown) => void emitTo("schematic", event, payload).catch(() => {});
+
+  useEffect(() => {
+    const subscriptions = [
+      listen(LINK.ready, () => {
+        sendToWindow(LINK.doc, linkRef.current.linkedDoc);
+        sendToWindow(LINK.focus, linkRef.current.focus);
+      }),
+      listen<string>(LINK.pick, (e) => linkRef.current.pickName(e.payload)),
+      listen(LINK.closed, () => setDetached(false)),
+    ];
+    return () => {
+      for (const s of subscriptions) void s.then((unlisten) => unlisten()).catch(() => {});
+    };
+  }, []);
+
+  useEffect(() => {
+    if (detached) sendToWindow(LINK.doc, linkedDoc);
+  }, [detached, linkedDoc]);
+
+  useEffect(() => {
+    if (detached) sendToWindow(LINK.focus, focus);
+  }, [detached, focus]);
+
+  const popOutSchematic = useCallback(async () => {
+    if (!schematic) return;
+    try {
+      await openSchematicWindow(`${schematic.name} — Avero`);
+      setDetached(true);
+    } catch (e) {
+      setToast(String(e));
+    }
+  }, [schematic]);
 
   // Files dropped on the window or opened from Finder.
   useEffect(() => {
@@ -494,6 +540,11 @@ export function App() {
       searchRef.current?.focus();
       searchRef.current?.select();
     },
+    searchSchematic: () => {
+      if (schematic && !schematicVisible) setSchematicVisible(true);
+      // After the pane is shown.
+      requestAnimationFrame(() => schematicViewRef.current?.focusSearch());
+    },
     palette: () => setDialog((d) => (d === "palette" ? null : d ?? "palette")),
     flip: () => setSide((s) => (s === "top" ? "bottom" : "top")),
     rotate: () => setRotation((r) => (r + 1) & 3),
@@ -502,6 +553,7 @@ export function App() {
     zoomIn: () => viewRef.current?.zoomBy(1.5),
     zoomOut: () => viewRef.current?.zoomBy(1 / 1.5),
     toggleSchematic: () => void toggleSchematic(),
+    popOutSchematic: () => void popOutSchematic(),
     toggleSidebar: () => setSettings((s) => ({ ...s, showSidebar: !s.showSidebar })),
     toggleRatsnest: () => setSettings((s) => ({ ...s, ratsnest: !s.ratsnest })),
     shortcuts: () => setDialog("help"),
@@ -543,6 +595,8 @@ export function App() {
       { id: "fit", label: t("menu.fit"), shortcut: "F", enabled: board, run: a.fit },
       { id: "ratsnest", label: t("menu.ratsnest"), shortcut: "⇧⌘R", enabled: board, run: a.toggleRatsnest },
       { id: "schematic", label: t("menu.schematic"), shortcut: "⌘E", run: a.toggleSchematic },
+      { id: "schematic-search", label: t("menu.findSchematic"), shortcut: "⌥⌘F", enabled: schematic !== null, run: a.searchSchematic },
+      { id: "schematic-window", label: t("menu.popOut"), enabled: schematic !== null && !detached, run: a.popOutSchematic },
       { id: "sidebar", label: t("menu.sidebar"), shortcut: "⌘I", enabled: board, run: a.toggleSidebar },
       { id: "export", label: t("menu.exportImage"), shortcut: "⇧⌘E", enabled: board, run: a.exportImage },
       { id: "new-tab", label: t("tabs.new"), shortcut: "⌘T", run: a.newTab },
@@ -592,6 +646,11 @@ export function App() {
       if (mod && key === "o") {
         e.preventDefault();
         void openDialog();
+        return;
+      }
+      if (mod && e.altKey && e.code === "KeyF") {
+        e.preventDefault();
+        actionsRef.current.searchSchematic();
         return;
       }
       if (mod && key === "f") {
@@ -779,6 +838,7 @@ export function App() {
                         classify={classifyWord}
                         onPick={pickWord}
                         onClose={closeSchematic}
+                        onPopOut={() => void popOutSchematic()}
                       />
                     </div>
                   </>

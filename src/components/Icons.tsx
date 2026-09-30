@@ -145,3 +145,11 @@ export const LibraryIcon = () => (
     <path d="m13.2 4.6 3.3-.9 2.6 12.3-3.3.8z" />
   </Icon>
 );
+
+export const PopOutIcon = () => (
+  <Icon>
+    <path d="M11 3.5h5.5V9" />
+    <path d="M16.5 3.5 9.5 10.5" />
+    <path d="M14 12v3.5a1 1 0 0 1-1 1H4.5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1H8" />
+  </Icon>
+);

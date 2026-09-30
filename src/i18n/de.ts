@@ -275,4 +275,12 @@ export const de: Record<MessageKey, string> = {
   "tabs.tab": "Tab",
   "help.tabs": "⌘T, ⌘W, ⌘1 … 9, ⌃⇥",
   "help.tabsLabel": "Tabs: neu, schließen, wechseln",
+  "schematic.search": "Im Schaltplan suchen",
+  "menu.findSchematic": "Im Schaltplan suchen",
+  "help.schematicSearch": "⌥⌘F",
+  "help.schematicSearchLabel": "Im Schaltplan nach beliebigem Text suchen",
+  "schematic.popOut": "In eigenem Fenster öffnen",
+  "schematic.none": "Kein Schaltplan in diesem Tab",
+  "schematic.loading": "Schaltplan wird geladen…",
+  "menu.popOut": "Schaltplan in eigenem Fenster",
 };

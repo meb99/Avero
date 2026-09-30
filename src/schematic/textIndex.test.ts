@@ -53,6 +53,13 @@ describe("WordIndex", () => {
     ]);
   });
 
+  it("searches for any part of a word", () => {
+    expect(index.search("nd").map((w) => w.page)).toEqual([0, 1, 1]);
+    expect(index.search("300").map((w) => w.key)).toEqual(["U3000"]);
+    expect(index.search("  ")).toEqual([]);
+    expect(index.search("n", 2)).toHaveLength(2);
+  });
+
   it("finds the word under a point", () => {
     expect(index.wordAt(1, 120, 96)?.key).toBe("U3000");
     expect(index.wordAt(1, 120, 300)).toBeUndefined();

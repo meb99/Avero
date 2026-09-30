@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
 import type { RenderTask } from "pdfjs-dist/legacy/build/pdf.mjs";
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, FitIcon, SchematicIcon, ZoomInIcon, ZoomOutIcon } from "../components/Icons";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CloseIcon,
+  FitIcon,
+  PopOutIcon,
+  SchematicIcon,
+  SearchIcon,
+  ZoomInIcon,
+  ZoomOutIcon,
+} from "../components/Icons";
 import { useI18n } from "../i18n";
 import type { OutlineEntry, PageSize, SchematicDocument } from "./document";
 import { PageCamera } from "./pageCamera";
@@ -19,6 +29,8 @@ export interface SchematicViewHandle {
   prevPage(): void;
   nextHit(): void;
   prevHit(): void;
+  /** Puts the keyboard into the schematic's own text search. */
+  focusSearch(): void;
 }
 
 export type WordTarget = "part" | "net" | null;
@@ -30,6 +42,8 @@ interface Props {
   classify(word: Word): WordTarget;
   onPick(word: Word): void;
   onClose(): void;
+  /** Moves the schematic into its own window; no button without it. */
+  onPopOut?: () => void;
   ref?: Ref<SchematicViewHandle>;
 }
 
@@ -57,7 +71,7 @@ function isCancel(e: unknown): boolean {
   return !!e && typeof e === "object" && "name" in e && (e as { name: string }).name === "RenderingCancelledException";
 }
 
-export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, ref }: Props) {
+export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, onPopOut, ref }: Props) {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -84,6 +98,10 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, r
   const [outline, setOutline] = useState<{ title: string; page: number; depth: number }[]>([]);
   const [hits, setHits] = useState<Word[]>([]);
   const [hit, setHit] = useState(0);
+  // Free text typed into the schematic's search field; while set it
+  // replaces the board selection as what is highlighted.
+  const [query, setQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
   const [cursor, setCursor] = useState<"default" | "pointer" | "grabbing">("default");
 
   // --- drawing -------------------------------------------------------------
@@ -261,6 +279,10 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, r
       prevPage: () => void showPage(pageRef.current - 1),
       nextHit: () => jumpTo(hitRef.current + 1),
       prevHit: () => jumpTo(hitRef.current - 1),
+      focusSearch: () => {
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      },
     }),
     [showPage, jumpTo],
   );
@@ -282,20 +304,26 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, r
     };
   }, [doc, showPage]);
 
-  // Occurrences of the focused text; re-evaluated while indexing continues.
-  const jumpedFor = useRef(-1);
+  // A new selection on the board takes over from typed text.
+  useEffect(() => setQuery(""), [focus]);
+
+  // Occurrences of the typed text or the focused name; re-evaluated while
+  // indexing continues.
+  const jumpedFor = useRef<number | string>(-1);
+  const typed = query.trim();
   useEffect(() => {
-    const found = focus ? doc.index.find(focus.text) : [];
+    const found = typed ? doc.index.search(typed) : focus ? doc.index.find(focus.text) : [];
     hitsRef.current = found;
     setHits(found);
-    if (!focus || found.length === 0) {
+    if (found.length === 0) {
       hitRef.current = 0;
       setHit(0);
       requestDraw();
       return;
     }
-    if (focus.jump && jumpedFor.current !== focus.nonce) {
-      jumpedFor.current = focus.nonce;
+    const jumpKey = typed ? `q:${typed}` : focus?.jump ? focus.nonce : jumpedFor.current;
+    if (jumpKey !== jumpedFor.current) {
+      jumpedFor.current = jumpKey;
       // Stay on the current page when the text is on it.
       const here = found.findIndex((w) => w.page === pageRef.current);
       jumpTo(here >= 0 ? here : 0);
@@ -303,7 +331,7 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, r
       hitRef.current = Math.min(hitRef.current, found.length - 1);
       requestDraw();
     }
-  }, [doc, focus, indexed, jumpTo, requestDraw]);
+  }, [doc, focus, typed, indexed, jumpTo, requestDraw]);
 
   // Size tracking.
   useEffect(() => {
@@ -524,10 +552,32 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, r
             <ZoomInIcon />
           </button>
         </div>
+        <label className="schematic-search">
+          <SearchIcon />
+          <input
+            ref={searchRef}
+            type="search"
+            spellCheck={false}
+            autoComplete="off"
+            placeholder={t("schematic.search")}
+            aria-label={t("schematic.search")}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                jumpTo(hitRef.current + (e.shiftKey ? -1 : 1));
+              } else if (e.key === "Escape") {
+                setQuery("");
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+          />
+        </label>
         <span className="schematic-spacer" />
-        {focus && hits.length > 0 && (
+        {(typed || focus) && hits.length > 0 && (
           <div className="hits" title={t("schematic.hitsHint")}>
-            <span className="hits-text">{focus.text}</span>
+            <span className="hits-text">{typed || focus?.text}</span>
             <span className="muted">
               {hit + 1}/{hits.length}
             </span>
@@ -539,10 +589,15 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, r
             </button>
           </div>
         )}
-        {focus && hits.length === 0 && indexed >= doc.pageCount && (
-          <span className="muted hits-none">{t("schematic.notFound", { text: focus.text })}</span>
+        {(typed || focus) && hits.length === 0 && indexed >= doc.pageCount && (
+          <span className="muted hits-none">{t("schematic.notFound", { text: typed || focus?.text || "" })}</span>
         )}
         {indexed < doc.pageCount && <span className="muted">{t("schematic.indexing", { n: indexed, total: doc.pageCount })}</span>}
+        {onPopOut && (
+          <button className="tool icon-only" onClick={onPopOut} aria-label={t("schematic.popOut")} title={t("schematic.popOut")}>
+            <PopOutIcon />
+          </button>
+        )}
         <button className="tool icon-only" onClick={onClose} aria-label={t("schematic.close")} title={t("schematic.close")}>
           <CloseIcon />
         </button>

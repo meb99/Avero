@@ -155,6 +155,7 @@ export function HelpDialog({ onClose }: { onClose(): void }) {
     ["help.library", "help.libraryLabel"],
     ["help.pages", "help.pagesLabel"],
     ["help.hits", "help.hitsLabel"],
+    ["help.schematicSearch", "help.schematicSearchLabel"],
     ["help.clear", "help.clearLabel"],
   ] as const;
   return (

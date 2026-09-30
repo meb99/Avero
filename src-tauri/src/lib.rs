@@ -215,6 +215,34 @@ fn export_json(path: String, data: String) -> Result<(), String> {
     notes::write_json(Path::new(&path), &data)
 }
 
+/// Label of the separate schematic window (second monitor).
+const SCHEMATIC_WINDOW: &str = "schematic";
+
+/// Opens the schematic in its own window, or brings that window forward.
+/// The page finds out from its window label that it shows only the schematic.
+#[tauri::command]
+async fn open_schematic_window(app: tauri::AppHandle, title: String) -> Result<(), String> {
+    use tauri::Manager;
+    if let Some(window) = app.get_webview_window(SCHEMATIC_WINDOW) {
+        return window.set_focus().map_err(|e| e.to_string());
+    }
+    tauri::WebviewWindowBuilder::new(&app, SCHEMATIC_WINDOW, tauri::WebviewUrl::default())
+        .title(title)
+        .inner_size(1100.0, 860.0)
+        .min_inner_size(480.0, 360.0)
+        .build()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn close_schematic_window(app: tauri::AppHandle) {
+    use tauri::Manager;
+    if let Some(window) = app.get_webview_window(SCHEMATIC_WINDOW) {
+        let _ = window.close();
+    }
+}
+
 #[tauri::command]
 fn take_pending_paths(pending: tauri::State<'_, PendingPaths>) -> Vec<String> {
     pending.0.lock().map(|mut p| std::mem::take(&mut *p)).unwrap_or_default()
@@ -237,12 +265,25 @@ pub fn run() {
             save_notes,
             export_json,
             write_binary,
+            open_schematic_window,
+            close_schematic_window,
             take_pending_paths
         ])
         .build(tauri::generate_context!())
         .expect("error while building Avero");
 
     app.run(|_app, _event| {
+        if let tauri::RunEvent::WindowEvent { label, event: tauri::WindowEvent::Destroyed, .. } = &_event {
+            use tauri::Emitter;
+            if label == SCHEMATIC_WINDOW {
+                // The main window shows the schematic again.
+                let _ = _app.emit_to("main", "schematic:closed", ());
+            } else if label == "main" {
+                // Closing the main window ends the app, schematic window included.
+                _app.exit(0);
+            }
+        }
+
         // Finder "Open With", double-click on an associated file, or a drop
         // on the Dock icon.
         #[cfg(target_os = "macos")]

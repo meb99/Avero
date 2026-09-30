@@ -1762,3 +1762,40 @@ button.danger {
   gap: 6px;
   min-width: 0;
 }
+
+/* Schematic text search */
+
+.schematic-search {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-muted);
+  flex: 0 1 170px;
+  min-width: 90px;
+}
+
+.schematic-search:focus-within {
+  border-color: var(--accent);
+}
+
+.schematic-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}
+
+/* Separate schematic window */
+
+.schematic-window {
+  display: flex;
+  height: 100%;
+}

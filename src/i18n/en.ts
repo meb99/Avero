@@ -273,6 +273,14 @@ export const en = {
   "tabs.tab": "Tab",
   "help.tabs": "⌘T, ⌘W, ⌘1 … 9, ⌃⇥",
   "help.tabsLabel": "Tabs: new, close, switch",
+  "schematic.search": "Search schematic",
+  "menu.findSchematic": "Search in Schematic",
+  "help.schematicSearch": "⌥⌘F",
+  "help.schematicSearchLabel": "Search the schematic for any text",
+  "schematic.popOut": "Open in a separate window",
+  "schematic.none": "No schematic in this tab",
+  "schematic.loading": "Loading schematic…",
+  "menu.popOut": "Schematic in Separate Window",
 };
 
 export type MessageKey = keyof typeof en;

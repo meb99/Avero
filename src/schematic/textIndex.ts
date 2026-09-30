@@ -83,6 +83,8 @@ export function wordsFromRuns(runs: TextRun[], page: number): Word[] {
   return words;
 }
 
+const readingOrder = (a: Word, b: Word) => a.page - b.page || a.box.y0 - b.box.y0 || a.box.x0 - b.box.x0;
+
 /** All words of a document, looked up by upper-case text. */
 export class WordIndex {
   private readonly byKey = new Map<string, Word[]>();
@@ -102,7 +104,20 @@ export class WordIndex {
   /** Occurrences in reading order: by page, then top to bottom, left to right. */
   find(text: string): Word[] {
     const list = this.byKey.get(text.trim().toUpperCase()) ?? [];
-    return [...list].sort((a, b) => a.page - b.page || a.box.y0 - b.box.y0 || a.box.x0 - b.box.x0);
+    return [...list].sort(readingOrder);
+  }
+
+  /** Words containing `text`, ignoring case, in reading order. */
+  search(text: string, limit = 5000): Word[] {
+    const q = text.trim().toUpperCase();
+    if (!q) return [];
+    const out: Word[] = [];
+    for (const [key, list] of this.byKey) {
+      if (!key.includes(q)) continue;
+      out.push(...list);
+      if (out.length >= limit) break;
+    }
+    return out.sort(readingOrder).slice(0, limit);
   }
 
   onPage(page: number): Word[] {
