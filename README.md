@@ -1,1 +1,117 @@
-# Avero
+<p align="center">
+  <img src="public/avero.svg" width="96" height="96" alt="Avero">
+</p>
+
+<h1 align="center">Avero</h1>
+
+<p align="center">Boardview für die Elektronik-Reparatur auf dem Mac.</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-12%2B-111111?logo=apple" alt="macOS 12+">
+  <img src="https://img.shields.io/badge/Rust-Tauri%202-F05138?logo=rust&logoColor=white" alt="Rust + Tauri 2">
+  <img src="https://img.shields.io/badge/Lizenz-MIT-55D5B4" alt="MIT">
+</p>
+
+![Avero mit hervorgehobenem Netz](docs/screenshot.png)
+
+Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ein Signal über beide Seiten der Platine. Das Ziel ist ein Werkzeug auf dem Niveau von FlexBV und XinZhiZao: Boardview, Schaltplan und Werkstattwissen in einer App. Alles läuft lokal, ohne Konto und ohne Telemetrie.
+
+## Stand (0.1)
+
+**Boardview**
+- Liest Test_Link `.brd` (auch verschleierte Dateien), BRD2, Honhan `.bdv`, ASUS `.asc`, BoardViewer `.bvr` / BVR3, GenCAD, Panel-CAD und IBM `.cst`.
+- Flüssige Darstellung per GPU (WebGL 2), auch bei zehntausenden Pins.
+- Oberseite / Unterseite (gespiegelt wie ein umgedrehtes Board), Drehen in 90°-Schritten.
+- Klick auf einen Pin hebt das ganze Netz hervor. Pins desselben Netzes auf der anderen Seite bleiben schwach sichtbar, damit man sieht, wohin das Signal geht.
+- Pin 1 ist eckig gezeichnet, Versorgungsnetze rot, Masse dunkel, Testpunkte als Raute.
+- Suche nach Bauteil, Netz oder Pin: `U3000`, `PP3V3`, `U3000.21`, `U1000 A12`.
+- Detailpanel mit Wert, Seite, Position und allen verbundenen Bauteilen und Pins, dazu Listen aller Bauteile und Netze.
+
+**Mac**
+- Toolbar als Titelleiste mit den Fenster-Ampeln, ⌘O / ⌘F, Hell- und Dunkelmodus nach Systemeinstellung.
+- Trackpad: zwei Finger verschieben, Zoomgeste zoomt (in den Einstellungen auf Mausrad-Zoom umstellbar).
+- Dateien per Drag & Drop, „Öffnen mit" im Finder oder aufs Dock-Symbol ziehen.
+- Deutsch und Englisch, je nach Systemsprache.
+
+Ein Demo-Board ist eingebaut, damit man alles ohne eigene Dateien ausprobieren kann.
+
+## Tastatur und Maus
+
+| Aktion | Eingabe |
+| --- | --- |
+| Verschieben | Ziehen, zwei Finger, Pfeiltasten |
+| Zoomen | Zoomgeste, `+` / `−` |
+| Auswählen | Klick |
+| Zur Auswahl zoomen | Doppelklick, `↩` |
+| Seite wechseln | `Leertaste` |
+| Drehen | `R` / `⇧R` |
+| Einpassen | `F` |
+| Suchen | `⌘F` oder `/` |
+| Öffnen | `⌘O` |
+| Auswahl aufheben | `Esc` |
+
+## Installation
+
+Unter [Releases](https://github.com/meb99/Avero/releases) liegt eine DMG (Universal: Apple Silicon und Intel). Avero in den Programme-Ordner ziehen und beim ersten Start per Rechtsklick → **Öffnen** bestätigen, da die App nicht von Apple notarisiert ist.
+
+Eine neue Version entsteht, wenn ein Tag `v*` gepusht wird: GitHub Actions baut die DMG und legt einen Release-Entwurf an.
+
+## Selbst bauen
+
+Voraussetzungen: macOS 12+, Xcode Command Line Tools, [Rust](https://rustup.rs) (stable), Node.js 22.
+
+```sh
+git clone https://github.com/meb99/Avero.git
+cd Avero
+npm install
+npm run tauri dev      # Entwicklung mit Hot Reload
+npm run tauri build    # Avero.app und DMG unter target/release/bundle
+```
+
+Tests und Prüfungen:
+
+```sh
+cargo test -p avero-formats      # Format-Parser
+cargo clippy --workspace -- -D warnings
+npm run typecheck && npm test    # Oberfläche
+```
+
+`avero-inspect` zeigt, was Avero aus einer Datei liest, ganz ohne Oberfläche:
+
+```sh
+cargo run -p avero-formats --bin avero-inspect -- board.brd
+cargo run -p avero-formats --bin avero-inspect -- board.brd --json
+```
+
+## Aufbau
+
+```text
+crates/avero-formats     Rust: Dateiformate → einheitliches Board-Modell (mil, Y nach oben)
+  src/formats/           ein Modul pro Format, plus Erkennung
+  src/builder.rs         Netze, Pin-Größen, Bauteilumrisse, Board-Umriss
+  src/demo.rs            synthetisches Demo-Board
+  tests/formats.rs       handgeschriebene Mini-Boards pro Format
+src-tauri                Mac-App: Befehle open_board / open_demo, Finder-Integration
+src                      Oberfläche (React + TypeScript)
+  core/                  Board-Modell, Kamera, Raster-Index, Suche, Tauri-Anbindung
+  render/                WebGL-2-Renderer, Beschriftungen, Farben
+  components/            Toolbar, Suche, Seitenleiste, Dialoge
+  i18n/                  Deutsch und Englisch
+docs/                    Roadmap und Formatnotizen
+```
+
+## Boardview-Dateien und Schaltpläne
+
+Boardviews und Schaltpläne sind fast immer Eigentum der Hersteller. **Sie gehören nicht in dieses Repository.** Die `.gitignore` schließt die üblichen Endungen aus. Die Tests nutzen ausschließlich selbst geschriebene Mini-Boards.
+
+## Weiter geht's
+
+Die nächsten Schritte stehen in [docs/ROADMAP.md](docs/ROADMAP.md): Schaltplan-Viewer mit Querverweisen, Bibliothek, Messwerte pro Netz, dann XZZ `.pcb`, `.fz` und `.tvw`.
+
+## Dank
+
+Das Wissen über die Dateiformate stammt zu großen Teilen aus [OpenBoardView](https://github.com/OpenBoardView/OpenBoardView) (MIT). Details in [NOTICE](NOTICE).
+
+## Lizenz
+
+[MIT](LICENSE)

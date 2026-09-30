@@ -1,0 +1,129 @@
+import { useEffect, useRef, type ReactNode } from "react";
+import { useI18n } from "../i18n";
+import type { Settings } from "../settings";
+import { CloseIcon } from "./Icons";
+
+function Dialog({ title, onClose, children }: { title: string; onClose(): void; children: ReactNode }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const d = ref.current;
+    if (d && !d.open) d.showModal();
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      className="dialog"
+      onClose={onClose}
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
+      onClick={(e) => {
+        if (e.target === ref.current) onClose();
+      }}
+    >
+      <header>
+        <h2>{title}</h2>
+        <button className="tool icon-only" onClick={onClose} aria-label="Close">
+          <CloseIcon />
+        </button>
+      </header>
+      <div className="dialog-body">{children}</div>
+    </dialog>
+  );
+}
+
+interface SettingsProps {
+  settings: Settings;
+  onChange(s: Settings): void;
+  onClose(): void;
+}
+
+export function SettingsDialog({ settings, onChange, onClose }: SettingsProps) {
+  const { t } = useI18n();
+  const set = <K extends keyof Settings>(key: K, value: Settings[K]) => onChange({ ...settings, [key]: value });
+  const check = (key: "ghostOtherSide" | "dimUnselected" | "showVias" | "partNames" | "pinNumbers" | "netNames", label: string) => (
+    <label className="check">
+      <input type="checkbox" checked={settings[key]} onChange={(e) => set(key, e.target.checked)} />
+      {label}
+    </label>
+  );
+
+  return (
+    <Dialog title={t("settings.title")} onClose={onClose}>
+      <div className="form-grid">
+        <label htmlFor="set-lang">{t("settings.language")}</label>
+        <select id="set-lang" value={settings.language} onChange={(e) => set("language", e.target.value as Settings["language"])}>
+          <option value="auto">{t("settings.language.auto")}</option>
+          <option value="en">English</option>
+          <option value="de">Deutsch</option>
+        </select>
+
+        <label htmlFor="set-theme">{t("settings.theme")}</label>
+        <select id="set-theme" value={settings.theme} onChange={(e) => set("theme", e.target.value as Settings["theme"])}>
+          <option value="system">{t("settings.theme.system")}</option>
+          <option value="dark">{t("settings.theme.dark")}</option>
+          <option value="light">{t("settings.theme.light")}</option>
+        </select>
+
+        <label htmlFor="set-units">{t("settings.units")}</label>
+        <select id="set-units" value={settings.units} onChange={(e) => set("units", e.target.value as Settings["units"])}>
+          <option value="mm">{t("settings.units.mm")}</option>
+          <option value="mil">{t("settings.units.mil")}</option>
+        </select>
+
+        <label htmlFor="set-scroll">{t("settings.scroll")}</label>
+        <select id="set-scroll" value={settings.scroll} onChange={(e) => set("scroll", e.target.value as Settings["scroll"])}>
+          <option value="pan">{t("settings.scroll.pan")}</option>
+          <option value="zoom">{t("settings.scroll.zoom")}</option>
+        </select>
+      </div>
+      <h3>{t("settings.display")}</h3>
+      <div className="checks">
+        {check("partNames", t("settings.partNames"))}
+        {check("pinNumbers", t("settings.pinNumbers"))}
+        {check("netNames", t("settings.netNames"))}
+        {check("ghostOtherSide", t("settings.ghost"))}
+        {check("dimUnselected", t("settings.dim"))}
+        {check("showVias", t("settings.vias"))}
+      </div>
+      <footer className="dialog-footer">
+        <button className="primary" onClick={onClose}>
+          {t("settings.done")}
+        </button>
+      </footer>
+    </Dialog>
+  );
+}
+
+export function HelpDialog({ onClose }: { onClose(): void }) {
+  const { t } = useI18n();
+  const rows = [
+    ["help.pan", "help.panLabel"],
+    ["help.zoom", "help.zoomLabel"],
+    ["help.select", "help.selectLabel"],
+    ["help.zoomTo", "help.zoomToLabel"],
+    ["help.flip", "help.flipLabel"],
+    ["help.rotate", "help.rotateLabel"],
+    ["help.fit", "help.fitLabel"],
+    ["help.search", "help.searchLabel"],
+    ["help.open", "help.openLabel"],
+    ["help.clear", "help.clearLabel"],
+  ] as const;
+  return (
+    <Dialog title={t("help.title")} onClose={onClose}>
+      <table className="shortcuts">
+        <tbody>
+          {rows.map(([keys, label]) => (
+            <tr key={keys}>
+              <td>
+                <kbd>{t(keys)}</kbd>
+              </td>
+              <td>{t(label)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Dialog>
+  );
+}

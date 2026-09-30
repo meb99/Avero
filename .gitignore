@@ -1,0 +1,24 @@
+node_modules/
+dist/
+target/
+src-tauri/gen/
+*.log
+.DS_Store
+*.tsbuildinfo
+
+# Boardview and schematic files are usually vendor property. They must never
+# be committed here; keep your own library outside of the repository.
+*.brd
+*.bdv
+*.bvr
+*.bvr3
+*.cst
+*.fz
+*.tvw
+*.asc
+*.gcd
+*.cad
+*.gencad
+*.pcb
+*.cae
+*.pdf
