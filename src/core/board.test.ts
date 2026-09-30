@@ -28,10 +28,30 @@ describe("BoardModel selection helpers", () => {
   });
 
   it("groups net members by part", () => {
+    // L5, R1, U10
     expect(model.netMembers(0)).toEqual([
+      { part: 2, pins: [6] },
       { part: 0, pins: [0] },
       { part: 1, pins: [2] },
     ]);
+  });
+
+  it("follows nets through coils and 0 Ω resistors", () => {
+    expect(model.isSeriesPart(2)).toBe(true);
+    expect(model.isSeriesPart(3)).toBe(true);
+    expect(model.isSeriesPart(0)).toBe(false); // R1 is 10k
+    const links = model.seriesLinks(0).map((l) => [model.nets[l.net].name, model.parts[l.via].name]);
+    expect(links).toEqual([
+      ["PP3V3_L", "L5"],
+      ["PP3V3_R", "R9"],
+    ]);
+  });
+
+  it("links every pin of a net with a spanning tree", () => {
+    const edges = model.ratsnest(0);
+    expect(edges).toHaveLength(2);
+    const touched = new Set(edges.flat());
+    expect([...touched].sort()).toEqual([0, 2, 6]);
   });
 
   it("sorts unconnected nets last", () => {

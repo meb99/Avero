@@ -16,7 +16,7 @@
 
 Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ein Signal über beide Seiten der Platine. Das Ziel ist ein Werkzeug auf dem Niveau von FlexBV und XinZhiZao: Boardview, Schaltplan und Werkstattwissen in einer App. Alles läuft lokal, ohne Konto und ohne Telemetrie.
 
-## Stand (0.4)
+## Stand (0.5)
 
 **Boardview**
 - Liest Test_Link `.brd` (auch verschleierte Dateien), BRD2, Honhan `.bdv`, ASUS `.asc`, BoardViewer `.bvr` / BVR3, GenCAD, Panel-CAD, IBM `.cst` und XinZhiZao `.pcb`.
@@ -26,6 +26,10 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - Klick auf einen Pin hebt das ganze Netz hervor. Pins desselben Netzes auf der anderen Seite bleiben schwach sichtbar, damit man sieht, wohin das Signal geht.
 - Pin 1 ist eckig gezeichnet, Versorgungsnetze rot, Masse dunkel, Testpunkte als Raute.
 - Suche nach Bauteil, Netz oder Pin: `U3000`, `PP3V3`, `U3000.21`, `U1000 A12`.
+- **Befehlspalette** (`⌘K`): jeder Befehl, jedes Bauteil, Netz und jeder Pin in einer Liste.
+- **Verbindungslinien** (Ratsnest) zwischen den Pins des gewählten Netzes, jeweils zum nächsten Nachbarn.
+- **Netze verfolgen** über Spulen, Ferrite, Sicherungen, Jumper und 0-Ω-Widerstände: Das Detailpanel zeigt „Weiter über", z. B. `PP1V8_SW` → `PP1V8` über `L3001`.
+- Ansicht als PNG exportieren (`⇧⌘E`), mit allen Beschriftungen.
 - Detailpanel mit Wert, Seite, Position und allen verbundenen Bauteilen und Pins, dazu Listen aller Bauteile und Netze.
 
 **Schaltplan**
@@ -42,7 +46,9 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - Gespeichert wird lokal unter `~/Library/Application Support/dev.meb99.avero/boards/`, eine Datei pro Board. Alle Dateien desselben Boards (etwa `.brd` und `.bdv`) teilen sich die Messwerte über die Boardnummer.
 
 **Mac**
-- Toolbar als Titelleiste mit den Fenster-Ampeln, ⌘O / ⌘F, Hell- und Dunkelmodus nach Systemeinstellung.
+- Echte Mac-Menüleiste (Ablage, Bearbeiten, Darstellung, Fenster, Hilfe) mit allen Befehlen und „Zuletzt geöffnet".
+- Toolbar als Titelleiste mit den Fenster-Ampeln, Hell- und Dunkelmodus nach Systemeinstellung.
+- Hinweis auf neue Versionen (einmal täglich, abschaltbar); „Nach Updates suchen…" im Avero-Menü.
 - Trackpad: zwei Finger verschieben, Zoomgeste zoomt (in den Einstellungen auf Mausrad-Zoom umstellbar).
 - Dateien per Drag & Drop, „Öffnen mit" im Finder oder aufs Dock-Symbol ziehen.
 - Deutsch und Englisch, je nach Systemsprache.
@@ -61,6 +67,10 @@ Ein Demo-Board mit passendem Demo-Schaltplan ist eingebaut, damit man alles ohne
 | Drehen | `R` / `⇧R` |
 | Einpassen | `F` |
 | Suchen | `⌘F` oder `/` |
+| Befehlspalette | `⌘K` |
+| Verbindungslinien ein/aus | `⇧⌘R` |
+| Ansicht als Bild exportieren | `⇧⌘E` |
+| Einstellungen | `⌘,` |
 | Öffnen (Boardview oder PDF) | `⌘O` |
 | Schaltplan ein/aus | `⌘E` |
 | Seitenleiste ein/aus | `⌘I` |
@@ -71,9 +81,12 @@ Ein Demo-Board mit passendem Demo-Schaltplan ist eingebaut, damit man alles ohne
 
 ## Installation
 
-Unter [Releases](https://github.com/meb99/Avero/releases) liegt eine DMG (Universal: Apple Silicon und Intel). Avero in den Programme-Ordner ziehen und beim ersten Start per Rechtsklick → **Öffnen** bestätigen, da die App nicht von Apple notarisiert ist.
+1. Unter [Releases](https://github.com/meb99/Avero/releases/latest) die Datei `Avero_…_universal.dmg` laden (Apple Silicon und Intel, macOS 13 oder neuer).
+2. DMG öffnen und Avero in den Programme-Ordner ziehen.
+3. Beim ersten Start meldet macOS, dass die App nicht von Apple geprüft ist (Avero ist nicht notarisiert). Unter macOS 13/14: Rechtsklick auf Avero → **Öffnen**. Unter macOS 15: einmal starten, dann **Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen"**.
+   Alternativ im Terminal: `xattr -dr com.apple.quarantine /Applications/Avero.app`
 
-Eine neue Version entsteht, wenn ein Tag `v*` gepusht wird: GitHub Actions baut die DMG und legt einen Release-Entwurf an.
+Avero meldet neue Versionen selbst. Eine neue Version entsteht, wenn ein Tag `v*` gepusht wird: GitHub Actions baut die DMG und veröffentlicht sie als Release.
 
 ## Selbst bauen
 

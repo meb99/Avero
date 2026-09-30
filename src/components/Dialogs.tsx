@@ -52,7 +52,16 @@ interface SettingsProps {
 export function SettingsDialog({ settings, onChange, onClose }: SettingsProps) {
   const { t } = useI18n();
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) => onChange({ ...settings, [key]: value });
-  type Toggle = "ghostOtherSide" | "dimUnselected" | "showVias" | "partNames" | "pinNumbers" | "netNames" | "autoSchematic";
+  type Toggle =
+    | "ghostOtherSide"
+    | "dimUnselected"
+    | "showVias"
+    | "partNames"
+    | "pinNumbers"
+    | "netNames"
+    | "ratsnest"
+    | "autoSchematic"
+    | "updateCheck";
   const check = (key: Toggle, label: string) => (
     <label className="check">
       <input type="checkbox" checked={settings[key]} onChange={(e) => set(key, e.target.checked)} />
@@ -97,6 +106,7 @@ export function SettingsDialog({ settings, onChange, onClose }: SettingsProps) {
         {check("ghostOtherSide", t("settings.ghost"))}
         {check("dimUnselected", t("settings.dim"))}
         {check("showVias", t("settings.vias"))}
+        {check("ratsnest", t("settings.ratsnest"))}
       </div>
       <h3>{t("settings.formats")}</h3>
       <div className="form-grid">
@@ -115,6 +125,8 @@ export function SettingsDialog({ settings, onChange, onClose }: SettingsProps) {
       <p className="muted setting-hint">{t("settings.xzzKeyHint")}</p>
       <h3>{t("schematic.title")}</h3>
       <div className="checks">{check("autoSchematic", t("settings.autoSchematic"))}</div>
+      <h3>Avero</h3>
+      <div className="checks">{check("updateCheck", t("settings.updateCheck"))}</div>
       <footer className="dialog-footer">
         <button className="primary" onClick={onClose}>
           {t("settings.done")}
@@ -135,6 +147,8 @@ export function HelpDialog({ onClose }: { onClose(): void }) {
     ["help.rotate", "help.rotateLabel"],
     ["help.fit", "help.fitLabel"],
     ["help.search", "help.searchLabel"],
+    ["help.palette", "help.paletteLabel"],
+    ["help.ratsnest", "help.ratsnestLabel"],
     ["help.open", "help.openLabel"],
     ["help.schematic", "help.schematicLabel"],
     ["help.library", "help.libraryLabel"],

@@ -178,6 +178,37 @@ fn save_notes(app: tauri::AppHandle, key: String, data: String) -> Result<(), St
     notes::save(&notes_dir(&app)?, &key, &data)
 }
 
+/// Decodes the percent-encoding the UI uses to pass paths in a header.
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(b) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                out.push(b);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Writes binary data (e.g. an exported PNG) to a path the user picked. The
+/// bytes come as the raw request body, the path in the `x-path` header.
+#[tauri::command]
+fn write_binary(request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let tauri::ipc::InvokeBody::Raw(data) = request.body() else {
+        return Err("expected binary data".into());
+    };
+    let path = request.headers().get("x-path").and_then(|v| v.to_str().ok()).ok_or("missing path")?;
+    let path = PathBuf::from(percent_decode(path));
+    std::fs::write(&path, data).map_err(|e| format!("{}: {e}", path.display()))
+}
+
 /// Writes a JSON export to a path the user picked in a save panel.
 #[tauri::command]
 fn export_json(path: String, data: String) -> Result<(), String> {
@@ -205,6 +236,7 @@ pub fn run() {
             load_notes,
             save_notes,
             export_json,
+            write_binary,
             take_pending_paths
         ])
         .build(tauri::generate_context!())
@@ -266,6 +298,13 @@ mod tests {
         assert_eq!(names("board.brd"), ["board.pdf", "J413 820-02100.PDF", "notes.pdf"]);
         assert_eq!(names("820-02100 boardview.brd")[0], "J413 820-02100.PDF");
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn decodes_percent_encoded_paths() {
+        assert_eq!(percent_decode("/Users/me/B%C3%B6rd%20A.png"), "/Users/me/Börd A.png");
+        assert_eq!(percent_decode("100%"), "100%");
+        assert_eq!(percent_decode("%zz"), "%zz");
     }
 
     #[test]

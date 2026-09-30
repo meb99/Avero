@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag like v0.2.0 to build a universal DMG and draft a GitHub release.
+# Push a tag like v0.5.0 to build a universal DMG and publish it as a GitHub release.
 on:
   push:
     tags: ["v*"]
@@ -29,6 +29,12 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Avero ${{ github.ref_name }}
-          releaseBody: Universal DMG for Apple Silicon and Intel. The app is not notarized; open it the first time with right-click → Open.
-          releaseDraft: true
+          releaseBody: |
+            Universal-DMG für Apple Silicon und Intel (macOS 13 oder neuer).
+
+            Installation: DMG öffnen, Avero in den Programme-Ordner ziehen. Avero ist nicht von Apple notarisiert:
+            - macOS 13/14: beim ersten Start Rechtsklick auf Avero → Öffnen.
+            - macOS 15: einmal starten, dann Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen".
+            - oder im Terminal: `xattr -dr com.apple.quarantine /Applications/Avero.app`
+          releaseDraft: false
           args: --target universal-apple-darwin

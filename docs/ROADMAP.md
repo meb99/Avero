@@ -47,11 +47,14 @@ Offen:
 - echte Pad-Formen und Bauteil-Silkscreen, wo das Format sie enthält
 - RAR-/7z-Archive importieren
 
-## 0.5 Profi-Funktionen
+## 0.5 Mac-App und Profi-Funktionen ✅
 
+- DMG als veröffentlichtes Release (Universal), Ad-hoc-signiert; Hinweis auf neue Versionen
+- Mac-Menüleiste mit allen Befehlen und „Zuletzt geöffnet"
+- Befehlspalette (⌘K) mit Befehlen, Bauteilen, Netzen und Pins
+- Verbindungslinien (Ratsnest) zwischen den Pins eines Netzes
+- Netze über 0-Ω-Widerstände, Spulen, Ferrite, Sicherungen und Jumper hinweg verfolgen („Weiter über")
+- Ansicht als PNG exportieren (Drucken geht über das exportierte Bild in Vorschau)
+
+Offen:
 - mehrere Boards in Tabs, zwei Boards vergleichen
-- Netze über 0-Ω-Widerstände, Spulen und Sicherungen hinweg verfolgen (virtuelle Netze), z. B. `PPBUS → PP3V8`
-- Luftlinien (Ratsnest) zwischen den Pins eines Netzes
-- Befehlspalette (⌘K), frei belegbare Tastenkürzel
-- Board als Bild exportieren, drucken
-- Mac-Menüleiste mit allen Befehlen

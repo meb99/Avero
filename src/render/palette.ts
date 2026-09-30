@@ -18,6 +18,7 @@ export interface Palette {
   pinOfSelectedPart: RGBA;
   pinHighlight: RGBA;
   pinSelected: RGBA;
+  ratsnest: RGBA;
   nail: RGBA;
   via: RGBA;
   label: string;
@@ -42,6 +43,7 @@ export const DARK: Palette = {
   pinOfSelectedPart: [79, 195, 247, 255],
   pinHighlight: [255, 213, 79, 255],
   pinSelected: [255, 255, 255, 255],
+  ratsnest: [255, 213, 79, 150],
   nail: [255, 167, 38, 255],
   via: [120, 144, 156, 255],
   label: "#dfe6ec",
@@ -66,6 +68,7 @@ export const LIGHT: Palette = {
   pinOfSelectedPart: [2, 119, 189, 255],
   pinHighlight: [245, 158, 11, 255],
   pinSelected: [20, 20, 20, 255],
+  ratsnest: [214, 120, 0, 170],
   nail: [230, 81, 0, 255],
   via: [120, 144, 156, 255],
   label: "#1f2933",

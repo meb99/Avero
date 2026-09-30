@@ -56,6 +56,7 @@ export function Details({ model, selection, side, settings, notes, updateNotes, 
     const n = model.nets[net];
     if (n.kind === "unconnected") return null;
     const members = model.netMembers(net);
+    const series = model.seriesLinks(net);
     return (
       <section className="details-section">
         <h3>
@@ -100,6 +101,22 @@ export function Details({ model, selection, side, settings, notes, updateNotes, 
                 );
               })}
             </div>
+          </>
+        )}
+        {series.length > 0 && (
+          <>
+            <h3 title={t("details.seriesHint")}>{t("details.series")}</h3>
+            <ul className="series-list">
+              {series.slice(0, 60).map(({ net: other, via }) => (
+                <li key={other}>
+                  {netLink(other)}
+                  <span className="muted">{t("details.through")}</span>
+                  <button className="link part-name" onClick={() => onSelect({ kind: "part", part: via }, true)}>
+                    {model.parts[via].name}
+                  </button>
+                </li>
+              ))}
+            </ul>
           </>
         )}
       </section>

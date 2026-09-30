@@ -7,6 +7,19 @@ export function visibleFrom(side: Side, view: ViewSide): boolean {
   return side === "both" || side === view;
 }
 
+/** A net reached through a series part (coil, fuse, 0 Ω resistor …). */
+export interface SeriesLink {
+  net: number;
+  /** The part that connects it to the previous net in the chain. */
+  via: number;
+  /** The net on the other side of `via`. */
+  from: number;
+}
+
+/** Parts that pass a signal through, by designator prefix. */
+const SERIES_PREFIX = /^(L|FB|FL|F|FU|XW|JP|SJ)\d/i;
+const ZERO_OHM = /^(0|0R|0R0|0\.0|0Ω|0 ?OHMS?)\b/i;
+
 export type Hit =
   | { kind: "pin"; pin: number }
   | { kind: "testPoint"; testPoint: number }
@@ -23,6 +36,8 @@ export class BoardModel {
   readonly sortedParts: number[];
   /** Nets sorted by name, unconnected last. */
   readonly sortedNets: number[];
+  private readonly ratsnestCache = new Map<number, [number, number][]>();
+  private readonly seriesCache = new Map<number, SeriesLink[]>();
 
   constructor(readonly board: Board) {
     const b = board.bounds;
@@ -103,6 +118,85 @@ export class BoardModel {
     if (sel.kind === "part") return sel.part;
     if (sel.kind === "pin") return this.pins[sel.pin].part;
     return undefined;
+  }
+
+  /**
+   * True for two-pin parts that connect their nets for tracing purposes:
+   * coils, ferrites, fuses, net ties, jumpers and 0 Ω resistors.
+   */
+  isSeriesPart(part: number): boolean {
+    const p = this.parts[part];
+    if (p.pinCount !== 2) return false;
+    if (SERIES_PREFIX.test(p.name)) return true;
+    return /^R\d/i.test(p.name) && !!p.device && ZERO_OHM.test(p.device.trim());
+  }
+
+  /**
+   * Nets reachable from `net` through series parts, breadth first, with the
+   * part that links each one. Ground and unconnected nets end a chain.
+   */
+  seriesLinks(net: number): SeriesLink[] {
+    const cached = this.seriesCache.get(net);
+    if (cached) return cached;
+    const out: SeriesLink[] = [];
+    const seen = new Set([net]);
+    const queue = [net];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      for (const pin of this.nets[current].pins) {
+        const part = this.pins[pin].part;
+        if (!this.isSeriesPart(part)) continue;
+        const p = this.parts[part];
+        for (let i = p.firstPin; i < p.firstPin + p.pinCount; i++) {
+          const other = this.pins[i].net;
+          const kind = this.nets[other].kind;
+          if (seen.has(other) || kind === "ground" || kind === "unconnected") continue;
+          seen.add(other);
+          out.push({ net: other, via: part, from: current });
+          queue.push(other);
+        }
+      }
+    }
+    this.seriesCache.set(net, out);
+    return out;
+  }
+
+  /**
+   * Connection lines for a net: a minimum spanning tree over its pins, so
+   * every pin is linked to its nearest neighbour without clutter. Returns
+   * pairs of pin indices. Very large nets (ground) are skipped.
+   */
+  ratsnest(net: number, maxPins = 2500): [number, number][] {
+    const cached = this.ratsnestCache.get(net);
+    if (cached) return cached;
+    const pins = this.nets[net].pins;
+    const n = pins.length;
+    const edges: [number, number][] = [];
+    if (n >= 2 && n <= maxPins) {
+      // Prim's algorithm on the complete graph, O(n²) without a heap.
+      const inTree = new Uint8Array(n);
+      const best = new Float64Array(n).fill(Infinity);
+      const parent = new Int32Array(n).fill(-1);
+      best[0] = 0;
+      for (let k = 0; k < n; k++) {
+        let u = -1;
+        for (let i = 0; i < n; i++) if (!inTree[i] && (u < 0 || best[i] < best[u])) u = i;
+        inTree[u] = 1;
+        if (parent[u] >= 0) edges.push([pins[parent[u]], pins[u]]);
+        const a = this.pins[pins[u]];
+        for (let i = 0; i < n; i++) {
+          if (inTree[i]) continue;
+          const b = this.pins[pins[i]];
+          const d = (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
+          if (d < best[i]) {
+            best[i] = d;
+            parent[i] = u;
+          }
+        }
+      }
+    }
+    this.ratsnestCache.set(net, edges);
+    return edges;
   }
 
   /** Parts touched by a net with the pins involved, sorted by part name. */

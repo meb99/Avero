@@ -146,6 +146,8 @@ export class BoardRenderer {
   private partFill?: FillSet;
   private partFillOwner = new Uint32Array(0);
   private boardFill?: { vao: WebGLVertexArrayObject; fans: [number, number][]; quadStart: number };
+  /** Lines drawn above everything else, such as the ratsnest. */
+  private overlay?: { set: InstanceSet; buffers: WebGLBuffer[]; vaos: WebGLVertexArrayObject[] };
   private buffers: WebGLBuffer[] = [];
   private vaos: WebGLVertexArrayObject[] = [];
 
@@ -339,6 +341,25 @@ export class BoardRenderer {
     upload(gl, this.boardLines.colors, edge);
   }
 
+  /** Replaces the overlay lines: `segments` holds x1, y1, x2, y2 per line. */
+  setOverlay(segments: Float32Array, color: readonly number[], width: number): void {
+    this.clearOverlay();
+    const count = segments.length / 4;
+    if (count === 0) return;
+    const buffers = this.buffers.length;
+    const vaos = this.vaos.length;
+    const set = this.lineSet(segments, count, color, width);
+    // Kept apart from the board buffers so they can be swapped on their own.
+    this.overlay = { set, buffers: this.buffers.splice(buffers), vaos: this.vaos.splice(vaos) };
+  }
+
+  private clearOverlay(): void {
+    if (!this.overlay) return;
+    for (const b of this.overlay.buffers) this.gl.deleteBuffer(b);
+    for (const v of this.overlay.vaos) this.gl.deleteVertexArray(v);
+    this.overlay = undefined;
+  }
+
   resize(cssWidth: number, cssHeight: number, dpr: number): void {
     const w = Math.max(1, Math.round(cssWidth * dpr));
     const h = Math.max(1, Math.round(cssHeight * dpr));
@@ -414,11 +435,18 @@ export class BoardRenderer {
         gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, set.count);
       }
     }
+
+    if (this.overlay) {
+      gl.useProgram(line.program);
+      gl.bindVertexArray(this.overlay.set.vao);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.overlay.set.count);
+    }
     gl.bindVertexArray(null);
   }
 
   private release(): void {
     const gl = this.gl;
+    this.clearOverlay();
     for (const b of this.buffers) gl.deleteBuffer(b);
     for (const v of this.vaos) gl.deleteVertexArray(v);
     this.buffers = [];

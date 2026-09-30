@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import type { Board, LoadError, LoadResult } from "./types";
 
 /** Where a board came from, for the title bar and recent files. */
@@ -55,6 +55,22 @@ export async function pickPath(title: string, kind: "any" | "pdf"): Promise<stri
 /** Raw bytes of a file, transferred as binary. */
 export async function readFileBytes(path: string): Promise<Uint8Array> {
   return new Uint8Array(await invoke<ArrayBuffer>("read_file", { path }));
+}
+
+/**
+ * Asks where to save and writes the bytes there. Resolves to the chosen
+ * path, or `undefined` when cancelled.
+ */
+export async function saveBytes(
+  bytes: Uint8Array,
+  title: string,
+  defaultName: string,
+  filter: { name: string; extensions: string[] },
+): Promise<string | undefined> {
+  const path = await save({ title, defaultPath: defaultName, filters: [filter] });
+  if (!path) return undefined;
+  await invoke("write_binary", bytes, { headers: { "x-path": encodeURIComponent(path) } });
+  return path;
 }
 
 /** Schematic PDFs in the board's folder, best match first. */

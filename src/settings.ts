@@ -12,6 +12,10 @@ export interface Settings {
   partNames: boolean;
   pinNumbers: boolean;
   netNames: boolean;
+  /** Connection lines between the pins of the highlighted net. */
+  ratsnest: boolean;
+  /** Look for a new release on GitHub once a day. */
+  updateCheck: boolean;
   autoSchematic: boolean;
   showSidebar: boolean;
   /** Width of the schematic panel as a share of the space next to the sidebar. */
@@ -33,6 +37,8 @@ export const DEFAULT_SETTINGS: Settings = {
   partNames: true,
   pinNumbers: true,
   netNames: true,
+  ratsnest: true,
+  updateCheck: true,
   autoSchematic: true,
   showSidebar: true,
   schematicShare: 0.5,

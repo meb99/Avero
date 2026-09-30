@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { BoardView, type BoardViewHandle } from "./components/BoardView";
+import { CommandPalette } from "./components/CommandPalette";
 import { HelpDialog, SettingsDialog } from "./components/Dialogs";
 import { LibraryDialog, type LibraryDrop } from "./components/Library";
 import { CloseIcon } from "./components/Icons";
@@ -9,13 +11,16 @@ import { StatusBar } from "./components/StatusBar";
 import { Toolbar } from "./components/Toolbar";
 import { Welcome } from "./components/Welcome";
 import { BoardModel, type ViewSide } from "./core/board";
+import type { Command } from "./core/commands";
 import {
+  BOARD_EXTENSIONS,
   loadDemo,
   loadPath,
   onFileDrop,
   onFinderOpen,
   pickPath,
   readFileBytes,
+  saveBytes,
   schematicsFor,
   setWindowTitle,
   type BoardSource,
@@ -23,17 +28,21 @@ import {
 } from "./core/loader";
 import type { LoadError, Selection, Side } from "./core/types";
 import { I18nContext, systemLanguage, translator, type MessageKey } from "./i18n";
+import { installMenu, nativeMenuActive, type MenuActions } from "./menu";
 import { DARK, LIGHT } from "./render/palette";
 import type { SchematicDocument } from "./schematic/document";
 import { SchematicView, type SchematicFocus, type SchematicViewHandle, type WordTarget } from "./schematic/SchematicView";
 import type { Word } from "./schematic/textIndex";
 import { clearRecent, loadRecent, loadSettings, rememberRecent, saveSettings, type Settings } from "./settings";
-import type { LibraryEntry } from "./workbench/library";
+import { dailyCheck, fetchUpdate, type Update } from "./updates";
+import { pickImport, type LibraryEntry } from "./workbench/library";
 import { netStatuses, type NetStatus } from "./workbench/notes";
 import { useBoardNotes } from "./workbench/store";
 
 const NONE: Selection = { kind: "none" };
 const DEMO_SCHEMATIC = `${import.meta.env.BASE_URL}demo/avero-demo-schematic.pdf`;
+const WEBSITE = "https://github.com/meb99/Avero";
+const TOAST_MS = 4000;
 
 function usePrefersDark(): boolean {
   const query = "(prefers-color-scheme: dark)";
@@ -84,12 +93,14 @@ export function App() {
   const [error, setError] = useState<{ name: string; path?: string; error: LoadError } | null>(null);
   // A file that failed for lack of an XZZ key, reopened once the key is set.
   const retryPath = useRef<string | null>(null);
-  const [dialog, setDialog] = useState<"settings" | "help" | "library" | null>(null);
+  const [dialog, setDialog] = useState<"settings" | "help" | "library" | "palette" | null>(null);
   const dialogRef = useRef(dialog);
   dialogRef.current = dialog;
   const [libraryDrop, setLibraryDrop] = useState<LibraryDrop | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [recent, setRecent] = useState<string[]>(loadRecent);
+  const [toast, setToast] = useState<string | null>(null);
+  const [update, setUpdate] = useState<Update | null>(null);
   const [schematic, setSchematic] = useState<SchematicDocument | null>(null);
   const [schematicVisible, setSchematicVisible] = useState(true);
   const [focus, setFocus] = useState<SchematicFocus | null>(null);
@@ -317,12 +328,139 @@ export function App() {
     };
   }, [openPath]);
 
+  // --- app actions: menu bar, command palette ------------------------------
+
+  const exportImage = useCallback(async () => {
+    const view = viewRef.current;
+    if (!view || !source) return;
+    try {
+      const blob = await view.snapshot();
+      const base = source.name.replace(/\.[^.]+$/, "");
+      const path = await saveBytes(new Uint8Array(await blob.arrayBuffer()), t("menu.exportImage"), `${base}-${side}.png`, {
+        name: "PNG",
+        extensions: ["png"],
+      });
+      if (path) setToast(t("export.saved", { name: fileName(path) }));
+    } catch (e) {
+      setToast(t("export.failed", { message: e instanceof Error ? e.message : String(e) }));
+    }
+  }, [source, side, t]);
+
+  const checkUpdates = useCallback(
+    async (manual: boolean) => {
+      try {
+        const found = await (manual ? fetchUpdate(__APP_VERSION__) : dailyCheck(__APP_VERSION__));
+        setUpdate(found);
+        if (manual && !found) setToast(t("update.none", { version: __APP_VERSION__ }));
+      } catch (e) {
+        if (manual) setToast(t("update.failed", { message: e instanceof Error ? e.message : String(e) }));
+      }
+    },
+    [t],
+  );
+
+  const importToLibrary = useCallback(async () => {
+    setDialog("library");
+    const paths = await pickImport(t("library.import"), BOARD_EXTENSIONS);
+    if (paths.length > 0) setLibraryDrop((d) => ({ paths, nonce: (d?.nonce ?? 0) + 1 }));
+  }, [t]);
+
+  const openExternal = (url: string) => void openUrl(url).catch(() => window.open(url, "_blank"));
+
+  const actions: MenuActions = {
+    open: () => void openDialog(),
+    openRecent: (path) => void openPath(path),
+    clearRecent: () => {
+      clearRecent();
+      setRecent([]);
+    },
+    library: () => setDialog((d) => (d === "library" ? null : "library")),
+    importToLibrary: () => void importToLibrary(),
+    closeBoard,
+    exportImage: () => void exportImage(),
+    settings: () => setDialog("settings"),
+    search: () => {
+      searchRef.current?.focus();
+      searchRef.current?.select();
+    },
+    palette: () => setDialog((d) => (d === "palette" ? null : d ?? "palette")),
+    flip: () => setSide((s) => (s === "top" ? "bottom" : "top")),
+    rotate: () => setRotation((r) => (r + 1) & 3),
+    rotateBack: () => setRotation((r) => (r + 3) & 3),
+    fit: () => viewRef.current?.fit(),
+    zoomIn: () => viewRef.current?.zoomBy(1.5),
+    zoomOut: () => viewRef.current?.zoomBy(1 / 1.5),
+    toggleSchematic: () => void toggleSchematic(),
+    toggleSidebar: () => setSettings((s) => ({ ...s, showSidebar: !s.showSidebar })),
+    toggleRatsnest: () => setSettings((s) => ({ ...s, ratsnest: !s.ratsnest })),
+    shortcuts: () => setDialog("help"),
+    checkUpdates: () => void checkUpdates(true),
+    website: () => openExternal(WEBSITE),
+  };
+  const actionsRef = useRef(actions);
+  actionsRef.current = actions;
+
+  // The menu calls through actionsRef, so it is rebuilt only for new texts.
+  useEffect(() => {
+    installMenu(t, () => actionsRef.current, recent, __APP_VERSION__).catch(() => {
+      // No native menu outside the desktop app (browser preview, tests).
+    });
+  }, [t, recent]);
+
+  // Once per start; dailyCheck itself limits the requests to one a day.
+  useEffect(() => {
+    if (settings.updateCheck) void checkUpdates(false);
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), TOAST_MS);
+    return () => clearTimeout(id);
+  }, [toast]);
+
+  const paletteCommands = (): Command[] => {
+    const a = actions;
+    const board = model !== null;
+    return [
+      { id: "open", label: t("menu.open"), shortcut: "⌘O", run: a.open },
+      { id: "library", label: t("menu.library"), shortcut: "⌘L", run: a.library },
+      { id: "import", label: t("menu.import"), shortcut: "⇧⌘I", run: a.importToLibrary },
+      { id: "demo", label: t("menu.demo"), run: () => void openDemo() },
+      { id: "flip", label: t("menu.flip"), shortcut: "Space", enabled: board, run: a.flip },
+      { id: "rotate", label: t("menu.rotate"), shortcut: "R", enabled: board, run: a.rotate },
+      { id: "rotate-back", label: t("menu.rotateBack"), shortcut: "⇧R", enabled: board, run: a.rotateBack },
+      { id: "fit", label: t("menu.fit"), shortcut: "F", enabled: board, run: a.fit },
+      { id: "ratsnest", label: t("menu.ratsnest"), shortcut: "⇧⌘R", enabled: board, run: a.toggleRatsnest },
+      { id: "schematic", label: t("menu.schematic"), shortcut: "⌘E", run: a.toggleSchematic },
+      { id: "sidebar", label: t("menu.sidebar"), shortcut: "⌘I", enabled: board, run: a.toggleSidebar },
+      { id: "export", label: t("menu.exportImage"), shortcut: "⇧⌘E", enabled: board, run: a.exportImage },
+      { id: "close", label: t("menu.closeBoard"), shortcut: "⇧⌘W", enabled: board, run: a.closeBoard },
+      { id: "settings", label: t("menu.settings"), shortcut: "⌘,", run: a.settings },
+      { id: "shortcuts", label: t("menu.shortcuts"), shortcut: "⌘/", run: a.shortcuts },
+      { id: "updates", label: t("menu.checkUpdates"), run: a.checkUpdates },
+      { id: "website", label: t("menu.website"), run: a.website },
+      ...recent.map((path, i) => ({ id: `recent-${i}`, label: `${t("menu.recent")}: ${fileName(path)}`, run: () => a.openRecent(path) })),
+    ];
+  };
+
   // --- keyboard ------------------------------------------------------------
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
+      if (mod && (e.key === "+" || e.key === "=")) {
+        e.preventDefault();
+        viewRef.current?.zoomBy(1.5);
+        return;
+      }
+      // With the native menu bar, its key equivalents handle ⌘ shortcuts.
+      if (mod && nativeMenuActive) return;
+      if (mod && key === "k") {
+        e.preventDefault();
+        actionsRef.current.palette();
+        return;
+      }
       if (mod && key === "o") {
         e.preventDefault();
         void openDialog();
@@ -555,6 +693,29 @@ export function App() {
             </div>
           )}
 
+          {update && (
+            <div className="update-banner" role="status">
+              <span>{t("update.available", { version: update.version })}</span>
+              <button
+                className="small primary"
+                onClick={() => {
+                  openExternal(update.url);
+                  setUpdate(null);
+                }}
+              >
+                {t("update.download")}
+              </button>
+              <button className="small" onClick={() => setUpdate(null)}>
+                {t("update.later")}
+              </button>
+            </div>
+          )}
+          {toast && (
+            <div className="toast" role="status">
+              {toast}
+            </div>
+          )}
+
           {dragOver && <div className="drop-overlay">{t(dialog === "library" ? "library.dropHere" : "drop.hint")}</div>}
         </main>
 
@@ -573,6 +734,9 @@ export function App() {
           />
         )}
         {dialog === "help" && <HelpDialog onClose={() => setDialog(null)} />}
+        {dialog === "palette" && (
+          <CommandPalette commands={paletteCommands()} model={model} onPick={(sel) => select(sel, true)} onClose={() => setDialog(null)} />
+        )}
         {dialog === "library" && <LibraryDialog drop={libraryDrop} onOpen={openLibraryEntry} onClose={() => setDialog(null)} />}
       </div>
     </I18nContext.Provider>

@@ -16,6 +16,8 @@ export interface BoardViewHandle {
   zoomBy(factor: number): void;
   panBy(dx: number, dy: number): void;
   zoomTo(bounds: Bounds): void;
+  /** The current view with labels as a PNG. */
+  snapshot(): Promise<Blob>;
 }
 
 interface Props {
@@ -156,8 +158,21 @@ export function BoardView({ model, side, rotation, selection, settings, palette,
         if (target.scale < cameraRef.current.scale) target.scale = Math.max(target.scale, cameraRef.current.scale * 0.5);
         flyTo(target);
       },
+      async snapshot() {
+        draw();
+        const gl = glRef.current!;
+        const out = document.createElement("canvas");
+        out.width = gl.width;
+        out.height = gl.height;
+        const ctx = out.getContext("2d")!;
+        ctx.drawImage(gl, 0, 0);
+        if (labelRef.current) ctx.drawImage(labelRef.current, 0, 0);
+        return new Promise<Blob>((resolve, reject) =>
+          out.toBlob((b) => (b ? resolve(b) : reject(new Error("PNG encoding failed"))), "image/png"),
+        );
+      },
     }),
-    [flyTo, requestDraw],
+    [draw, flyTo, requestDraw],
   );
 
   // Renderer lifetime.
@@ -235,6 +250,22 @@ export function BoardView({ model, side, rotation, selection, settings, palette,
     rendererRef.current?.setStyle(style, palette);
     requestDraw();
   }, [model, side, selection, settings, palette, requestDraw, rendererVersion]);
+
+  // Connection lines of the highlighted net.
+  const ratsnestNet = settings.ratsnest ? model.selectedNet(selection) : undefined;
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    const edges = ratsnestNet === undefined || model.nets[ratsnestNet].kind === "ground" ? [] : model.ratsnest(ratsnestNet);
+    const segs = new Float32Array(edges.length * 4);
+    edges.forEach(([a, b], i) => {
+      const p = model.pins[a];
+      const q = model.pins[b];
+      segs.set([p.x, p.y, q.x, q.y], i * 4);
+    });
+    renderer.setOverlay(segs, palette.ratsnest, 1.4);
+    requestDraw();
+  }, [model, ratsnestNet, palette, requestDraw, rendererVersion]);
 
   useEffect(() => {
     stateRef.current.measured = measured;
