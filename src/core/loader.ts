@@ -39,14 +39,27 @@ export async function loadDemo(): Promise<Loaded> {
 }
 
 /** Native open panel. Resolves to `undefined` when cancelled. */
-export async function pickBoardPath(title: string): Promise<string | undefined> {
-  const picked = await open({
-    title,
-    multiple: false,
-    directory: false,
-    filters: [{ name: "Boardview", extensions: BOARD_EXTENSIONS }],
-  });
+export async function pickPath(title: string, kind: "any" | "pdf"): Promise<string | undefined> {
+  const filters =
+    kind === "pdf"
+      ? [{ name: "PDF", extensions: ["pdf"] }]
+      : [
+          { name: "Boardview / PDF", extensions: [...BOARD_EXTENSIONS, "pdf"] },
+          { name: "Boardview", extensions: BOARD_EXTENSIONS },
+          { name: "PDF", extensions: ["pdf"] },
+        ];
+  const picked = await open({ title, multiple: false, directory: false, filters });
   return typeof picked === "string" ? picked : undefined;
+}
+
+/** Raw bytes of a file, transferred as binary. */
+export async function readFileBytes(path: string): Promise<Uint8Array> {
+  return new Uint8Array(await invoke<ArrayBuffer>("read_file", { path }));
+}
+
+/** Schematic PDFs in the board's folder, best match first. */
+export function schematicsFor(boardPath: string): Promise<string[]> {
+  return invoke<string[]>("schematics_for", { boardPath });
 }
 
 /** Files dropped onto the window. */

@@ -2,18 +2,35 @@ import type { Ref } from "react";
 import type { BoardModel, ViewSide } from "../core/board";
 import type { Selection } from "../core/types";
 import { useI18n } from "../i18n";
-import { CloseIcon, FitIcon, FlipIcon, HelpIcon, OpenIcon, RotateIcon, SettingsIcon, ZoomInIcon, ZoomOutIcon } from "./Icons";
+import {
+  CloseIcon,
+  FitIcon,
+  FlipIcon,
+  HelpIcon,
+  OpenIcon,
+  RotateIcon,
+  SchematicIcon,
+  SettingsIcon,
+  SidebarIcon,
+  ZoomInIcon,
+  ZoomOutIcon,
+} from "./Icons";
 import { SearchBox } from "./SearchBox";
 
 interface Props {
   model: BoardModel | null;
   side: ViewSide;
+  hasSchematic: boolean;
+  schematicVisible: boolean;
+  sidebarVisible: boolean;
   onOpen(): void;
   onClose(): void;
   onSide(side: ViewSide): void;
   onRotate(): void;
   onFit(): void;
   onZoom(factor: number): void;
+  onSchematic(): void;
+  onSidebar(): void;
   onSettings(): void;
   onHelp(): void;
   onPick(selection: Selection): void;
@@ -82,6 +99,26 @@ export function Toolbar(p: Props) {
 
       <div className="toolbar-spacer" data-tauri-drag-region />
       <div className="toolbar-group">
+        <button
+          className={`tool icon-only${p.schematicVisible ? " active" : ""}`}
+          onClick={p.onSchematic}
+          title={p.hasSchematic ? t("schematic.toggle") : t("schematic.open")}
+          aria-label={p.hasSchematic ? t("schematic.toggle") : t("schematic.open")}
+          aria-pressed={p.schematicVisible}
+        >
+          <SchematicIcon />
+        </button>
+        {board && (
+          <button
+            className={`tool icon-only${p.sidebarVisible ? " active" : ""}`}
+            onClick={p.onSidebar}
+            title={t("toolbar.sidebar")}
+            aria-label={t("toolbar.sidebar")}
+            aria-pressed={p.sidebarVisible}
+          >
+            <SidebarIcon />
+          </button>
+        )}
         <button className="tool icon-only" onClick={p.onHelp} title={t("toolbar.help")} aria-label={t("toolbar.help")}>
           <HelpIcon />
         </button>

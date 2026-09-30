@@ -12,6 +12,10 @@ export interface Settings {
   partNames: boolean;
   pinNumbers: boolean;
   netNames: boolean;
+  autoSchematic: boolean;
+  showSidebar: boolean;
+  /** Width of the schematic panel as a share of the space next to the sidebar. */
+  schematicShare: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -25,6 +29,9 @@ export const DEFAULT_SETTINGS: Settings = {
   partNames: true,
   pinNumbers: true,
   netNames: true,
+  autoSchematic: true,
+  showSidebar: true,
+  schematicShare: 0.5,
 };
 
 const KEY = "avero.settings.v1";

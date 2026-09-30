@@ -42,7 +42,8 @@ interface SettingsProps {
 export function SettingsDialog({ settings, onChange, onClose }: SettingsProps) {
   const { t } = useI18n();
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) => onChange({ ...settings, [key]: value });
-  const check = (key: "ghostOtherSide" | "dimUnselected" | "showVias" | "partNames" | "pinNumbers" | "netNames", label: string) => (
+  type Toggle = "ghostOtherSide" | "dimUnselected" | "showVias" | "partNames" | "pinNumbers" | "netNames" | "autoSchematic";
+  const check = (key: Toggle, label: string) => (
     <label className="check">
       <input type="checkbox" checked={settings[key]} onChange={(e) => set(key, e.target.checked)} />
       {label}
@@ -87,6 +88,8 @@ export function SettingsDialog({ settings, onChange, onClose }: SettingsProps) {
         {check("dimUnselected", t("settings.dim"))}
         {check("showVias", t("settings.vias"))}
       </div>
+      <h3>{t("schematic.title")}</h3>
+      <div className="checks">{check("autoSchematic", t("settings.autoSchematic"))}</div>
       <footer className="dialog-footer">
         <button className="primary" onClick={onClose}>
           {t("settings.done")}
@@ -108,6 +111,9 @@ export function HelpDialog({ onClose }: { onClose(): void }) {
     ["help.fit", "help.fitLabel"],
     ["help.search", "help.searchLabel"],
     ["help.open", "help.openLabel"],
+    ["help.schematic", "help.schematicLabel"],
+    ["help.pages", "help.pagesLabel"],
+    ["help.hits", "help.hitsLabel"],
     ["help.clear", "help.clearLabel"],
   ] as const;
   return (

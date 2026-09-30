@@ -37,7 +37,7 @@ pub enum ParseError {
     TooLarge,
     #[error("This is not a boardview format Avero can read.")]
     Unrecognized,
-    #[error("This is a PDF. Schematic support is coming in a later version.")]
+    #[error("This is a PDF. Open it as a schematic.")]
     Pdf,
     #[error("{0} files are not supported yet.")]
     Unsupported(&'static str),

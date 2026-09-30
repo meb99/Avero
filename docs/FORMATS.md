@@ -24,7 +24,7 @@ Diese Formate werden erkannt und mit einer klaren Meldung abgelehnt:
 | ASUS `.fz` | verschlüsselt, Schlüssel nötig. Geplant für 0.4. |
 | Teboview `.tvw` | Geplant für 0.4. |
 | Cadence Allegro | Erkennung über Offset `0xF8`. Keine Pläne. |
-| PDF | Wird als Schaltplan erkannt. Schaltplan-Viewer kommt mit 0.2. |
+| PDF | Kein Board, sondern ein Schaltplan: wird im Schaltplan-Viewer geöffnet. |
 
 ## Was der Builder ergänzt
 

@@ -111,3 +111,29 @@ export const PinIcon = ({ size = 18 }: { size?: number }) => (
     <circle cx="10" cy="10" r="1.2" fill="currentColor" />
   </Icon>
 );
+
+export const ChevronLeftIcon = () => (
+  <Icon size={16}>
+    <path d="M12.5 4.5 7 10l5.5 5.5" />
+  </Icon>
+);
+
+export const ChevronRightIcon = () => (
+  <Icon size={16}>
+    <path d="M7.5 4.5 13 10l-5.5 5.5" />
+  </Icon>
+);
+
+export const SchematicIcon = ({ size = 18 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M4.5 2.5h8l3 3v12h-11z" />
+    <path d="M7 9h2l1-2 1.5 4 1-2h1.5M7 13.5h6" />
+  </Icon>
+);
+
+export const SidebarIcon = () => (
+  <Icon>
+    <rect x="2.5" y="4" width="15" height="12" rx="1.5" />
+    <path d="M12.5 4v12" />
+  </Icon>
+);

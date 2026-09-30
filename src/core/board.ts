@@ -125,8 +125,11 @@ export class BoardModel {
     switch (sel.kind) {
       case "none":
         return undefined;
-      case "part":
-        return this.parts[sel.part].bounds;
+      case "part": {
+        // Small parts get some surroundings, like single pins.
+        const b = this.parts[sel.part].bounds;
+        return padBounds(b, Math.max((b.maxX - b.minX + b.maxY - b.minY) * 0.1, 120));
+      }
       // Single pads get some surroundings so you can see where you are.
       case "pin":
         return padBounds(circleBounds(this.pins[sel.pin]), Math.max(this.pins[sel.pin].radius * 15, 150));

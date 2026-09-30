@@ -81,6 +81,7 @@ export type LoadErrorCode =
   | "invalid"
   | "no-content"
   | "io"
+  | "schematic"
   | "internal";
 
 export interface LoadError {

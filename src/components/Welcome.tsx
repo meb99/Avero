@@ -8,7 +8,7 @@ interface Props {
   onClearRecent(): void;
 }
 
-const FORMATS = ["BRD", "BRD2", "BDV", "ASC", "BVR", "BVR3", "GenCAD", "CAD", "CST"];
+const FORMATS = ["BRD", "BRD2", "BDV", "ASC", "BVR", "BVR3", "GenCAD", "CAD", "CST", "PDF"];
 
 export function Welcome({ recent, onOpen, onDemo, onOpenRecent, onClearRecent }: Props) {
   const { t } = useI18n();
@@ -51,6 +51,7 @@ export function Welcome({ recent, onOpen, onDemo, onOpenRecent, onClearRecent }:
           <p>
             <span className="muted">{t("welcome.formats")}:</span> {FORMATS.join(" · ")}
           </p>
+          <p className="muted">{t("welcome.schematicHint")}</p>
           <p className="muted">{t("welcome.privacy")}</p>
         </footer>
       </div>

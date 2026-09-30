@@ -26,3 +26,9 @@ distributed under the following license:
   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   SOFTWARE.
+
+The schematic viewer bundles PDF.js (pdfjs-dist), Copyright Mozilla
+Foundation and contributors, licensed under the Apache License 2.0
+(https://www.apache.org/licenses/LICENSE-2.0). Its license and the licenses
+of its bundled decoders ship in node_modules/pdfjs-dist and are copied into
+the app under pdfjs/.

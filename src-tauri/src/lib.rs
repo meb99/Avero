@@ -59,6 +59,43 @@ pub fn load(path: &Path) -> Result<Board, LoadError> {
     }
 }
 
+/// Schematic PDFs next to a board file, best match first: same file name,
+/// then a shared board number (`820-02100`), then everything else.
+pub fn find_schematics(board: &Path) -> Vec<PathBuf> {
+    let Some(dir) = board.parent() else { return Vec::new() };
+    let stem = board.file_stem().map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default();
+    let board_tokens = id_tokens(&stem);
+    let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
+
+    let mut found: Vec<(u8, String, PathBuf)> = entries
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf")))
+        .map(|p| {
+            let name = p.file_stem().map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default();
+            let rank = if name == stem {
+                0
+            } else if id_tokens(&name).iter().any(|t| board_tokens.contains(t)) {
+                1
+            } else {
+                2
+            };
+            (rank, name, p)
+        })
+        .collect();
+    found.sort();
+    found.into_iter().map(|(_, _, p)| p).collect()
+}
+
+/// Parts of a file name that look like identifiers: at least five
+/// characters with a digit, e.g. `820-02100`, `x1carbon6`, `nm-b461`.
+fn id_tokens(name: &str) -> Vec<String> {
+    name.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+        .filter(|t| t.len() >= 5 && t.chars().any(|c| c.is_ascii_digit()))
+        .map(str::to_string)
+        .collect()
+}
+
 /// Files handed to the app by Finder before the UI subscribed to them.
 #[derive(Default)]
 struct PendingPaths(Mutex<Vec<String>>);
@@ -75,6 +112,17 @@ async fn open_demo() -> Result<Board, LoadError> {
 }
 
 #[tauri::command]
+fn schematics_for(board_path: String) -> Vec<String> {
+    find_schematics(Path::new(&board_path)).into_iter().map(|p| p.to_string_lossy().into_owned()).collect()
+}
+
+/// Raw file bytes (schematic PDFs), sent as binary rather than JSON.
+#[tauri::command]
+async fn read_file(path: String) -> Result<tauri::ipc::Response, LoadError> {
+    Ok(tauri::ipc::Response::new(read(Path::new(&path))?))
+}
+
+#[tauri::command]
 fn take_pending_paths(pending: tauri::State<'_, PendingPaths>) -> Vec<String> {
     pending.0.lock().map(|mut p| std::mem::take(&mut *p)).unwrap_or_default()
 }
@@ -83,7 +131,13 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(PendingPaths::default())
-        .invoke_handler(tauri::generate_handler![open_board, open_demo, take_pending_paths])
+        .invoke_handler(tauri::generate_handler![
+            open_board,
+            open_demo,
+            schematics_for,
+            read_file,
+            take_pending_paths
+        ])
         .build(tauri::generate_context!())
         .expect("error while building Avero");
 
@@ -124,6 +178,24 @@ mod tests {
         let board = load(&dir.join("PINS.asc")).unwrap();
         assert_eq!(board.parts.len(), 1);
         assert_eq!(board.outline[0].len(), 3);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn ranks_schematics_next_to_the_board() {
+        let dir = std::env::temp_dir().join(format!("avero-sch-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for f in ["J413 820-02100.PDF", "notes.pdf", "board.pdf", "board.brd", "readme.txt"] {
+            std::fs::write(dir.join(f), b"%PDF").unwrap();
+        }
+        let names = |board: &str| -> Vec<String> {
+            find_schematics(&dir.join(board))
+                .iter()
+                .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+                .collect()
+        };
+        assert_eq!(names("board.brd"), ["board.pdf", "J413 820-02100.PDF", "notes.pdf"]);
+        assert_eq!(names("820-02100 boardview.brd")[0], "J413 820-02100.PDF");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

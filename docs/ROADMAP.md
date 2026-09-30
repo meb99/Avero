@@ -10,12 +10,18 @@ Ziel: ein Mac-Werkzeug, das Boardview, Schaltplan und Werkstattwissen zusammenbr
 - Suche (Bauteil, Netz, `Bauteil.Pin`), Detailpanel, Bauteil- und Netzlisten
 - Mac-App: Ampeln in der Toolbar, Finder-Integration, Drag & Drop, Hell/Dunkel, Deutsch/Englisch
 
-## 0.2 Schaltplan
+## 0.2 Schaltplan ✅
 
-- PDF-Viewer (pdf.js) neben dem Board oder auf einem zweiten Monitor
-- Textindex der Schaltplanseiten
-- Querverweise in beide Richtungen: Bauteil oder Netz im Board anklicken → Seite im Schaltplan springt hin und markiert es; Bezeichner im Schaltplan anklicken → Board zeigt es
-- Schaltplan automatisch neben der Boardview-Datei finden (gleicher Ordner, gleiche Boardnummer)
+- PDF-Viewer (pdf.js) neben dem Board, verschiebbarer Trenner, scharfes Nachrendern beim Zoomen
+- Wortindex aller Seiten im Hintergrund, auch für gedrehten Text
+- Querverweise in beide Richtungen: Bauteil oder Netz im Board → Fundstellen im Schaltplan (mit `[` / `]` durchblättern); Bezeichner im Schaltplan anklicken → Board zeigt es
+- Schaltplan automatisch neben der Boardview-Datei finden (gleicher Name oder gleiche Boardnummer)
+- Seitennavigation und PDF-Lesezeichen, Demo-Schaltplan zum Demo-Board
+
+Offen aus 0.2:
+- Schaltplan in einem eigenen Fenster (zweiter Monitor)
+- Suche im Schaltplan nach beliebigem Text, nicht nur nach Board-Namen
+- Pin-Nummern im Schaltplan dem Pin im Board zuordnen (nicht nur dem Bauteil)
 
 ## 0.3 Werkstatt
 

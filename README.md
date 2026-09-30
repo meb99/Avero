@@ -7,16 +7,16 @@
 <p align="center">Boardview für die Elektronik-Reparatur auf dem Mac.</p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/macOS-12%2B-111111?logo=apple" alt="macOS 12+">
+  <img src="https://img.shields.io/badge/macOS-13%2B-111111?logo=apple" alt="macOS 13+">
   <img src="https://img.shields.io/badge/Rust-Tauri%202-F05138?logo=rust&logoColor=white" alt="Rust + Tauri 2">
   <img src="https://img.shields.io/badge/Lizenz-MIT-55D5B4" alt="MIT">
 </p>
 
-![Avero mit hervorgehobenem Netz](docs/screenshot.png)
+![Avero mit Board und Schaltplan nebeneinander](docs/screenshot.png)
 
 Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ein Signal über beide Seiten der Platine. Das Ziel ist ein Werkzeug auf dem Niveau von FlexBV und XinZhiZao: Boardview, Schaltplan und Werkstattwissen in einer App. Alles läuft lokal, ohne Konto und ohne Telemetrie.
 
-## Stand (0.1)
+## Stand (0.2)
 
 **Boardview**
 - Liest Test_Link `.brd` (auch verschleierte Dateien), BRD2, Honhan `.bdv`, ASUS `.asc`, BoardViewer `.bvr` / BVR3, GenCAD, Panel-CAD und IBM `.cst`.
@@ -27,13 +27,19 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - Suche nach Bauteil, Netz oder Pin: `U3000`, `PP3V3`, `U3000.21`, `U1000 A12`.
 - Detailpanel mit Wert, Seite, Position und allen verbundenen Bauteilen und Pins, dazu Listen aller Bauteile und Netze.
 
+**Schaltplan**
+- PDF-Schaltplan neben dem Board, mit verschiebbarem Trenner; ein PDF im selben Ordner wie die Boardview-Datei öffnet sich automatisch (gleicher Name oder gleiche Boardnummer wie `820-02100`).
+- Bauteil, Pin oder Netz im Board wählen → der Schaltplan springt zur Fundstelle und markiert alle Vorkommen; mit `[` / `]` durch die Fundstellen.
+- Bauteil- oder Netznamen im Schaltplan anklicken → das Board zeigt sie.
+- Scharf bei jeder Zoomstufe, Seitennavigation und Lesezeichen (Abschnitte) des PDFs.
+
 **Mac**
 - Toolbar als Titelleiste mit den Fenster-Ampeln, ⌘O / ⌘F, Hell- und Dunkelmodus nach Systemeinstellung.
 - Trackpad: zwei Finger verschieben, Zoomgeste zoomt (in den Einstellungen auf Mausrad-Zoom umstellbar).
 - Dateien per Drag & Drop, „Öffnen mit" im Finder oder aufs Dock-Symbol ziehen.
 - Deutsch und Englisch, je nach Systemsprache.
 
-Ein Demo-Board ist eingebaut, damit man alles ohne eigene Dateien ausprobieren kann.
+Ein Demo-Board mit passendem Demo-Schaltplan ist eingebaut, damit man alles ohne eigene Dateien ausprobieren kann.
 
 ## Tastatur und Maus
 
@@ -47,7 +53,11 @@ Ein Demo-Board ist eingebaut, damit man alles ohne eigene Dateien ausprobieren k
 | Drehen | `R` / `⇧R` |
 | Einpassen | `F` |
 | Suchen | `⌘F` oder `/` |
-| Öffnen | `⌘O` |
+| Öffnen (Boardview oder PDF) | `⌘O` |
+| Schaltplan ein/aus | `⌘E` |
+| Seitenleiste ein/aus | `⌘I` |
+| Schaltplan: Seite zurück/vor | `Bild ↑` / `Bild ↓` |
+| Schaltplan: Fundstelle zurück/vor | `[` / `]` |
 | Auswahl aufheben | `Esc` |
 
 ## Installation
@@ -58,7 +68,7 @@ Eine neue Version entsteht, wenn ein Tag `v*` gepusht wird: GitHub Actions baut 
 
 ## Selbst bauen
 
-Voraussetzungen: macOS 12+, Xcode Command Line Tools, [Rust](https://rustup.rs) (stable), Node.js 22.
+Voraussetzungen: macOS 13+, Xcode Command Line Tools, [Rust](https://rustup.rs) (stable), Node.js 22.
 
 ```sh
 git clone https://github.com/meb99/Avero.git
@@ -94,9 +104,12 @@ crates/avero-formats     Rust: Dateiformate → einheitliches Board-Modell (mil,
 src-tauri                Mac-App: Befehle open_board / open_demo, Finder-Integration
 src                      Oberfläche (React + TypeScript)
   core/                  Board-Modell, Kamera, Raster-Index, Suche, Tauri-Anbindung
+  schematic/             PDF-Viewer (pdf.js), Wortindex, Querverweise
   render/                WebGL-2-Renderer, Beschriftungen, Farben
   components/            Toolbar, Suche, Seitenleiste, Dialoge
   i18n/                  Deutsch und Englisch
+scripts/demo_schematic.py  erzeugt den Demo-Schaltplan aus dem Demo-Board
+public/demo/             Demo-Schaltplan (synthetisch)
 docs/                    Roadmap und Formatnotizen
 ```
 
@@ -106,11 +119,11 @@ Boardviews und Schaltpläne sind fast immer Eigentum der Hersteller. **Sie gehö
 
 ## Weiter geht's
 
-Die nächsten Schritte stehen in [docs/ROADMAP.md](docs/ROADMAP.md): Schaltplan-Viewer mit Querverweisen, Bibliothek, Messwerte pro Netz, dann XZZ `.pcb`, `.fz` und `.tvw`.
+Die nächsten Schritte stehen in [docs/ROADMAP.md](docs/ROADMAP.md): Bibliothek, Messwerte pro Netz, dann XZZ `.pcb`, `.fz` und `.tvw`.
 
 ## Dank
 
-Das Wissen über die Dateiformate stammt zu großen Teilen aus [OpenBoardView](https://github.com/OpenBoardView/OpenBoardView) (MIT). Details in [NOTICE](NOTICE).
+Das Wissen über die Dateiformate stammt zu großen Teilen aus [OpenBoardView](https://github.com/OpenBoardView/OpenBoardView) (MIT). PDFs werden mit [PDF.js](https://mozilla.github.io/pdf.js/) (Apache-2.0) dargestellt. Details in [NOTICE](NOTICE).
 
 ## Lizenz
 

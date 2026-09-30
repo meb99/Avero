@@ -1,5 +1,6 @@
 import type { BoardModel } from "../core/board";
 import type { BoardSource } from "../core/loader";
+import type { SchematicDocument } from "../schematic/document";
 import { formatSize } from "../format";
 import { useI18n } from "../i18n";
 import type { Settings } from "../settings";
@@ -7,11 +8,12 @@ import type { Settings } from "../settings";
 interface Props {
   model: BoardModel | null;
   source: BoardSource | null;
+  schematic: SchematicDocument | null;
   loading: string | null;
   settings: Settings;
 }
 
-export function StatusBar({ model, source, loading, settings }: Props) {
+export function StatusBar({ model, source, schematic, loading, settings }: Props) {
   const { t } = useI18n();
   const b = model?.board;
   return (
@@ -33,6 +35,11 @@ export function StatusBar({ model, source, loading, settings }: Props) {
             </span>
           )}
         </>
+      )}
+      {!loading && schematic && (
+        <span className="status-file muted" title={schematic.path ?? schematic.name}>
+          {t("schematic.title")}: {schematic.name} · {schematic.pageCount} {t("schematic.pages")}
+        </span>
       )}
       <span className="status-spacer" />
       <span className="muted">Avero {__APP_VERSION__}</span>
