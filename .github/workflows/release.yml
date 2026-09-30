@@ -1,27 +1,77 @@
 name: Release
 
-# Builds a universal DMG and publishes it as a GitHub release, either for a
-# pushed tag like v0.5.0 or started by hand (Actions → Release → Run
-# workflow) with a version, which then also creates the tag.
+# Publishes a universal DMG as a GitHub release, fully automatic:
+#
+# - after CI passed on main, when the version in src-tauri/tauri.conf.json
+#   has no release yet (bump the version, push, done);
+# - for a pushed tag like v0.5.1;
+# - by hand: Actions → Release → Run workflow, optionally with a version.
 on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   push:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
       version:
-        description: "Version, e.g. 0.5.0 (the tag v0.5.0 is created on the chosen branch)"
-        required: true
+        description: "Version, e.g. 0.5.1 (empty: the version in tauri.conf.json)"
+        required: false
 
 permissions:
   contents: write
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
-  dmg:
-    runs-on: macos-latest
-    env:
-      TAG: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
+  check:
+    # A CI run that failed or ran for something other than a push never releases.
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      sha: ${{ steps.version.outputs.sha }}
+      publish: ${{ steps.exists.outputs.publish }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - id: version
+        env:
+          INPUT: ${{ inputs.version }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            tag="$GITHUB_REF_NAME"
+          elif [ -n "$INPUT" ]; then
+            tag="v${INPUT#v}"
+          else
+            tag="v$(jq -r .version src-tauri/tauri.conf.json)"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - id: exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "$TAG is already released, nothing to do."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  dmg:
+    needs: check
+    if: needs.check.outputs.publish == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.check.outputs.sha }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
@@ -35,8 +85,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ env.TAG }}
-          releaseName: Avero ${{ env.TAG }}
+          tagName: ${{ needs.check.outputs.tag }}
+          releaseName: Avero ${{ needs.check.outputs.tag }}
+          releaseCommitish: ${{ needs.check.outputs.sha }}
           releaseBody: |
             Universal-DMG für Apple Silicon und Intel (macOS 13 oder neuer).
 
