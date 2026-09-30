@@ -55,6 +55,8 @@ pub enum ParseError {
     NeedsFzKey,
     #[error("The FZ key is not valid for this file.")]
     InvalidFzKey,
+    #[error("All {0} parts of this XZZ file are encrypted and it has no test pads; it needs the XZZ key.")]
+    XzzAllLocked(u32),
 }
 
 impl ParseError {
@@ -77,6 +79,7 @@ impl ParseError {
             ParseError::InvalidKey => "invalid-key",
             ParseError::NeedsFzKey => "needs-fz-key",
             ParseError::InvalidFzKey => "invalid-fz-key",
+            ParseError::XzzAllLocked(_) => "xzz-all-locked",
         }
     }
 

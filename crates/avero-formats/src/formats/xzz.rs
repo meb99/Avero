@@ -216,7 +216,7 @@ pub fn parse(input: &[u8], key: Option<u64>) -> Result<RawBoard, ParseError> {
 
     // Without a key, only a board with test pads is worth showing.
     if key.is_none() && board.test_points.is_empty() {
-        return Err(ParseError::NeedsKey);
+        return Err(ParseError::XzzAllLocked(board.locked_parts));
     }
     if board.parts.is_empty() && failed_parts > 0 {
         return Err(ParseError::invalid(

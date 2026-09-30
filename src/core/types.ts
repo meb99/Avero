@@ -90,6 +90,7 @@ export type LoadErrorCode =
   | "invalid-key"
   | "needs-fz-key"
   | "invalid-fz-key"
+  | "xzz-all-locked"
   | "internal";
 
 export interface LoadError {

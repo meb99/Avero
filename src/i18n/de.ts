@@ -321,4 +321,5 @@ export const de: Record<MessageKey, string> = {
   "update.install": "Jetzt aktualisieren",
   "update.installing": "Avero {version} wird installiert … Avero startet danach neu.",
   "update.failedInstall": "Das Update ließ sich nicht installieren ({message}). Stattdessen ist die Download-Seite geöffnet.",
+  "error.xzz-all-locked": "In dieser XinZhiZao-Datei ist alles Brauchbare verschlüsselt: Bauteile mit Pins, keine offenen Testpunkte. Ohne XZZ-Schlüssel gäbe es nur den Umriss zu sehen. Dasselbe Board als .brd, .bdv, .asc oder .fz öffnet sich ohne Schlüssel.",
 };

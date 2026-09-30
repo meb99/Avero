@@ -1095,7 +1095,7 @@ export function App() {
               <div>
                 <strong>{t("error.title", { name: error.name })}</strong>
                 <p>{errorText}</p>
-                {["needs-key", "invalid-key", "needs-fz-key", "invalid-fz-key"].includes(error.error.code) && (
+                {["needs-key", "invalid-key", "needs-fz-key", "invalid-fz-key", "xzz-all-locked"].includes(error.error.code) && (
                   <button
                     className="small"
                     onClick={() => {

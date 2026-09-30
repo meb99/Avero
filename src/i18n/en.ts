@@ -319,6 +319,7 @@ export const en = {
   "update.install": "Update now",
   "update.installing": "Installing Avero {version}… Avero restarts by itself.",
   "update.failedInstall": "The update could not be installed ({message}). The download page is open instead.",
+  "error.xzz-all-locked": "Everything useful in this XinZhiZao file is encrypted (parts with pins, no open test points). Without the key there is nothing to show but the outline. The same board as .brd, .bdv, .asc or .fz opens without a key.",
 };
 
 export type MessageKey = keyof typeof en;
