@@ -653,14 +653,36 @@ export function App() {
     }
   }, [source, side, t]);
 
+  // Set below, once installUpdate exists; checkUpdates only calls it later.
+  const installUpdateRef = useRef<(found: Update) => Promise<void>>(async () => {});
   const checkUpdates = useCallback(
     async (manual: boolean) => {
+      if (!manual) {
+        setUpdate(await dailyCheck(__APP_VERSION__));
+        return;
+      }
+      // A manual check always answers with a native dialog.
+      setToast(t("update.checking"));
+      const { ask, message } = await import("@tauri-apps/plugin-dialog");
       try {
-        const found = await (manual ? fetchUpdate(__APP_VERSION__) : dailyCheck(__APP_VERSION__));
+        const found = await fetchUpdate(__APP_VERSION__);
+        setToast(null);
+        if (!found) {
+          await message(t("update.none", { version: __APP_VERSION__ }), { title: "Avero", kind: "info" });
+          return;
+        }
         setUpdate(found);
-        if (manual && !found) setToast(t("update.none", { version: __APP_VERSION__ }));
+        const yes = await ask(t("update.ask", { version: found.version, current: __APP_VERSION__ }), {
+          title: "Avero",
+          kind: "info",
+          okLabel: t("update.install"),
+          cancelLabel: t("update.later"),
+        });
+        if (yes) await installUpdateRef.current(found);
       } catch (e) {
-        if (manual) setToast(t("update.failed", { message: e instanceof Error ? e.message : String(e) }));
+        setToast(null);
+        const text = t("update.failed", { message: e instanceof Error ? e.message : String(e) });
+        await message(text, { title: "Avero", kind: "warning" }).catch(() => setToast(text));
       }
     },
     [t],
@@ -683,6 +705,8 @@ export function App() {
       openExternal(found.url);
     }
   };
+
+  installUpdateRef.current = installUpdate;
 
   const openExternal = (url: string) => void openUrl(url).catch(() => window.open(url, "_blank"));
 
@@ -1179,6 +1203,7 @@ export function App() {
           <SettingsDialog
             settings={settings}
             onChange={setSettings}
+            onCheckUpdates={() => void checkUpdates(true)}
             onClose={() => {
               setDialog(null);
               const retry = retryPath.current;

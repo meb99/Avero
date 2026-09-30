@@ -287,6 +287,12 @@ fn close_schematic_window(app: tauri::AppHandle) {
     }
 }
 
+/// The latest release on GitHub if it is newer than `current`.
+#[tauri::command]
+async fn check_update(current: String) -> Result<Option<updater::Available>, String> {
+    updater::check(&current)
+}
+
 /// Downloads a newer release, replaces the app and restarts into it.
 #[tauri::command]
 async fn install_update(app: tauri::AppHandle, version: String) -> Result<(), String> {
@@ -319,6 +325,7 @@ pub fn run() {
             remove_photo,
             load_text_index,
             save_text_index,
+            check_update,
             install_update,
             open_schematic_window,
             close_schematic_window,

@@ -1718,6 +1718,14 @@ button.danger {
 
 /* Update notice */
 
+.version-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+}
+
 .update-banner {
   position: absolute;
   right: 16px;

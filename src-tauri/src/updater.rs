@@ -23,6 +23,60 @@ fn run(cmd: &mut Command, what: &str) -> Result<String, String> {
     }
 }
 
+/// A newer release found on GitHub.
+#[derive(Debug, serde::Serialize, PartialEq)]
+pub struct Available {
+    pub version: String,
+    pub url: String,
+}
+
+fn numbers(v: &str) -> Vec<u64> {
+    v.trim_start_matches(['v', 'V']).split(['.', '-']).map(|p| p.parse().unwrap_or(0)).collect()
+}
+
+/// True when `candidate` is a higher dotted version than `current`.
+pub fn is_newer(candidate: &str, current: &str) -> bool {
+    let (a, b) = (numbers(candidate), numbers(current));
+    (0..a.len().max(b.len()))
+        .map(|i| a.get(i).unwrap_or(&0).cmp(b.get(i).unwrap_or(&0)))
+        .find(|o| o.is_ne())
+        .is_some_and(|o| o.is_gt())
+}
+
+/// Reads GitHub's "latest release" answer; `None` when it is not newer.
+pub fn parse_latest(json: &str, current: &str) -> Result<Option<Available>, String> {
+    let v: serde_json::Value = serde_json::from_str(json).map_err(|e| format!("GitHub: {e}"))?;
+    let tag = v["tag_name"].as_str().unwrap_or_default();
+    if tag.is_empty() || v["draft"].as_bool() == Some(true) || v["prerelease"].as_bool() == Some(true) {
+        return Ok(None);
+    }
+    let version = tag.trim_start_matches(['v', 'V']).to_string();
+    if !valid_version(&version) || !is_newer(&version, current) {
+        return Ok(None);
+    }
+    let url = v["html_url"].as_str().unwrap_or("https://github.com/meb99/Avero/releases").to_string();
+    Ok(Some(Available { version, url }))
+}
+
+/// Asks GitHub for the latest release, with macOS' curl and a time limit,
+/// so the answer never depends on the web view.
+pub fn check(current: &str) -> Result<Option<Available>, String> {
+    let url = format!("https://api.github.com/repos/{REPO}/releases/latest");
+    let out = run(
+        Command::new("/usr/bin/curl")
+            .args(["-sS", "--proto", "=https", "--max-time", "20", "-w", "\n%{http_code}"])
+            .args(["-H", "Accept: application/vnd.github+json", "-H", "User-Agent: Avero"])
+            .arg(&url),
+        "GitHub",
+    )?;
+    let (body, status) = out.rsplit_once('\n').unwrap_or(("", out.as_str()));
+    match status.trim() {
+        "200" => parse_latest(body, current),
+        "404" => Ok(None), // no release yet
+        code => Err(format!("GitHub answered {code}")),
+    }
+}
+
 /// `1.2.3`, nothing else (the version ends up in a URL and a comparison).
 pub fn valid_version(v: &str) -> bool {
     let parts: Vec<&str> = v.split('.').collect();
@@ -121,6 +175,26 @@ fn download_and_swap(version: &str, target: &Path, work: &Path) -> Result<(), St
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compares_versions() {
+        assert!(is_newer("0.5.3", "0.5.2"));
+        assert!(is_newer("v0.10.0", "0.9.9"));
+        assert!(!is_newer("0.5.2", "0.5.2"));
+        assert!(!is_newer("0.4.9", "0.5.0"));
+    }
+
+    #[test]
+    fn reads_latest_release() {
+        let json = r#"{"tag_name":"v0.5.3","html_url":"https://x/r","draft":false,"prerelease":false}"#;
+        assert_eq!(
+            parse_latest(json, "0.5.2").unwrap(),
+            Some(Available { version: "0.5.3".into(), url: "https://x/r".into() })
+        );
+        assert_eq!(parse_latest(json, "0.5.3").unwrap(), None);
+        assert_eq!(parse_latest(r#"{"tag_name":"v9.0.0","draft":true}"#, "0.5.2").unwrap(), None);
+        assert!(parse_latest("not json", "0.5.2").is_err());
+    }
 
     #[test]
     fn accepts_only_plain_versions() {

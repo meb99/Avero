@@ -21,8 +21,16 @@ export function isNewer(candidate: string, current: string): boolean {
   return false;
 }
 
-/** Latest release if it is newer than `current`; null when up to date. */
+/**
+ * Latest release if it is newer than `current`; null when up to date. In
+ * the app the request goes through macOS' curl (see updater.rs), so it
+ * never hangs in or gets blocked by the web view.
+ */
 export async function fetchUpdate(current: string): Promise<Update | null> {
+  if ("__TAURI_INTERNALS__" in window) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return (await invoke<Update | null>("check_update", { current })) ?? null;
+  }
   const res = await fetch(LATEST, { headers: { Accept: "application/vnd.github+json" } });
   if (res.status === 404) return null; // no release yet
   if (!res.ok) throw new Error(`GitHub: ${res.status}`);

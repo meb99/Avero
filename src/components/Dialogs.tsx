@@ -46,10 +46,11 @@ export function Dialog({
 interface SettingsProps {
   settings: Settings;
   onChange(s: Settings): void;
+  onCheckUpdates(): void;
   onClose(): void;
 }
 
-export function SettingsDialog({ settings, onChange, onClose }: SettingsProps) {
+export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: SettingsProps) {
   const { t } = useI18n();
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) => onChange({ ...settings, [key]: value });
   type Toggle =
@@ -142,6 +143,12 @@ export function SettingsDialog({ settings, onChange, onClose }: SettingsProps) {
       <div className="checks">{check("autoSchematic", t("settings.autoSchematic"))}</div>
       <h3>Avero</h3>
       <div className="checks">{check("updateCheck", t("settings.updateCheck"))}</div>
+      <div className="version-row">
+        <span className="muted">{t("settings.version", { version: __APP_VERSION__ })}</span>
+        <button className="small" onClick={onCheckUpdates}>
+          {t("menu.checkUpdates")}
+        </button>
+      </div>
       <footer className="dialog-footer">
         <button className="primary" onClick={onClose}>
           {t("settings.done")}
