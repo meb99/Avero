@@ -1,5 +1,8 @@
-import { compareReadings, hasValues, type Comparison, type Quantity, type Reading, type Value } from "./measure";
+import { compareReadings, hasValues, QUANTITIES, type Comparison, type Quantity, type Reading, type Value } from "./measure";
 import { parsePhoto, type BoardPhoto, type PhotoSide } from "./photo";
+
+export type CaseStatus = "open" | "waiting" | "repaired" | "unrepairable";
+export const CASE_STATUSES: CaseStatus[] = ["open", "waiting", "repaired", "unrepairable"];
 
 /** One device on the bench. */
 export interface RepairCase {
@@ -9,7 +12,17 @@ export interface RepairCase {
   notes: string;
   /** Readings by net name. */
   readings: Record<string, Reading>;
+  status?: CaseStatus;
+  /** Device model, e.g. "Switch OLED HEG-001". */
+  device?: string;
+  serial?: string;
+  customer?: string;
+  /** Stored photo files (copied into Avero's data folder). */
+  photos?: string[];
 }
+
+/** Fields of a case that are edited as a whole. */
+export type CaseFields = Partial<Pick<RepairCase, "title" | "notes" | "status" | "device" | "serial" | "customer" | "photos">>;
 
 /**
  * Everything Avero remembers about a board: reference readings from a known
@@ -71,13 +84,31 @@ export function addCase(notes: BoardNotes, title: string): BoardNotes {
   return { ...notes, cases: [...notes.cases, c], activeCase: c.id, updated: now() };
 }
 
-export function updateCase(notes: BoardNotes, id: string, change: Partial<Pick<RepairCase, "title" | "notes">>): BoardNotes {
+export function updateCase(notes: BoardNotes, id: string, change: CaseFields): BoardNotes {
   return { ...notes, cases: notes.cases.map((c) => (c.id === id ? { ...c, ...change } : c)), updated: now() };
 }
 
 export function removeCase(notes: BoardNotes, id: string): BoardNotes {
   const cases = notes.cases.filter((c) => c.id !== id);
   return { ...notes, cases, activeCase: notes.activeCase === id ? (cases.at(-1)?.id ?? null) : notes.activeCase, updated: now() };
+}
+
+/**
+ * Takes a case's readings as reference, e.g. once the board works again or
+ * when it is a known good board. Values of the case win per quantity.
+ */
+export function caseToReference(notes: BoardNotes, id: string): BoardNotes {
+  const c = notes.cases.find((x) => x.id === id);
+  if (!c) return notes;
+  const reference = { ...notes.reference };
+  for (const [net, r] of Object.entries(c.readings)) {
+    if (!hasValues(r)) continue;
+    const merged: Reading = { ...reference[net] };
+    for (const q of QUANTITIES) if (r[q] !== undefined) merged[q] = r[q];
+    merged.updated = now();
+    reference[net] = merged;
+  }
+  return { ...notes, reference, updated: now() };
 }
 
 export function activeCase(notes: BoardNotes): RepairCase | undefined {
@@ -191,7 +222,9 @@ export function parseNotes(json: string): BoardNotes | null {
       name: typeof d.name === "string" ? d.name : d.key,
       notes: typeof d.notes === "string" ? d.notes : "",
       reference: d.reference ?? {},
-      cases: d.cases.filter((c): c is RepairCase => !!c && typeof c.id === "string" && typeof c.readings === "object"),
+      cases: d.cases
+        .filter((c): c is RepairCase => !!c && typeof c.id === "string" && typeof c.readings === "object")
+        .map((c) => ({ ...c, photos: Array.isArray(c.photos) ? c.photos.filter((p) => typeof p === "string") : undefined })),
       activeCase: typeof d.activeCase === "string" ? d.activeCase : null,
       photos: parsePhotos(d.photos),
       netNames: parseNetNames(d.netNames),
@@ -220,7 +253,10 @@ export function mergeNotes(mine: BoardNotes, theirs: BoardNotes): BoardNotes {
   for (const c of theirs.cases) {
     const i = cases.findIndex((x) => x.id === c.id);
     if (i < 0) cases.push(c);
-    else cases[i] = { ...cases[i], readings: mergeReadings(cases[i].readings, c.readings) };
+    else {
+      const photos = [...new Set([...(cases[i].photos ?? []), ...(c.photos ?? [])])];
+      cases[i] = { ...c, ...cases[i], readings: mergeReadings(cases[i].readings, c.readings), photos: photos.length ? photos : undefined };
+    }
   }
   const notes = theirs.notes && !mine.notes.includes(theirs.notes) ? [mine.notes, theirs.notes].filter(Boolean).join("\n\n") : mine.notes;
   return {

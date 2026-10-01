@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addCase,
   boardKey,
+  caseToReference,
   emptyNotes,
   mergeNotes,
   netStatuses,
@@ -94,5 +95,20 @@ describe("own net names", () => {
   it("keeps own names through save and load", () => {
     const n = renameNet(emptyNotes("k", "k"), "Net10", "Net10", "GND");
     expect(parseNotes(JSON.stringify(n))?.netNames).toEqual({ Net10: "GND" });
+  });
+});
+
+describe("case to reference", () => {
+  it("takes a case's readings as reference, per quantity", () => {
+    let n = setValue(emptyNotes("k", "k"), "reference", "PP3V3", "diode", 0.4);
+    n = setValue(n, "reference", "PP3V3", "voltage", 3.3);
+    n = addCase(n, "Gutes Board");
+    const id = n.activeCase!;
+    n = setValue(n, { caseId: id }, "PP3V3", "diode", 0.45);
+    n = setValue(n, { caseId: id }, "PP1V8", "voltage", 1.8);
+    n = caseToReference(n, id);
+    expect(n.reference.PP3V3.diode).toBe(0.45);
+    expect(n.reference.PP3V3.voltage).toBe(3.3);
+    expect(n.reference.PP1V8.voltage).toBe(1.8);
   });
 });

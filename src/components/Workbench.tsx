@@ -6,6 +6,7 @@ import { useI18n } from "../i18n";
 import { formatValue, QUANTITIES, type Reading } from "../workbench/measure";
 import { activeCase, addCase, netStatuses, removeCase, updateCase, type BoardNotes, type NetStatus } from "../workbench/notes";
 import { exportNotes, importNotes } from "../workbench/store";
+import { CaseEditor, CaseHistory } from "./CaseEditor";
 
 interface Props {
   model: BoardModel;
@@ -120,6 +121,7 @@ export function Workbench({ model, notes, update, tolerance, onTolerance, onSele
             }}
           />
         )}
+        <CaseHistory notes={notes} onPick={(id) => update((n) => ({ ...n, activeCase: id }))} />
         {current && (
           <NotesField
             value={current.notes}
@@ -127,6 +129,7 @@ export function Workbench({ model, notes, update, tolerance, onTolerance, onSele
             onSave={(v) => update((n) => updateCase(n, current.id, { notes: v }))}
           />
         )}
+        {current && <CaseEditor notes={notes} repair={current} update={update} tolerance={tolerance} onMessage={setMessage} />}
       </section>
 
       <section className="wb-section">

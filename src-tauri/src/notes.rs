@@ -46,11 +46,13 @@ pub fn save(dir: &Path, key: &str, json: &str) -> Result<(), String> {
 /// Image types a board photo may have.
 const PHOTO_TYPES: &[&str] = &["jpg", "jpeg", "png", "heic", "webp"];
 
-/// Copies a photo of the board into `dir` as `<key>-<side>-<stamp>.<ext>`
+/// Copies a photo of the board (side `top`/`bottom`) or of a repair case
+/// (`case`) into `dir` as `<key>-<side>-<stamp>.<ext>`
 /// and returns the copy's path, so the photo survives the original being
 /// moved or deleted.
 pub fn store_photo(dir: &Path, key: &str, side: &str, source: &Path, stamp: u128) -> Result<PathBuf, String> {
-    if side != "top" && side != "bottom" {
+    // Board photos per side, or photos of a repair case.
+    if !matches!(side, "top" | "bottom" | "case") {
         return Err(format!("unknown side {side}"));
     }
     let ext = source.extension().and_then(|e| e.to_str()).map(str::to_lowercase).unwrap_or_default();
@@ -90,6 +92,9 @@ mod tests {
         assert_eq!(stored.file_name().unwrap(), "820-02100-top-7.jpg");
         assert_eq!(std::fs::read(&stored).unwrap(), b"jpeg");
         assert!(store_photo(&dir, "x", "left", &source, 7).is_err());
+        let case = store_photo(&dir, "820-02100", "case", &source, 8).unwrap();
+        assert_eq!(case.file_name().unwrap(), "820-02100-case-8.jpg");
+        remove_photo(&dir, &case).unwrap();
         assert!(store_photo(&dir, "x", "top", Path::new("/tmp/a.pdf"), 7).is_err());
         assert!(remove_photo(&dir, &source).is_err());
         remove_photo(&dir, &stored).unwrap();
