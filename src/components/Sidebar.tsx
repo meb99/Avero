@@ -8,7 +8,7 @@ import { Workbench } from "./Workbench";
 import { Details } from "./Details";
 import { VirtualList } from "./VirtualList";
 import { LayerList } from "./LayerList";
-import type { Palette } from "../render/palette";
+import type { Palette, RGBA } from "../render/palette";
 import type { SchematicDocument } from "../schematic/document";
 
 type Tab = "details" | "parts" | "nets" | "layers" | "measure";
@@ -31,6 +31,9 @@ interface Props {
   onRenameNet(net: number, name: string): string | null;
   /** Changes when net names change, so name-sorted lists refresh. */
   namesRevision: number;
+  pinnedNets: ReadonlyMap<number, RGBA>;
+  onTogglePin(net: number): void;
+  onShowMarker(id: string): void;
 }
 
 export function Sidebar({
@@ -50,6 +53,9 @@ export function Sidebar({
   onSchematicJump,
   onRenameNet,
   namesRevision,
+  pinnedNets,
+  onTogglePin,
+  onShowMarker,
 }: Props) {
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("details");
@@ -111,6 +117,8 @@ export function Sidebar({
             schematic={schematic}
             onSchematicJump={onSchematicJump}
             onRenameNet={onRenameNet}
+            pinnedNets={pinnedNets}
+            onTogglePin={onTogglePin}
           />
         </div>
       )}
@@ -124,6 +132,7 @@ export function Sidebar({
             tolerance={settings.tolerance}
             onTolerance={onTolerance}
             onSelect={onSelect}
+            onShowMarker={onShowMarker}
             error={notesError}
           />
         </div>

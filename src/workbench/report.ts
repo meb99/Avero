@@ -45,7 +45,7 @@ const GREEN = rgb(0.1, 0.55, 0.3);
 const RED = rgb(0.78, 0.16, 0.16);
 
 /** The standard PDF fonts only know Latin-1-ish text; replace the rest. */
-function safeText(font: PDFFont, text: string): string {
+export function safeText(font: PDFFont, text: string): string {
   const replaced = text
     .replace(/Ω/g, "Ohm")
     .replace(/→/g, "->")

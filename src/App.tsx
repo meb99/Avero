@@ -45,12 +45,25 @@ import { clearRecent, loadRecent, loadSettings, rememberRecent, saveSettings, ty
 import { useTheme } from "./theme";
 import { dailyCheck, fetchUpdate, type Update } from "./updates";
 import { pickImport, type LibraryEntry, type LibraryFile } from "./workbench/library";
-import { boardKey, netStatuses, renameNet, setPhoto, type NetStatus } from "./workbench/notes";
+import {
+  addMarker,
+  boardKey,
+  netStatuses,
+  newMarkerId,
+  removeMarker,
+  renameNet,
+  setPhoto,
+  updateMarker,
+  type NetStatus,
+} from "./workbench/notes";
+import { MarkerEditor, PinnedLegend } from "./components/Markers";
+import { PIN_COLORS } from "./render/palette";
 import { alignPhoto } from "./workbench/photo";
 import { loadPhotoImage } from "./workbench/photoImage";
 import { useBoardNotes } from "./workbench/store";
 
 const NONE: Selection = { kind: "none" };
+const NO_NETS: number[] = [];
 const DEMO_SCHEMATIC = `${import.meta.env.BASE_URL}demo/avero-demo-schematic.pdf`;
 const WEBSITE = "https://github.com/meb99/Avero";
 const TOAST_MS = 4000;
@@ -303,6 +316,69 @@ export function App() {
     },
     [model, notesForModel, updateNotes, t],
   );
+
+  // Nets pinned in their own colors, for the board they were pinned on.
+  const [pinChoice, setPinChoice] = useState<{ model: BoardModel | null; nets: number[] }>({ model: null, nets: [] });
+  const pinnedList = pinChoice.model === model ? pinChoice.nets : NO_NETS;
+  const pinnedNets = useMemo(
+    () => new Map(pinnedList.map((net, i) => [net, PIN_COLORS[i % PIN_COLORS.length]] as const)),
+    [pinnedList],
+  );
+  const togglePinned = useCallback(
+    (net: number) =>
+      setPinChoice((c) => {
+        const nets = c.model === model ? c.nets : [];
+        return { model, nets: nets.includes(net) ? nets.filter((n) => n !== net) : [...nets, net] };
+      }),
+    [model],
+  );
+
+  // Notes pinned to spots on the board.
+  const [placingMarker, setPlacingMarker] = useState(false);
+  const [editingMarker, setEditingMarker] = useState<{ id: string; at: Point } | null>(null);
+  const boardMarkers = notesForModel?.markers;
+  const markerMarks = useMemo(() => boardMarkers ?? [], [boardMarkers]);
+  const editedMarker = editingMarker ? boardMarkers?.find((m) => m.id === editingMarker.id) : undefined;
+  const openMarker = useCallback((id: string) => {
+    const m = boardMarkers?.find((x) => x.id === id);
+    const at = m && viewRef.current?.toScreen(m);
+    if (at) setEditingMarker({ id, at });
+  }, [boardMarkers]);
+  const placeMarker = useCallback(
+    (point: Point) => {
+      setPlacingMarker(false);
+      if (!notesForModel) return;
+      const id = newMarkerId();
+      updateNotes((n) => addMarker(n, { id, x: point.x, y: point.y, side, text: "" }));
+      const at = viewRef.current?.toScreen(point);
+      if (at) setEditingMarker({ id, at });
+    },
+    [notesForModel, updateNotes, side],
+  );
+  const closeMarker = useCallback(() => {
+    // A new marker left without text is not worth keeping.
+    if (editedMarker && !editedMarker.text) updateNotes((n) => removeMarker(n, editedMarker.id));
+    setEditingMarker(null);
+  }, [editedMarker, updateNotes]);
+  const showMarker = useCallback(
+    (id: string) => {
+      const m = boardMarkers?.find((x) => x.id === id);
+      if (!m) return;
+      setSide(m.side);
+      viewRef.current?.zoomTo({ minX: m.x - 150, minY: m.y - 150, maxX: m.x + 150, maxY: m.y + 150 });
+      // Open the note once the view has flown there.
+      window.setTimeout(() => {
+        const at = viewRef.current?.toScreen(m);
+        if (at) setEditingMarker({ id, at });
+      }, 360);
+    },
+    [boardMarkers],
+  );
+
+  const placingMarkerRef = useRef(placingMarker);
+  placingMarkerRef.current = placingMarker;
+  const togglePinnedRef = useRef(togglePinned);
+  togglePinnedRef.current = togglePinned;
 
   // A page in the occurrence list: show the schematic there.
   const jumpInSchematic = useCallback((text: string, hit: number) => {
@@ -710,6 +786,33 @@ export function App() {
     }
   }, [source, side, t]);
 
+  const exportPdf = useCallback(async () => {
+    const view = viewRef.current;
+    if (!view || !source) return;
+    try {
+      const [{ viewPdf }, blob] = await Promise.all([import("./workbench/viewPdf"), view.snapshot()]);
+      const date = new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeStyle: "short" }).format(new Date());
+      const sideText = t(side === "top" ? "side.top" : "side.bottom");
+      const notesOnBoard = (boardMarkers ?? [])
+        .filter((m) => m.text)
+        .map((m) => `${t(m.side === "top" ? "side.top" : "side.bottom")}: ${m.text}`);
+      const bytes = await viewPdf({
+        image: new Uint8Array(await blob.arrayBuffer()),
+        title: source.name,
+        subtitle: `${sideText} · ${date}`,
+        notesTitle: t("marker.list"),
+        notes: notesOnBoard,
+        footer: t("report.footer"),
+        legend: model ? [...pinnedNets].map(([net, color]) => ({ name: model.nets[net].name, color })) : [],
+      });
+      const base = source.name.replace(/\.[^.]+$/, "");
+      const path = await saveBytes(bytes, t("menu.exportPdf"), `${base}-${side}.pdf`, { name: "PDF", extensions: ["pdf"] });
+      if (path) setToast(t("export.saved", { name: fileName(path) }));
+    } catch (e) {
+      setToast(t("export.failed", { message: e instanceof Error ? e.message : String(e) }));
+    }
+  }, [source, side, t, lang, boardMarkers, model, pinnedNets]);
+
   // Set below, once installUpdate exists; checkUpdates only calls it later.
   const installUpdateRef = useRef<(found: Update) => Promise<void>>(async () => {});
   const checkUpdates = useCallback(
@@ -781,6 +884,7 @@ export function App() {
     nextTab: () => cycleTab(1),
     prevTab: () => cycleTab(-1),
     exportImage: () => void exportImage(),
+    exportPdf: () => void exportPdf(),
     settings: () => setDialog("settings"),
     search: () => {
       searchRef.current?.focus();
@@ -848,6 +952,8 @@ export function App() {
       { id: "schematic-window", label: t("menu.popOut"), enabled: schematic !== null && !detached, run: a.popOutSchematic },
       { id: "sidebar", label: t("menu.sidebar"), shortcut: "⌘I", enabled: board, run: a.toggleSidebar },
       { id: "export", label: t("menu.exportImage"), shortcut: "⇧⌘E", enabled: board, run: a.exportImage },
+      { id: "export-pdf", label: t("menu.exportPdf"), shortcut: "⌥⌘E", enabled: board, run: a.exportPdf },
+      { id: "marker", label: t("marker.place"), shortcut: "M", enabled: board && notes !== null, run: () => setPlacingMarker(true) },
       { id: "photo-add", label: t("photo.add"), enabled: board && notes !== null, run: a.addPhoto },
       { id: "photo-toggle", label: t("photo.toggle"), enabled: !!storedPhoto, run: a.togglePhoto },
       { id: "photo-realign", label: `${t("photo.title")}: ${t("photo.realign")}`, enabled: !!storedPhoto, run: () => storedPhoto && void startAlignment(storedPhoto.file, false) },
@@ -946,8 +1052,19 @@ export function App() {
           break;
         case "Escape":
           if (aligningRef.current) cancelAlignment();
+          else if (placingMarkerRef.current) setPlacingMarker(false);
           else setSelection(NONE);
           break;
+        case "m":
+        case "M":
+          if (model) setPlacingMarker((v) => !v);
+          break;
+        case "p":
+        case "P": {
+          const net = model?.selectedNet(selection);
+          if (net !== undefined) togglePinnedRef.current(net);
+          break;
+        }
         case " ":
           e.preventDefault();
           setSide((s) => (s === "top" ? "bottom" : "top"));
@@ -1043,6 +1160,8 @@ export function App() {
           onHelp={() => setDialog("help")}
           onPick={(sel) => select(sel, true)}
           searchRef={searchRef}
+          placingMarker={placingMarker}
+          onMarker={() => setPlacingMarker((v) => !v)}
         />
 
         {tabs.length > 1 && <TabBar tabs={tabInfos} active={activeTab} onSwitch={switchTab} onClose={closeTab} onNew={newTab} />}
@@ -1074,12 +1193,41 @@ export function App() {
                     palette={palette}
                     hiddenLayers={hiddenLayers}
                     namesRevision={namesRevision}
+                    pinnedNets={pinnedNets}
+                    markers={markerMarks}
+                    activeMarker={editingMarker?.id ?? null}
+                    onMarkerClick={openMarker}
                     measured={measured}
                     initialView={initialView}
                     photo={photoLayer}
-                    onPointPick={aligning && aligning.photoPoints.length >= 2 ? pickBoardPoint : undefined}
+                    onPointPick={
+                      placingMarker ? placeMarker : aligning && aligning.photoPoints.length >= 2 ? pickBoardPoint : undefined
+                    }
                     onSelect={select}
-                  />
+                  >
+                    {placingMarker && <div className="placing-hint">{t("marker.placing")}</div>}
+                    <PinnedLegend
+                      model={model}
+                      pinned={pinnedNets}
+                      onSelect={(net) => select({ kind: "net", net }, true)}
+                      onUnpin={togglePinned}
+                    />
+                    {editingMarker && editedMarker && (
+                      <MarkerEditor
+                        marker={editedMarker}
+                        at={editingMarker.at}
+                        onSave={(text) => {
+                          updateNotes((n) => (text ? updateMarker(n, editedMarker.id, text) : removeMarker(n, editedMarker.id)));
+                          setEditingMarker(null);
+                        }}
+                        onDelete={() => {
+                          updateNotes((n) => removeMarker(n, editedMarker.id));
+                          setEditingMarker(null);
+                        }}
+                        onClose={closeMarker}
+                      />
+                    )}
+                  </BoardView>
                 ) : (
                   !showSchematic && <div className="board-placeholder">{t("welcome.open")}</div>
                 )}
@@ -1161,6 +1309,9 @@ export function App() {
                   onSchematicJump={jumpInSchematic}
                   onRenameNet={renameModelNet}
                   namesRevision={namesRevision}
+                  pinnedNets={pinnedNets}
+                  onTogglePin={togglePinned}
+                  onShowMarker={showMarker}
                 />
               )}
             </>

@@ -255,3 +255,81 @@ function fitText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number):
   while (t.length > 1 && ctx.measureText(t + "…").width > maxWidth) t = t.slice(0, -1);
   return t + "…";
 }
+
+/** A board note as the labels layer draws it. */
+export interface MarkerMark {
+  id: string;
+  x: number;
+  y: number;
+  side: ViewSide;
+  text: string;
+}
+
+const MARKER_HEAD = 7;
+const MARKER_STEM = 16;
+const MARKER_TEXT = 34;
+
+/** Screen geometry of a marker: pin head above the spot, text bubble beside it. */
+export function markerLayout(ctx: CanvasRenderingContext2D | null, camera: Camera, m: MarkerMark) {
+  const p = camera.toScreen(m);
+  const head = { x: p.x, y: p.y - MARKER_STEM };
+  const text = m.text.length > MARKER_TEXT ? `${m.text.slice(0, MARKER_TEXT - 1)}…` : m.text;
+  const width = ctx ? ctx.measureText(text).width : text.length * 6.5;
+  const bubble = { x0: head.x + MARKER_HEAD + 4, y0: head.y - 10, x1: head.x + MARKER_HEAD + 14 + width, y1: head.y + 10 };
+  return { point: p, head, text, bubble };
+}
+
+/** The marker under a screen point, if any. */
+export function markerAt(camera: Camera, markers: readonly MarkerMark[], x: number, y: number): MarkerMark | undefined {
+  for (let i = markers.length - 1; i >= 0; i--) {
+    const l = markerLayout(null, camera, markers[i]);
+    if (Math.hypot(x - l.head.x, y - l.head.y) <= MARKER_HEAD + 4) return markers[i];
+    if (markers[i].text && x >= l.bubble.x0 && x <= l.bubble.x1 && y >= l.bubble.y0 && y <= l.bubble.y1) return markers[i];
+  }
+  return undefined;
+}
+
+/** Board notes as red pins with their text; the far side's ones faint. */
+export function drawMarkers(
+  ctx: CanvasRenderingContext2D,
+  camera: Camera,
+  markers: readonly MarkerMark[],
+  view: ViewSide,
+  palette: Palette,
+  dpr: number,
+  active: string | null,
+): void {
+  if (markers.length === 0) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.font = `600 12px ${FONT}`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  for (const m of markers) {
+    const l = markerLayout(ctx, camera, m);
+    ctx.globalAlpha = m.side === view ? 1 : 0.35;
+    ctx.strokeStyle = "#7f1d1d";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(l.point.x, l.point.y);
+    ctx.lineTo(l.head.x, l.head.y);
+    ctx.stroke();
+    ctx.fillStyle = m.id === active ? "#f59e0b" : "#dc2626";
+    ctx.beginPath();
+    ctx.arc(l.head.x, l.head.y, MARKER_HEAD, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    if (l.text) {
+      const b = l.bubble;
+      ctx.fillStyle = palette.labelHalo;
+      ctx.strokeStyle = "#dc2626";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0, 5);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = palette.label;
+      ctx.fillText(l.text, b.x0 + 5, l.head.y + 0.5);
+    }
+  }
+  ctx.globalAlpha = 1;
+}

@@ -13,6 +13,7 @@ export interface MenuActions {
   nextTab(): void;
   prevTab(): void;
   exportImage(): void;
+  exportPdf(): void;
   settings(): void;
   search(): void;
   searchSchematic(): void;
@@ -103,6 +104,7 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
         item("import", t("menu.import"), (a) => a.importToLibrary(), "CmdOrCtrl+Shift+I"),
         SEP,
         item("export-image", t("menu.exportImage"), (a) => a.exportImage(), "CmdOrCtrl+Shift+E"),
+        item("export-pdf", t("menu.exportPdf"), (a) => a.exportPdf(), "CmdOrCtrl+Alt+E"),
         SEP,
         item("close-tab", t("tabs.close"), (a) => a.closeBoard(), "CmdOrCtrl+W"),
       ],

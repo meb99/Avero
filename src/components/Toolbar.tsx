@@ -5,6 +5,7 @@ import { useI18n } from "../i18n";
 import {
   CloseIcon,
   FitIcon,
+  FlagIcon,
   FlipIcon,
   HelpIcon,
   LibraryIcon,
@@ -37,6 +38,9 @@ interface Props {
   onHelp(): void;
   onPick(selection: Selection): void;
   searchRef: Ref<HTMLInputElement>;
+  /** Next click on the board places a note. */
+  placingMarker: boolean;
+  onMarker(): void;
 }
 
 export function Toolbar(p: Props) {
@@ -91,6 +95,15 @@ export function Toolbar(p: Props) {
             </button>
             <button className="tool icon-only" onClick={() => p.onZoom(1.5)} title={t("toolbar.zoomIn")} aria-label={t("toolbar.zoomIn")}>
               <ZoomInIcon />
+            </button>
+            <button
+              className={`tool icon-only${p.placingMarker ? " active" : ""}`}
+              onClick={p.onMarker}
+              title={`${t("marker.place")} (M)`}
+              aria-label={t("marker.place")}
+              aria-pressed={p.placingMarker}
+            >
+              <FlagIcon />
             </button>
           </div>
           <div className="toolbar-search">

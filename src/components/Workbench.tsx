@@ -15,6 +15,7 @@ interface Props {
   tolerance: number;
   onTolerance(t: number): void;
   onSelect(selection: Selection, zoom: boolean): void;
+  onShowMarker(id: string): void;
   error: string | null;
 }
 
@@ -44,7 +45,7 @@ function NotesField({ value, onSave, placeholder }: { value: string; onSave(v: s
 }
 
 /** The "Measure" tab: repair cases, all measured nets, notes, import/export. */
-export function Workbench({ model, notes, update, tolerance, onTolerance, onSelect, error }: Props) {
+export function Workbench({ model, notes, update, tolerance, onTolerance, onSelect, onShowMarker, error }: Props) {
   const { t, lang } = useI18n();
   const [onlyDeviations, setOnlyDeviations] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -189,6 +190,24 @@ export function Workbench({ model, notes, update, tolerance, onTolerance, onSele
           </select>
         </div>
       </section>
+
+      {(notes.markers?.length ?? 0) > 0 && (
+        <section className="wb-section">
+          <h3>
+            {t("marker.list")} <span className="muted">{notes.markers!.length}</span>
+          </h3>
+          <ul className="marker-list">
+            {notes.markers!.map((m) => (
+              <li key={m.id}>
+                <button className="link" onClick={() => onShowMarker(m.id)}>
+                  {m.text || t("marker.empty")}
+                </button>
+                <span className="muted">{t(m.side === "top" ? "side.top" : "side.bottom")}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="wb-section">
         <label className="wb-label">{t("measure.boardNotes")}</label>

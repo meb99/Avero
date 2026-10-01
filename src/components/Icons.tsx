@@ -112,6 +112,13 @@ export const PinIcon = ({ size = 18 }: { size?: number }) => (
   </Icon>
 );
 
+export const FlagIcon = () => (
+  <Icon>
+    <path d="M5 17V3.5" />
+    <path d="M5 4h9l-2 3.25L14 10.5H5" />
+  </Icon>
+);
+
 export const ChevronLeftIcon = () => (
   <Icon size={16}>
     <path d="M12.5 4.5 7 10l5.5 5.5" />

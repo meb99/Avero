@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { SchematicDocument } from "../schematic/document";
 import { SchematicHits } from "./SchematicHits";
+import type { RGBA } from "../render/palette";
 import { visibleFrom, type BoardModel, type ViewSide } from "../core/board";
 import type { NetKind, Selection, Side } from "../core/types";
 import { formatLength, formatSize } from "../format";
@@ -22,6 +23,9 @@ interface Props {
   onSchematicJump?(text: string, hit: number): void;
   /** Gives a net its own name; returns an error message or null. */
   onRenameNet?(net: number, name: string): string | null;
+  /** Nets pinned in their own colors on the board. */
+  pinnedNets?: ReadonlyMap<number, RGBA>;
+  onTogglePin?(net: number): void;
 }
 
 /** Inline editor for a net's own name; empty gives the file name back. */
@@ -95,6 +99,8 @@ export function Details({
   schematic,
   onSchematicJump,
   onRenameNet,
+  pinnedNets,
+  onTogglePin,
 }: Props) {
   const { t } = useI18n();
   const u = settings.units;
@@ -299,6 +305,20 @@ export function Details({
             <span className="details-type">{t("details.net")}</span>
             <h2 className={`kind-text-${net.kind}`}>{net.name}</h2>
             {net.assumedGround && <p className="details-device">{t("details.assumedGround")}</p>}
+            {onTogglePin && (
+              <button
+                className={`small pin-toggle${pinnedNets?.has(selection.net) ? " on" : ""}`}
+                onClick={() => onTogglePin(selection.net)}
+                title={t("pin.hint")}
+                style={
+                  pinnedNets?.has(selection.net)
+                    ? { borderColor: `rgb(${pinnedNets.get(selection.net)!.slice(0, 3).join(" ")})` }
+                    : undefined
+                }
+              >
+                {pinnedNets?.has(selection.net) ? t("pin.unpin") : t("pin.pin")}
+              </button>
+            )}
             {onRenameNet && (
               <NetRename
                 key={selection.net}

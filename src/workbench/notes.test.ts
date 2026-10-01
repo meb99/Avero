@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addCase,
+  addMarker,
   boardKey,
   caseToReference,
   emptyNotes,
@@ -8,9 +9,11 @@ import {
   netStatuses,
   parseNotes,
   removeCase,
+  removeMarker,
   renameNet,
   setReading,
   setValue,
+  updateMarker,
 } from "./notes";
 
 describe("boardKey", () => {
@@ -110,5 +113,23 @@ describe("case to reference", () => {
     expect(n.reference.PP3V3.diode).toBe(0.45);
     expect(n.reference.PP3V3.voltage).toBe(3.3);
     expect(n.reference.PP1V8.voltage).toBe(1.8);
+  });
+});
+
+describe("board markers", () => {
+  it("adds, edits, saves and removes markers", () => {
+    const added = addMarker(emptyNotes("k", "k"), { id: "m1", x: 10, y: 20, side: "top", text: "Kurzschluss hier" });
+    let n = updateMarker(added, "m1", "Kurzschluss PP3V3");
+    const loaded = parseNotes(JSON.stringify(n))!;
+    expect(loaded.markers).toHaveLength(1);
+    expect(loaded.markers![0]).toMatchObject({ x: 10, y: 20, side: "top", text: "Kurzschluss PP3V3" });
+    n = removeMarker(loaded, "m1");
+    expect(n.markers).toEqual([]);
+  });
+
+  it("keeps both sides' markers when merging an import", () => {
+    const a = addMarker(emptyNotes("k", "k"), { id: "a", x: 1, y: 1, side: "top", text: "a" });
+    const b = addMarker(emptyNotes("k", "k"), { id: "b", x: 2, y: 2, side: "bottom", text: "b" });
+    expect(mergeNotes(a, b).markers?.map((m) => m.text)).toEqual(["a", "b"]);
   });
 });

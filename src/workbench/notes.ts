@@ -24,6 +24,17 @@ export interface RepairCase {
 /** Fields of a case that are edited as a whole. */
 export type CaseFields = Partial<Pick<RepairCase, "title" | "notes" | "status" | "device" | "serial" | "customer" | "photos">>;
 
+/** A note pinned to a spot on the board, e.g. "short to ground here". */
+export interface BoardMarker {
+  id: string;
+  /** Board position in mils. */
+  x: number;
+  y: number;
+  side: "top" | "bottom";
+  text: string;
+  created: string;
+}
+
 /**
  * Everything Avero remembers about a board: reference readings from a known
  * good board, repair cases and free notes. Stored per board key.
@@ -40,6 +51,8 @@ export interface BoardNotes {
   photos?: Partial<Record<PhotoSide, BoardPhoto>>;
   /** Own net names: name in the file -> name to show (Net10 -> GND). */
   netNames?: Record<string, string>;
+  /** Notes pinned to spots on the board. */
+  markers?: BoardMarker[];
   updated: string;
 }
 
@@ -197,6 +210,36 @@ export function renameNet(notes: BoardNotes, fileName: string, current: string, 
   };
 }
 
+/** Id for a new marker; made outside state updates so it stays the same. */
+export const newMarkerId = newId;
+
+export function addMarker(notes: BoardNotes, marker: Omit<BoardMarker, "created">): BoardNotes {
+  if (notes.markers?.some((m) => m.id === marker.id)) return notes;
+  return { ...notes, markers: [...(notes.markers ?? []), { ...marker, created: now() }], updated: now() };
+}
+
+export function updateMarker(notes: BoardNotes, id: string, text: string): BoardNotes {
+  return { ...notes, markers: (notes.markers ?? []).map((m) => (m.id === id ? { ...m, text } : m)), updated: now() };
+}
+
+export function removeMarker(notes: BoardNotes, id: string): BoardNotes {
+  return { ...notes, markers: (notes.markers ?? []).filter((m) => m.id !== id), updated: now() };
+}
+
+function parseMarkers(value: unknown): BoardMarker[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out = value.filter(
+    (m): m is BoardMarker =>
+      !!m &&
+      typeof m.id === "string" &&
+      Number.isFinite(m.x) &&
+      Number.isFinite(m.y) &&
+      (m.side === "top" || m.side === "bottom") &&
+      typeof m.text === "string",
+  );
+  return out.length ? out.map((m) => ({ ...m, created: typeof m.created === "string" ? m.created : new Date(0).toISOString() })) : undefined;
+}
+
 function parseNetNames(value: unknown): Record<string, string> | undefined {
   if (!value || typeof value !== "object") return undefined;
   const out: Record<string, string> = {};
@@ -228,6 +271,7 @@ export function parseNotes(json: string): BoardNotes | null {
       activeCase: typeof d.activeCase === "string" ? d.activeCase : null,
       photos: parsePhotos(d.photos),
       netNames: parseNetNames(d.netNames),
+      markers: parseMarkers(d.markers),
       updated: typeof d.updated === "string" ? d.updated : new Date(0).toISOString(),
     };
   } catch {
@@ -242,6 +286,12 @@ function mergeReadings(a: Record<string, Reading>, b: Record<string, Reading>): 
     if (!mine || (r.updated ?? "") > (mine.updated ?? "")) out[net] = r;
   }
   return out;
+}
+
+function mergeMarkers(mine: BoardMarker[] | undefined, theirs: BoardMarker[] | undefined): BoardMarker[] | undefined {
+  if (!mine && !theirs) return undefined;
+  const ids = new Set((mine ?? []).map((m) => m.id));
+  return [...(mine ?? []), ...(theirs ?? []).filter((m) => !ids.has(m.id))];
 }
 
 /**
@@ -264,6 +314,7 @@ export function mergeNotes(mine: BoardNotes, theirs: BoardNotes): BoardNotes {
     notes,
     reference: mergeReadings(mine.reference, theirs.reference),
     netNames: theirs.netNames || mine.netNames ? { ...theirs.netNames, ...mine.netNames } : undefined,
+    markers: mergeMarkers(mine.markers, theirs.markers),
     cases,
     activeCase: mine.activeCase ?? theirs.activeCase,
     updated: now(),

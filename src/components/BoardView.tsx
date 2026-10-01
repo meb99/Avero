@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from "react";
 import type { BoardModel, Hit, ViewSide } from "../core/board";
 import { Camera, lerpCamera } from "../core/camera";
 import type { Bounds, Point, Selection } from "../core/types";
 import { useI18n } from "../i18n";
-import { drawLabels } from "../render/labels";
-import type { Palette } from "../render/palette";
+import { drawLabels, drawMarkers, markerAt, type MarkerMark } from "../render/labels";
+import type { Palette, RGBA } from "../render/palette";
 import { BoardRenderer } from "../render/renderer";
 import { computeStyle } from "../render/style";
 import type { Settings } from "../settings";
@@ -33,6 +33,8 @@ export interface BoardViewHandle {
   zoomTo(bounds: Bounds): void;
   /** The current view with labels as a PNG. */
   snapshot(): Promise<Blob>;
+  /** Screen position (relative to the view) of a board point. */
+  toScreen(p: Point): Point;
   viewState(): ViewState;
 }
 
@@ -47,6 +49,14 @@ interface Props {
   hiddenLayers?: ReadonlySet<number>;
   /** Changes when net names change, so labels redraw. */
   namesRevision?: number;
+  /** Nets pinned in their own colors. */
+  pinnedNets?: ReadonlyMap<number, RGBA>;
+  /** Notes pinned to spots on the board. */
+  markers?: readonly MarkerMark[];
+  activeMarker?: string | null;
+  onMarkerClick?(id: string): void;
+  /** Drawn above the board, positioned by the caller (marker editor). */
+  children?: ReactNode;
   /** Measurement state by net index, drawn as dots on pins. */
   measured?: ReadonlyMap<number, NetStatus>;
   /** View to show a newly set board with, instead of fitting it. */
@@ -69,6 +79,8 @@ interface Hover {
 }
 
 const NO_LAYERS: ReadonlySet<number> = new Set();
+const NO_PINS: ReadonlyMap<number, RGBA> = new Map();
+const NO_MARKERS: readonly MarkerMark[] = [];
 const DRAG_THRESHOLD = 4;
 const FLY_MS = 280;
 
@@ -95,6 +107,11 @@ export function BoardView({
   palette,
   hiddenLayers = NO_LAYERS,
   namesRevision = 0,
+  pinnedNets = NO_PINS,
+  markers = NO_MARKERS,
+  activeMarker = null,
+  onMarkerClick,
+  children,
   measured,
   initialView,
   photo,
@@ -121,6 +138,8 @@ export function BoardView({
     palette,
     hiddenLayers,
     measured,
+    markers,
+    activeMarker,
     highlightedNet: undefined as number | undefined,
   });
   const [hover, setHover] = useState<Hover | null>(null);
@@ -149,6 +168,7 @@ export function BoardView({
       dprRef.current,
       s.measured,
     );
+    drawMarkers(labels, cameraRef.current, s.markers, s.side, s.palette, dprRef.current, s.activeMarker);
   }, []);
 
   const requestDraw = useCallback(() => {
@@ -220,6 +240,9 @@ export function BoardView({
         return new Promise<Blob>((resolve, reject) =>
           out.toBlob((b) => (b ? resolve(b) : reject(new Error("PNG encoding failed"))), "image/png"),
         );
+      },
+      toScreen(p: Point) {
+        return cameraRef.current.toScreen(p);
       },
       viewState() {
         const { centerX, centerY, scale } = cameraRef.current;
@@ -304,15 +327,22 @@ export function BoardView({
         showVias: settings.showVias,
         showTraces: settings.showTraces,
         hiddenLayers,
+        pinnedNets,
         dimUnselected: settings.dimUnselected,
       },
       palette,
     );
     Object.assign(stateRef.current, { model, side, selection, settings, palette, hiddenLayers, highlightedNet: style.highlightedNet });
+    // pinnedNets: colors of pins and tracks.
     rendererRef.current?.setStyle(style, palette);
     requestDraw();
     // namesRevision: net names live in the model and are drawn as labels.
-  }, [model, side, selection, settings, palette, hiddenLayers, namesRevision, requestDraw, rendererVersion]);
+  }, [model, side, selection, settings, palette, hiddenLayers, pinnedNets, namesRevision, requestDraw, rendererVersion]);
+
+  useEffect(() => {
+    Object.assign(stateRef.current, { markers, activeMarker });
+    requestDraw();
+  }, [markers, activeMarker, requestDraw]);
 
   // Photo of the real board: new image or alignment re-uploads, opacity only redraws.
   const photoImage = photo?.image;
@@ -460,6 +490,11 @@ export function BoardView({
         onPointPick(snapped ? { x: snapped.x, y: snapped.y } : cameraRef.current.toWorld(p));
         return;
       }
+      const marker = onMarkerClick && markerAt(cameraRef.current, stateRef.current.markers, p.x, p.y);
+      if (marker) {
+        onMarkerClick!(marker.id);
+        return;
+      }
       onSelect(hitToSelection(hitAt(p)), false);
     }
   };
@@ -544,6 +579,7 @@ export function BoardView({
           {formatLength(cursor.x, settings.units)} · {formatLength(cursor.y, settings.units)}
         </div>
       )}
+      {children}
     </div>
   );
 }

@@ -2261,3 +2261,100 @@ button.danger {
 .case-status.status-waiting {
   color: #b26a00;
 }
+
+/* Board notes and pinned nets */
+
+.marker-editor {
+  position: absolute;
+  z-index: 5;
+  width: 260px;
+  padding: 8px;
+  border: 1px solid #dc2626;
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.marker-editor textarea {
+  width: 100%;
+  resize: vertical;
+  font: inherit;
+}
+
+.marker-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.marker-editor-actions .danger {
+  margin-right: auto;
+}
+
+.placing-hint {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(220, 38, 38, 0.92);
+  color: #fff;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.pinned-legend {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pinned-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.pinned-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+}
+
+.pinned-chip .tool {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+}
+
+.pin-toggle {
+  margin-top: 6px;
+  border-width: 2px;
+}
+
+.marker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+}
+
+.marker-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+}

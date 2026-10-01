@@ -140,6 +140,16 @@ export const LIGHT: Palette = {
   selectionRing: "#111111",
 };
 
+/** Colors for nets pinned at the same time, in pinning order. */
+export const PIN_COLORS: readonly RGBA[] = [
+  [236, 72, 153, 255],
+  [34, 197, 94, 255],
+  [59, 130, 246, 255],
+  [168, 85, 247, 255],
+  [6, 182, 212, 255],
+  [249, 115, 22, 255],
+];
+
 /** Color of trace layer `index`. */
 export function layerColor(p: Palette, layers: readonly Layer[], index: number): RGBA {
   const layer = layers[index];
