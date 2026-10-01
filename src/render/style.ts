@@ -1,4 +1,4 @@
-import { visibleFrom, type BoardModel, type ViewSide } from "../core/board";
+import { markerSize, visibleFrom, type BoardModel, type ViewSide } from "../core/board";
 import type { NetKind, Selection } from "../core/types";
 import { layerColor, type Palette, type RGBA } from "./palette";
 
@@ -18,6 +18,8 @@ export interface BoardStyle {
   pinColors: Uint8Array;
   testPointColors: Uint8Array;
   traceColors: Uint8Array;
+  /** Per part; only used for parts drawn as markers. */
+  markerColors: Uint8Array;
   partFillColors: Uint8Array;
   partOutlineColors: Uint8Array;
   partOutlineWidths: Float32Array;
@@ -130,6 +132,15 @@ export function computeStyle(
     }
   }
 
+  const markerColors = new Uint8Array(parts.length * 4);
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (!part.marker) continue;
+    const near = visibleFrom(part.side, view);
+    if (i === selectedPart) put(markerColors, i, palette.partSelectedOutline, 1);
+    else put(markerColors, i, markerSize(part) > 4 ? palette.markerChip : palette.markerSmall, near ? dim : options.ghostOtherSide ? GHOST_ALPHA : 0);
+  }
+
   const partFillColors = new Uint8Array(parts.length * 4);
   const partOutlineColors = new Uint8Array(parts.length * 4);
   const partOutlineWidths = new Float32Array(parts.length);
@@ -151,5 +162,5 @@ export function computeStyle(
     }
   }
 
-  return { pinColors, testPointColors, traceColors, partFillColors, partOutlineColors, partOutlineWidths, highlightedNet: net, selectedPart };
+  return { pinColors, testPointColors, traceColors, markerColors, partFillColors, partOutlineColors, partOutlineWidths, highlightedNet: net, selectedPart };
 }

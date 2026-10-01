@@ -27,6 +27,8 @@ export interface Part {
   outline: Point[];
   bounds: Bounds;
   device?: string;
+  /** Only the position is known: drawn as a marker, not as a body. */
+  marker?: boolean;
 }
 
 export interface Pin {

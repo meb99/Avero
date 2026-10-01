@@ -439,6 +439,7 @@ VIA VIASTACK_1 52000 51000 ALL 0 VIA_1\n$ENDROUTES\n";
     assert_eq!((net.traces.len(), net.test_points.len()), (3, 1));
     let c = part(&b, "C-0402");
     assert!(c.outline.len() == 4 && c.bounds.min_x < 52000.0 && c.bounds.max_x > 52000.0);
+    assert!(c.marker);
 }
 
 fn cst_fixture() -> Vec<u8> {

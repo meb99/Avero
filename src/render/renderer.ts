@@ -1,4 +1,4 @@
-import type { BoardModel } from "../core/board";
+import { markerSize, partCenter, type BoardModel } from "../core/board";
 import type { Camera } from "../core/camera";
 import type { Point } from "../core/types";
 import type { Palette } from "./palette";
@@ -56,13 +56,15 @@ uniform mat3 u_world;
 uniform vec2 u_viewport;
 uniform float u_scale;
 uniform float u_minRadius;
+uniform float u_dpr;
 out vec2 v_local;
 out vec4 v_color;
 flat out float v_shape;
 out float v_radius;
 void main() {
   vec2 c = (u_world * vec3(a_pad.xy, 1.0)).xy;
-  float r = max(a_pad.z * u_scale, u_minRadius);
+  // Negative radii are CSS pixels (markers), positive ones board units.
+  float r = a_pad.z < 0.0 ? -a_pad.z * u_dpr : max(a_pad.z * u_scale, u_minRadius);
   float extent = r + 1.5;
   v_local = a_corner * extent;
   v_radius = r;
@@ -168,6 +170,9 @@ export class BoardRenderer {
   private pins?: InstanceSet;
   private testPoints?: InstanceSet;
   private traces?: InstanceSet;
+  private markers?: InstanceSet;
+  /** Part index per marker instance. */
+  private markerOwner = new Uint32Array(0);
   /** Trace index per instance: inner layers drawn first, top last. */
   private traceOrder = new Uint32Array(0);
   private partLines?: InstanceSet;
@@ -189,7 +194,7 @@ export class BoardRenderer {
     if (!gl) throw new Error("WebGL 2 is not available");
     this.gl = gl;
     this.lineProgram = this.compile(LINE_VS, COLOR_FS, ["u_world", "u_viewport", "u_dpr", "u_scale"]);
-    this.padProgram = this.compile(PAD_VS, PAD_FS, ["u_world", "u_viewport", "u_scale", "u_minRadius"]);
+    this.padProgram = this.compile(PAD_VS, PAD_FS, ["u_world", "u_viewport", "u_scale", "u_minRadius", "u_dpr"]);
     this.fillProgram = this.compile(FILL_VS, COLOR_FS, ["u_world", "u_viewport"]);
     this.imageProgram = this.compile(IMAGE_VS, IMAGE_FS, ["u_world", "u_viewport", "u_tex", "u_opacity"]);
     this.quad = this.staticBuffer(new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]));
@@ -303,9 +308,22 @@ export class BoardRenderer {
     this.traces = this.lineSet(traceData, traces.length);
     upload(gl, this.traces.widths!, traceWidths);
 
+    const markerData: number[] = [];
+    const markerOwner: number[] = [];
+    parts.forEach((p, i) => {
+      if (!p.marker) return;
+      const c = partCenter(p);
+      const size = markerSize(p);
+      markerData.push(c.x, c.y, -size, size > 4 ? SHAPE_SQUARE : SHAPE_CIRCLE);
+      markerOwner.push(i);
+    });
+    this.markerOwner = Uint32Array.from(markerOwner);
+    this.markers = this.padSet(new Float32Array(markerData), markerOwner.length);
+
     const segs: number[] = [];
     const owner: number[] = [];
     parts.forEach((p, i) => {
+      if (p.marker) return;
       const o = p.outline;
       for (let k = 0; k < o.length; k++) {
         const a = o[k];
@@ -327,6 +345,7 @@ export class BoardRenderer {
     const tri: number[] = [];
     const triOwner: number[] = [];
     parts.forEach((p, i) => {
+      if (p.marker) return;
       const o = p.outline;
       for (let k = 1; k + 1 < o.length; k++) {
         tri.push(o[0].x, o[0].y, o[k].x, o[k].y, o[k + 1].x, o[k + 1].y);
@@ -369,6 +388,11 @@ export class BoardRenderer {
     if (!this.pins || !this.testPoints || !this.partLines || !this.partFill || !this.boardLines) return;
     upload(gl, this.pins.colors, style.pinColors);
     upload(gl, this.testPoints.colors, style.testPointColors);
+    if (this.markers && this.markers.count > 0) {
+      const colors = new Uint8Array(this.markerOwner.length * 4);
+      this.markerOwner.forEach((part, i) => colors.set(style.markerColors.subarray(part * 4, part * 4 + 4), i * 4));
+      upload(gl, this.markers.colors, colors);
+    }
     if (this.traces && this.traces.count > 0) {
       const colors = new Uint8Array(this.traceOrder.length * 4);
       this.traceOrder.forEach((ti, i) => colors.set(style.traceColors.subarray(ti * 4, ti * 4 + 4), i * 4));
@@ -546,7 +570,8 @@ export class BoardRenderer {
     gl.uniform2f(pad.uniforms.u_viewport, w, h);
     gl.uniform1f(pad.uniforms.u_scale, camera.scale * dpr);
     gl.uniform1f(pad.uniforms.u_minRadius, 1.2 * dpr);
-    for (const set of [this.pins, this.testPoints]) {
+    gl.uniform1f(pad.uniforms.u_dpr, dpr);
+    for (const set of [this.pins, this.testPoints, this.markers]) {
       if (set && set.count > 0) {
         gl.bindVertexArray(set.vao);
         gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, set.count);
@@ -569,7 +594,7 @@ export class BoardRenderer {
     for (const v of this.vaos) gl.deleteVertexArray(v);
     this.buffers = [];
     this.vaos = [];
-    this.pins = this.testPoints = this.traces = this.partLines = this.boardLines = undefined;
+    this.pins = this.testPoints = this.traces = this.markers = this.partLines = this.boardLines = undefined;
     this.partFill = undefined;
     this.boardFill = undefined;
   }

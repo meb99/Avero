@@ -32,11 +32,13 @@ pub(crate) struct RawPart {
     pub pins: Vec<RawPin>,
     /// Explicit body outline from the file, if any.
     pub outline: Option<Vec<Point>>,
+    /// Only the position is known; `outline` is a small square around it.
+    pub marker: bool,
 }
 
 impl RawPart {
     pub fn new(name: impl Into<String>, side: Side, mount: Mount) -> Self {
-        Self { name: name.into(), side, mount, device: None, pins: Vec::new(), outline: None }
+        Self { name: name.into(), side, mount, device: None, pins: Vec::new(), outline: None, marker: false }
     }
 }
 
@@ -149,6 +151,7 @@ impl RawBoard {
                 outline,
                 bounds,
                 device: raw.device.filter(|d| !d.is_empty()),
+                marker: raw.marker,
             });
         }
 

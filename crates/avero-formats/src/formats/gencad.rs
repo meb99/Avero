@@ -534,6 +534,7 @@ impl Parser {
                     Point::new(x + r, y + r),
                     Point::new(x - r, y + r),
                 ]);
+                part.marker = true;
                 board.parts.push(part);
                 continue;
             }

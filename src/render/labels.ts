@@ -1,4 +1,4 @@
-import { visibleFrom, type BoardModel, type ViewSide } from "../core/board";
+import { markerSize, partCenter, visibleFrom, type BoardModel, type ViewSide } from "../core/board";
 import type { Camera } from "../core/camera";
 import type { Selection } from "../core/types";
 import type { NetStatus } from "../workbench/notes";
@@ -109,6 +109,12 @@ export function drawLabels(
     model.partIndex.query(visible, (i) => {
       const part = model.parts[i];
       if (!visibleFrom(part.side, view)) return;
+      if (part.marker) {
+        // Size unknown: chips are always named, small parts once zoomed in.
+        const chip = markerSize(part) > 4;
+        if (chip || s >= 1.2) candidates.push({ i, w: chip ? 36 : 22, h: chip ? 36 : 22 });
+        return;
+      }
       const b = part.bounds;
       const sideways = (camera.rotation & 1) === 1;
       const w = (sideways ? b.maxY - b.minY : b.maxX - b.minX) * s;
@@ -138,7 +144,7 @@ export function drawLabels(
       }
       // Try the middle of the part first, then just above and below it.
       const selected = i === model.selectedPart(selection);
-      const inside = h >= size * 1.4 && tw <= w * 1.6;
+      const inside = !part.marker && h >= size * 1.4 && tw <= w * 1.6;
       const spots = inside ? [c.y, c.y - h / 2 - size * 0.7, c.y + h / 2 + size * 0.7] : [c.y - h / 2 - size * 0.7, c.y + h / 2 + size * 0.7];
       let y: number | undefined;
       for (const candidate of spots) {
@@ -222,6 +228,17 @@ function drawSelectionRing(
   let target: { x: number; y: number; radius: number } | undefined;
   if (selection.kind === "pin") target = model.pins[selection.pin];
   else if (selection.kind === "testPoint") target = model.testPoints[selection.testPoint];
+  else if (selection.kind === "part" && model.parts[selection.part].marker) {
+    // Markers have a fixed size on screen, so does their ring.
+    const part = model.parts[selection.part];
+    const p = camera.toScreen(partCenter(part));
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = palette.selectionRing;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, markerSize(part) * 1.5 + 5, 0, Math.PI * 2);
+    ctx.stroke();
+    return;
+  }
   if (!target) return;
   const p = camera.toScreen(target);
   const r = Math.max(target.radius * camera.scale, 1.2) + 4;

@@ -26,6 +26,19 @@ export type Hit =
   | { kind: "trace"; trace: number; net: number }
   | { kind: "part"; part: number };
 
+/** Footprint names of chips and connectors, as opposed to small parts. */
+const CHIP_FOOTPRINT = /^(BGA|LGA|QFN|QFP|DFN|SON|SOP|SOIC|TSSOP|SSOP|SOT|CSP|WLCSP|IC|U\d|CPU|SOC|PMIC|J|CN|CON|USB|HDMI|SIM|SD)/i;
+
+/** Marker size in CSS pixels for parts whose size is unknown. */
+export function markerSize(part: Part): number {
+  return CHIP_FOOTPRINT.test(part.name) ? 7 : 3;
+}
+
+export function partCenter(part: Part): Point {
+  const b = part.bounds;
+  return { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
+}
+
 /** A loaded board plus the lookup structures the UI needs. */
 export class BoardModel {
   readonly partIndex: GridIndex;
@@ -233,7 +246,10 @@ export class BoardModel {
         return undefined;
       case "part": {
         // Small parts get some surroundings, like single pins.
-        const b = this.parts[sel.part].bounds;
+        const part = this.parts[sel.part];
+        const b = part.bounds;
+        // Markers have no size: show the neighbourhood a chip would cover.
+        if (part.marker) return padBounds(b, markerSize(part) > 4 ? 450 : 150);
         return padBounds(b, Math.max((b.maxX - b.minX + b.maxY - b.minY) * 0.1, 120));
       }
       // Single pads get some surroundings so you can see where you are.
@@ -292,6 +308,23 @@ export class BoardModel {
         best = { kind: "testPoint", testPoint: i };
       }
     });
+    if (best) return best;
+
+    // Markers have a fixed size on screen; `tolerance` is 4 pixels.
+    const px = tolerance / 4;
+    this.partIndex.query(
+      { minX: p.x - 12 * px, minY: p.y - 12 * px, maxX: p.x + 12 * px, maxY: p.y + 12 * px },
+      (i) => {
+        const part = this.parts[i];
+        if (!part.marker || !visibleFrom(part.side, view)) return;
+        const c = partCenter(part);
+        const d = Math.hypot(c.x - p.x, c.y - p.y) - markerSize(part) * px;
+        if (d <= tolerance && d < bestDist) {
+          bestDist = d;
+          best = { kind: "part", part: i };
+        }
+      },
+    );
     if (best) return best;
 
     if (showTraces) {

@@ -133,6 +133,9 @@ pub struct Part {
     /// Device, value or manufacturer code, when the file provides one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub device: Option<String>,
+    /// Only the position is known (no pins, no body): drawn as a marker.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub marker: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

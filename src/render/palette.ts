@@ -23,6 +23,9 @@ export interface Palette {
   ratsnest: RGBA;
   nail: RGBA;
   via: RGBA;
+  /** Markers of parts with known position only: chips and small parts. */
+  markerChip: RGBA;
+  markerSmall: RGBA;
   /** Copper tracks of the side in view. */
   trace: RGBA;
   /** Trace colors: top, bottom, then inner layers in turn. */
@@ -55,6 +58,8 @@ export const DARK: Palette = {
   nail: [255, 167, 38, 255],
   via: [120, 144, 156, 255],
   trace: [196, 128, 64, 150],
+  markerChip: [245, 245, 245, 255],
+  markerSmall: [176, 190, 197, 230],
   layerTop: [239, 83, 80, 255],
   layerBottom: [66, 133, 244, 255],
   layerInner: [
@@ -93,6 +98,8 @@ export const LIGHT: Palette = {
   nail: [230, 81, 0, 255],
   via: [120, 144, 156, 255],
   trace: [184, 106, 40, 140],
+  markerChip: [33, 33, 33, 255],
+  markerSmall: [84, 110, 122, 230],
   layerTop: [211, 47, 47, 255],
   layerBottom: [21, 101, 192, 255],
   layerInner: [
