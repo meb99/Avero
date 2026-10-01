@@ -36,3 +36,16 @@ Die meisten Formate speichern nur Pin-Mittelpunkte. `builder.rs` ergänzt deshal
 - **Bauteilumriss:** Box entlang der Achse bei 2 Pins, sonst die engste von zwei Drehlagen.
 - **Netzart** aus dem Namen: `GND`, `PGND`, `VSS` → Masse; `PP3V3_S5`, `+3VALW`, `VCC_*`, `1V8` → Versorgung; `NC`, leer → nicht verbunden.
 - **Board-Umriss** aus losen Segmenten (Endpunkte werden verkettet) oder, wenn keiner da ist, aus den Pins.
+
+## XZZ → GenCAD in der Bibliothek
+
+Seit 0.8.0 bietet die Bibliothek eine native Konvertierung von XZZ-`.pcb` nach
+GenCAD 1.4 (`UNITS THOU`). Sie liest DES- oder unverschlüsselte Bauteilblöcke,
+kurze und lange Pin-Footer, Padgrößen, Rotation, Netzzuordnungen, Kontur,
+Leiterbahnen, Vias und Layer. Ungültige Bauteildaten werden nicht als leere CAD
+exportiert. Ein kompatibler Standardschlüssel ist für diesen Konvertierungsweg
+enthalten; der direkte XZZ-Reader nutzt weiterhin den Schlüssel aus den
+Einstellungen. Ein eingetragener Schlüssel überschreibt auch beim Konvertieren
+den Standard. Alle Ausgaben werden vor dem Speichern mit Averos GenCAD-Reader
+geprüft. Vorhandene Dateien werden nicht überschrieben und gleiche Ausgaben
+werden erkannt. Tests im Repository verwenden ausschließlich synthetische Daten.

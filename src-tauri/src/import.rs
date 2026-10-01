@@ -392,6 +392,45 @@ pub fn import(root: &Path, paths: &[PathBuf], folder: Option<&str>) -> ImportRes
     result
 }
 
+/// Stores a generated GenCAD in the same folders as ordinary imports. Returns
+/// the existing path for identical content, including a previously renamed file.
+/// Exclusive creation prevents another import from being overwritten.
+pub(crate) fn import_generated(
+    root: &Path,
+    name: String,
+    bytes: Vec<u8>,
+    folder: Option<&str>,
+) -> Result<(PathBuf, bool), String> {
+    use std::io::Write;
+    let source = Source { name, context: String::new(), data: Data::Bytes(bytes) };
+    let dir = root.join(folder.and_then(sanitize_folder).unwrap_or_else(|| board_folder(&source)));
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())?.filter_map(Result::ok) {
+        let path = entry.path();
+        if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("cad"))
+            && same_content(&path, &source.data)
+        {
+            return Ok((path, true));
+        }
+    }
+    let Data::Bytes(bytes) = source.data else { unreachable!() };
+    let mut target = dir.join(&source.name);
+    loop {
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&target) {
+            Ok(mut file) => {
+                if let Err(e) = file.write_all(&bytes).and_then(|_| file.flush()) {
+                    drop(file);
+                    let _ = std::fs::remove_file(&target);
+                    return Err(format!("{}: {e}", target.display()));
+                }
+                return Ok((target, false));
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => target = free_name(&dir, &source.name),
+            Err(e) => return Err(format!("{}: {e}", target.display())),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -422,6 +461,31 @@ mod tests {
         walk(root, root, &mut out);
         out.sort();
         out
+    }
+
+    #[test]
+    fn generated_files_keep_names_and_skip_duplicates_without_overwriting() {
+        let root = temp("converted");
+        let bytes = b"$HEADER\nGENCAD 1.4\n$ENDHEADER\n".to_vec();
+        let (first, duplicate) =
+            import_generated(&root, "Board.cad".into(), bytes.clone(), Some("Nintendo/Switch")).unwrap();
+        assert!(!duplicate);
+        assert!(first.ends_with("Nintendo/Switch/Board.cad"));
+        let renamed = first.with_file_name("My board.cad");
+        std::fs::rename(&first, &renamed).unwrap();
+        let (same, duplicate) =
+            import_generated(&root, "Board.cad".into(), bytes.clone(), Some("Nintendo/Switch")).unwrap();
+        assert!(duplicate);
+        assert_eq!(same, renamed);
+        let old = renamed.with_file_name("Board.cad");
+        std::fs::write(&old, b"existing board").unwrap();
+        let (different, duplicate) =
+            import_generated(&root, "Board.cad".into(), b"different board".to_vec(), Some("Nintendo/Switch"))
+                .unwrap();
+        assert!(!duplicate);
+        assert!(different.ends_with("Board (2).cad"));
+        assert_eq!(std::fs::read(old).unwrap(), b"existing board");
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

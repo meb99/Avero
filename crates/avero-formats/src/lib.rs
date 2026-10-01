@@ -11,6 +11,7 @@
 //! ```
 
 mod builder;
+pub mod convert;
 pub mod demo;
 pub mod formats;
 mod infer;
@@ -96,7 +97,8 @@ impl ParseError {
 /// Settings some formats need.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ParseOptions {
-    /// DES key for XinZhiZao `.pcb` files. Avero does not ship one.
+    /// DES key for the direct XinZhiZao reader. The separate converter has
+    /// its own compatibility default.
     pub xzz_key: Option<u64>,
     /// RC6 key schedule for ASUS `.fz` files. Avero does not ship one.
     pub fz_key: Option<formats::FzKey>,

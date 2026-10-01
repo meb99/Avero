@@ -1471,6 +1471,26 @@ button.danger {
   gap: 6px;
 }
 
+.library-convert {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.library-convert h3 { margin: 0 0 4px; font-size: 13px; }
+.library-convert p { margin: 0; font-size: 12px; line-height: 1.5; }
+.conversion-status, .conversion-file, .library-convert > .library-warn { grid-column: 1 / -1; }
+.conversion-status:empty { display: none; }
+.conversion-status { font-size: 12px; overflow-wrap: anywhere; }
+.conversion-file { display: flex; align-items: center; gap: 12px; font-size: 12px; }
+.conversion-file span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.conversion-results { grid-column: 1 / -1; display: grid; gap: 6px; max-height: 150px; overflow-y: auto; }
+.conversion-results:empty { display: none; }
+
 .folder-chip {
   display: inline-flex;
   align-items: center;
