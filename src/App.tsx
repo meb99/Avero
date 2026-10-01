@@ -45,7 +45,7 @@ import { clearRecent, loadRecent, loadSettings, rememberRecent, saveSettings, ty
 import { useTheme } from "./theme";
 import { dailyCheck, fetchUpdate, type Update } from "./updates";
 import { pickImport, type LibraryEntry, type LibraryFile } from "./workbench/library";
-import { netStatuses, setPhoto, type NetStatus } from "./workbench/notes";
+import { boardKey, netStatuses, renameNet, setPhoto, type NetStatus } from "./workbench/notes";
 import { alignPhoto } from "./workbench/photo";
 import { loadPhotoImage } from "./workbench/photoImage";
 import { useBoardNotes } from "./workbench/store";
@@ -191,6 +191,16 @@ export function App() {
   );
   const { notes, update: updateNotes, error: notesError } = useBoardNotes(source);
 
+  // Own net names (Net10 -> GND) live in the board notes and are applied to
+  // the model in place; the revision makes name-sorted views refresh.
+  const [namesRevision, setNamesRevision] = useState(0);
+  const notesForModel = notes && source && notes.key === boardKey(source) ? notes : null;
+  const netNames = notesForModel?.netNames;
+  useEffect(() => {
+    if (model && notesForModel && model.applyNetNames(netNames ?? {})) setNamesRevision((r) => r + 1);
+    // notesForModel only matters as "the notes of this board have loaded".
+  }, [model, netNames, notesForModel !== null]);
+
   // --- board photos ----------------------------------------------------------
 
   const [aligning, setAligning] = useState<PhotoAlignment | null>(null);
@@ -280,7 +290,25 @@ export function App() {
       if (net !== undefined) out.set(net, status);
     }
     return out;
-  }, [model, notes, settings.tolerance]);
+  }, [model, notes, settings.tolerance, namesRevision]);
+
+  const renameModelNet = useCallback(
+    (net: number, name: string): string | null => {
+      if (!model || !notesForModel) return null;
+      const target = name.trim() || model.fileNetName(net);
+      const other = model.findNet(target);
+      if (other !== undefined && other !== net) return t("details.nameTaken", { name: target });
+      updateNotes((n) => renameNet(n, model.fileNetName(net), model.nets[net].name, target));
+      return null;
+    },
+    [model, notesForModel, updateNotes, t],
+  );
+
+  // A page in the occurrence list: show the schematic there.
+  const jumpInSchematic = useCallback((text: string, hit: number) => {
+    setSchematicVisible(true);
+    setFocus({ text, jump: true, hit, nonce: ++focusNonce.current });
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -581,7 +609,8 @@ export function App() {
       parts: model ? model.parts.map((p) => p.name.toUpperCase()) : [],
       nets: model ? model.nets.filter((n) => n.kind !== "unconnected").map((n) => n.name.toUpperCase()) : [],
     };
-  }, [schematic, model]);
+    // namesRevision: own net names change the model's names in place.
+  }, [schematic, model, namesRevision]);
   const linkRef = useRef({ linkedDoc, focus, pickName });
   linkRef.current = { linkedDoc, focus, pickName };
 
@@ -1044,6 +1073,7 @@ export function App() {
                     settings={settings}
                     palette={palette}
                     hiddenLayers={hiddenLayers}
+                    namesRevision={namesRevision}
                     measured={measured}
                     initialView={initialView}
                     photo={photoLayer}
@@ -1127,6 +1157,10 @@ export function App() {
                   palette={palette}
                   hiddenLayers={hiddenLayers}
                   onHiddenLayers={(hidden) => setLayerChoice({ model, hidden })}
+                  schematic={schematic}
+                  onSchematicJump={jumpInSchematic}
+                  onRenameNet={renameModelNet}
+                  namesRevision={namesRevision}
                 />
               )}
             </>

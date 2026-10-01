@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import type { SchematicDocument } from "../schematic/document";
+import { SchematicHits } from "./SchematicHits";
 import { visibleFrom, type BoardModel, type ViewSide } from "../core/board";
 import type { NetKind, Selection, Side } from "../core/types";
 import { formatLength, formatSize } from "../format";
@@ -15,6 +17,54 @@ interface Props {
   notes: BoardNotes | null;
   updateNotes(change: (n: BoardNotes) => BoardNotes): void;
   onSelect(selection: Selection, zoom: boolean): void;
+  /** Open schematic, for the list of occurrences. */
+  schematic?: SchematicDocument | null;
+  onSchematicJump?(text: string, hit: number): void;
+  /** Gives a net its own name; returns an error message or null. */
+  onRenameNet?(net: number, name: string): string | null;
+}
+
+/** Inline editor for a net's own name; empty gives the file name back. */
+function NetRename({ current, fileName, onSave }: { current: string; fileName: string; onSave(name: string): string | null }) {
+  const { t } = useI18n();
+  const [text, setText] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const done = () => {
+    if (text === null) return;
+    const message = onSave(text);
+    setError(message);
+    if (!message) setText(null);
+  };
+  if (text === null)
+    return (
+      <div className="net-rename">
+        <button className="small" onClick={() => setText(current === fileName ? "" : current)}>
+          {t("details.renameNet")}
+        </button>
+        {current !== fileName && <span className="muted">{t("details.fileName", { name: fileName })}</span>}
+      </div>
+    );
+  return (
+    <div className="net-rename">
+      <input
+        autoFocus
+        value={text}
+        placeholder={fileName}
+        aria-label={t("details.renameNet")}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={done}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") {
+            setError(null);
+            setText(null);
+          }
+        }}
+      />
+      <span className="muted">{t("details.renameHint")}</span>
+      {error && <span className="wb-error">{error}</span>}
+    </div>
+  );
 }
 
 const sideKey: Record<Side, MessageKey> = { top: "side.top", bottom: "side.bottom", both: "side.both" };
@@ -34,7 +84,18 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export function Details({ model, selection, side, settings, notes, updateNotes, onSelect }: Props) {
+export function Details({
+  model,
+  selection,
+  side,
+  settings,
+  notes,
+  updateNotes,
+  onSelect,
+  schematic,
+  onSchematicJump,
+  onRenameNet,
+}: Props) {
   const { t } = useI18n();
   const u = settings.units;
 
@@ -123,6 +184,9 @@ export function Details({ model, selection, side, settings, notes, updateNotes, 
     );
   };
 
+  const hits = (names: string[]) =>
+    schematic && onSchematicJump ? <SchematicHits doc={schematic} names={names} onJump={onSchematicJump} /> : null;
+
   switch (selection.kind) {
     case "none":
       return <p className="details-empty">{t("details.empty")}</p>;
@@ -148,6 +212,7 @@ export function Details({ model, selection, side, settings, notes, updateNotes, 
             </Row>
             <Row label={t("details.size")}>{formatSize(b.maxX - b.minX, b.maxY - b.minY, u)}</Row>
           </dl>
+          {hits([part.name])}
           <section className="details-section">
             <h3>{t("details.pins")}</h3>
             <table className="pin-table">
@@ -234,6 +299,14 @@ export function Details({ model, selection, side, settings, notes, updateNotes, 
             <span className="details-type">{t("details.net")}</span>
             <h2 className={`kind-text-${net.kind}`}>{net.name}</h2>
             {net.assumedGround && <p className="details-device">{t("details.assumedGround")}</p>}
+            {onRenameNet && (
+              <NetRename
+                key={selection.net}
+                current={net.name}
+                fileName={model.fileNetName(selection.net)}
+                onSave={(name) => onRenameNet(selection.net, name)}
+              />
+            )}
           </header>
           <dl className="props">
             <Row label={t("details.kind")}>{t(kindKey[net.kind])}</Row>
@@ -245,6 +318,7 @@ export function Details({ model, selection, side, settings, notes, updateNotes, 
             )}
           </dl>
           {measure(selection.net)}
+          {hits([net.name, model.fileNetName(selection.net)])}
           {netMembers(selection.net)}
         </div>
       );

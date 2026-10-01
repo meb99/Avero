@@ -25,6 +25,8 @@ export interface BoardNotes {
   activeCase: string | null;
   /** Photos of the real board per side, aligned to the boardview. */
   photos?: Partial<Record<PhotoSide, BoardPhoto>>;
+  /** Own net names: name in the file -> name to show (Net10 -> GND). */
+  netNames?: Record<string, string>;
   updated: string;
 }
 
@@ -140,6 +142,37 @@ function parsePhotos(value: unknown): BoardNotes["photos"] {
   return top || bottom ? { ...(top && { top }), ...(bottom && { bottom }) } : undefined;
 }
 
+/**
+ * Gives a net its own name (or the file name back, when `to` is empty or
+ * equal to it). Readings move along, so nothing measured gets lost.
+ */
+export function renameNet(notes: BoardNotes, fileName: string, current: string, to: string): BoardNotes {
+  const target = to.trim() || fileName;
+  if (target === current) return notes;
+  const move = (readings: Record<string, Reading>) => {
+    if (!(current in readings)) return readings;
+    const { [current]: moved, ...rest } = readings;
+    return { ...rest, [target]: { ...rest[target], ...moved } };
+  };
+  const netNames = { ...notes.netNames };
+  if (target === fileName) delete netNames[fileName];
+  else netNames[fileName] = target;
+  return {
+    ...notes,
+    netNames,
+    reference: move(notes.reference),
+    cases: notes.cases.map((c) => ({ ...c, readings: move(c.readings) })),
+    updated: now(),
+  };
+}
+
+function parseNetNames(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(value)) if (typeof v === "string" && v.trim()) out[k] = v.trim();
+  return Object.keys(out).length ? out : undefined;
+}
+
 /** Sets or (with `undefined`) removes the photo of one side. */
 export function setPhoto(notes: BoardNotes, side: PhotoSide, photo: BoardPhoto | undefined): BoardNotes {
   const photos = { ...notes.photos };
@@ -161,6 +194,7 @@ export function parseNotes(json: string): BoardNotes | null {
       cases: d.cases.filter((c): c is RepairCase => !!c && typeof c.id === "string" && typeof c.readings === "object"),
       activeCase: typeof d.activeCase === "string" ? d.activeCase : null,
       photos: parsePhotos(d.photos),
+      netNames: parseNetNames(d.netNames),
       updated: typeof d.updated === "string" ? d.updated : new Date(0).toISOString(),
     };
   } catch {
@@ -193,6 +227,7 @@ export function mergeNotes(mine: BoardNotes, theirs: BoardNotes): BoardNotes {
     ...mine,
     notes,
     reference: mergeReadings(mine.reference, theirs.reference),
+    netNames: theirs.netNames || mine.netNames ? { ...theirs.netNames, ...mine.netNames } : undefined,
     cases,
     activeCase: mine.activeCase ?? theirs.activeCase,
     updated: now(),

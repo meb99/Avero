@@ -7,6 +7,7 @@ import {
   netStatuses,
   parseNotes,
   removeCase,
+  renameNet,
   setReading,
   setValue,
 } from "./notes";
@@ -72,5 +73,26 @@ describe("board notes", () => {
     expect(merged.reference.PP3V3.voltage).toBe(3.28);
     expect(merged.reference.PP1V8.voltage).toBe(1.8);
     expect(merged.notes).toBe("Referenz von Werkstatt B");
+  });
+});
+
+describe("own net names", () => {
+  it("renames a net and moves its readings, and gives the file name back", () => {
+    let n = setValue(emptyNotes("k", "k"), "reference", "Net10", "diode", 0);
+    n = addCase(n, "Fall 1");
+    n = setValue(n, { caseId: n.activeCase! }, "Net10", "diode", 0.002);
+    n = renameNet(n, "Net10", "Net10", "GND");
+    expect(n.netNames).toEqual({ Net10: "GND" });
+    expect(n.reference.GND.diode).toBe(0);
+    expect(n.reference.Net10).toBeUndefined();
+    expect(n.cases[0].readings.GND.diode).toBe(0.002);
+    n = renameNet(n, "Net10", "GND", "");
+    expect(n.netNames).toEqual({});
+    expect(n.reference.Net10.diode).toBe(0);
+  });
+
+  it("keeps own names through save and load", () => {
+    const n = renameNet(emptyNotes("k", "k"), "Net10", "Net10", "GND");
+    expect(parseNotes(JSON.stringify(n))?.netNames).toEqual({ Net10: "GND" });
   });
 });

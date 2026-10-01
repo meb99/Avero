@@ -76,3 +76,18 @@ describe("search", () => {
     expect(search(model, "UNCON")).toEqual([]);
   });
 });
+
+describe("own net names", () => {
+  it("renames nets, keeps the file name findable and can undo", () => {
+    const model = new BoardModel(structuredClone(testBoard()));
+    const i = model.findNet("PP3V3")!;
+    expect(model.applyNetNames({ PP3V3: "PP3V3_MAIN" })).toBe(true);
+    expect(model.nets[i].name).toBe("PP3V3_MAIN");
+    expect(model.findNet("pp3v3_main")).toBe(i);
+    expect(model.findNet("PP3V3")).toBe(i);
+    expect(model.fileNetName(i)).toBe("PP3V3");
+    expect(model.applyNetNames({ PP3V3: "PP3V3_MAIN" })).toBe(false);
+    expect(model.applyNetNames({})).toBe(true);
+    expect(model.nets[i].name).toBe("PP3V3");
+  });
+});

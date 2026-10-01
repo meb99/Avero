@@ -24,6 +24,8 @@ export interface SchematicFocus {
   nonce: number;
   /** Search for words containing the text (typed into the search field). */
   partial?: boolean;
+  /** Occurrence to show, in reading order (from the occurrence list). */
+  hit?: number;
 }
 
 export interface SchematicViewHandle {
@@ -327,9 +329,10 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
     const jumpKey = typed ? `q:${typed}` : focus?.jump ? focus.nonce : jumpedFor.current;
     if (jumpKey !== jumpedFor.current) {
       jumpedFor.current = jumpKey;
-      // Stay on the current page when the text is on it.
+      // A chosen occurrence, else stay on the current page when the text is on it.
       const here = found.findIndex((w) => w.page === pageRef.current);
-      jumpTo(here >= 0 ? here : 0);
+      const wanted = !typed && focus?.hit !== undefined && focus.hit < found.length ? focus.hit : undefined;
+      jumpTo(wanted ?? (here >= 0 ? here : 0));
     } else {
       hitRef.current = Math.min(hitRef.current, found.length - 1);
       requestDraw();

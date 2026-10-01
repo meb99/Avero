@@ -9,6 +9,7 @@ import { Details } from "./Details";
 import { VirtualList } from "./VirtualList";
 import { LayerList } from "./LayerList";
 import type { Palette } from "../render/palette";
+import type { SchematicDocument } from "../schematic/document";
 
 type Tab = "details" | "parts" | "nets" | "layers" | "measure";
 
@@ -25,6 +26,11 @@ interface Props {
   palette: Palette;
   hiddenLayers: ReadonlySet<number>;
   onHiddenLayers(hidden: ReadonlySet<number>): void;
+  schematic: SchematicDocument | null;
+  onSchematicJump(text: string, hit: number): void;
+  onRenameNet(net: number, name: string): string | null;
+  /** Changes when net names change, so name-sorted lists refresh. */
+  namesRevision: number;
 }
 
 export function Sidebar({
@@ -40,6 +46,10 @@ export function Sidebar({
   palette,
   hiddenLayers,
   onHiddenLayers,
+  schematic,
+  onSchematicJump,
+  onRenameNet,
+  namesRevision,
 }: Props) {
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("details");
@@ -60,7 +70,8 @@ export function Sidebar({
     const q = netFilter.trim().toUpperCase();
     const all = model.sortedNets;
     return q ? all.filter((i) => model.nets[i].name.toUpperCase().includes(q)) : all;
-  }, [model, netFilter]);
+    // namesRevision: own net names change the model's names in place.
+  }, [model, netFilter, namesRevision]);
 
   const pinless = model.pins.length === 0 && model.traces.length > 0;
   const selectedPart = model.selectedPart(selection);
@@ -97,6 +108,9 @@ export function Sidebar({
             notes={notes}
             updateNotes={updateNotes}
             onSelect={onSelect}
+            schematic={schematic}
+            onSchematicJump={onSchematicJump}
+            onRenameNet={onRenameNet}
           />
         </div>
       )}

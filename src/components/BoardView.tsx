@@ -45,6 +45,8 @@ interface Props {
   palette: Palette;
   /** Trace layers switched off. */
   hiddenLayers?: ReadonlySet<number>;
+  /** Changes when net names change, so labels redraw. */
+  namesRevision?: number;
   /** Measurement state by net index, drawn as dots on pins. */
   measured?: ReadonlyMap<number, NetStatus>;
   /** View to show a newly set board with, instead of fitting it. */
@@ -92,6 +94,7 @@ export function BoardView({
   settings,
   palette,
   hiddenLayers = NO_LAYERS,
+  namesRevision = 0,
   measured,
   initialView,
   photo,
@@ -308,7 +311,8 @@ export function BoardView({
     Object.assign(stateRef.current, { model, side, selection, settings, palette, hiddenLayers, highlightedNet: style.highlightedNet });
     rendererRef.current?.setStyle(style, palette);
     requestDraw();
-  }, [model, side, selection, settings, palette, hiddenLayers, requestDraw, rendererVersion]);
+    // namesRevision: net names live in the model and are drawn as labels.
+  }, [model, side, selection, settings, palette, hiddenLayers, namesRevision, requestDraw, rendererVersion]);
 
   // Photo of the real board: new image or alignment re-uploads, opacity only redraws.
   const photoImage = photo?.image;

@@ -2133,3 +2133,22 @@ button.danger {
   font-size: 12px;
   margin: 0 0 8px;
 }
+
+.net-rename {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.net-rename input {
+  flex: 1 1 140px;
+}
+
+.schematic-hits .pin-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}

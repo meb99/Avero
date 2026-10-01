@@ -46,11 +46,13 @@ export class BoardModel {
   readonly testPointIndex: GridIndex;
   readonly traceIndex: GridIndex;
   private readonly partsByName = new Map<string, number>();
-  private readonly netsByName = new Map<string, number>();
+  private netsByName = new Map<string, number>();
+  /** Net names as the file has them; `nets[i].name` may be the user's own. */
+  private readonly fileNetNames: string[];
   /** Parts sorted by name for list views. */
   readonly sortedParts: number[];
   /** Nets sorted by name, unconnected last. */
-  readonly sortedNets: number[];
+  sortedNets: number[] = [];
   private readonly ratsnestCache = new Map<number, [number, number][]>();
   private readonly seriesCache = new Map<number, SeriesLink[]>();
 
@@ -68,17 +70,49 @@ export class BoardModel {
     board.pins.forEach((p, i) => this.pinIndex.insert(i, circleBounds(p)));
     board.testPoints.forEach((t, i) => this.testPointIndex.insert(i, circleBounds(t)));
     this.traces.forEach((t, i) => this.traceIndex.insert(i, traceBounds(t)));
-    board.nets.forEach((n, i) => this.netsByName.set(n.name.toUpperCase(), i));
+    this.fileNetNames = board.nets.map((n) => n.name);
 
     const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
     this.sortedParts = board.parts.map((_, i) => i).sort((a, b) => collator.compare(board.parts[a].name, board.parts[b].name));
-    this.sortedNets = board.nets
+    this.indexNets();
+  }
+
+  private indexNets(): void {
+    const nets = this.board.nets;
+    this.netsByName = new Map();
+    // File names stay findable (schematics, old exports); own names win.
+    this.fileNetNames.forEach((n, i) => this.netsByName.set(n.toUpperCase(), i));
+    nets.forEach((n, i) => this.netsByName.set(n.name.toUpperCase(), i));
+    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+    this.sortedNets = nets
       .map((_, i) => i)
       .sort((a, b) => {
-        const ua = board.nets[a].kind === "unconnected" ? 1 : 0;
-        const ub = board.nets[b].kind === "unconnected" ? 1 : 0;
-        return ua - ub || collator.compare(board.nets[a].name, board.nets[b].name);
+        const ua = nets[a].kind === "unconnected" ? 1 : 0;
+        const ub = nets[b].kind === "unconnected" ? 1 : 0;
+        return ua - ub || collator.compare(nets[a].name, nets[b].name);
       });
+  }
+
+  /** The net's name in the file, before any renaming. */
+  fileNetName(net: number): string {
+    return this.fileNetNames[net];
+  }
+
+  /**
+   * Applies the user's own net names (file name -> own name). Nets missing
+   * from `names` get their file name back. Returns true when a name changed.
+   */
+  applyNetNames(names: Readonly<Record<string, string>>): boolean {
+    let changed = false;
+    this.board.nets.forEach((n, i) => {
+      const want = names[this.fileNetNames[i]] ?? this.fileNetNames[i];
+      if (n.name !== want) {
+        n.name = want;
+        changed = true;
+      }
+    });
+    if (changed) this.indexNets();
+    return changed;
   }
 
   get parts(): Part[] {
