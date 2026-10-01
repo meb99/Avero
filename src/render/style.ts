@@ -6,6 +6,7 @@ export interface DisplayOptions {
   /** Show parts and pins of the far side faintly. */
   ghostOtherSide: boolean;
   showVias: boolean;
+  showTraces: boolean;
   /** Fade everything that is not part of the current selection. */
   dimUnselected: boolean;
 }
@@ -14,6 +15,7 @@ export interface DisplayOptions {
 export interface BoardStyle {
   pinColors: Uint8Array;
   testPointColors: Uint8Array;
+  traceColors: Uint8Array;
   partFillColors: Uint8Array;
   partOutlineColors: Uint8Array;
   partOutlineWidths: Float32Array;
@@ -98,6 +100,22 @@ export function computeStyle(
     }
   }
 
+  // Tracks of the side in view; inner layers and the far side only for the
+  // highlighted net, so it can be followed through the board.
+  const traces = model.traces;
+  const traceColors = new Uint8Array(traces.length * 4);
+  for (let i = 0; i < traces.length; i++) {
+    const t = traces[i];
+    const near = t.side === view;
+    if (net !== undefined && t.net === net) {
+      put(traceColors, i, palette.pinHighlight, near ? 1 : FAR_HIGHLIGHT_ALPHA);
+    } else if (!options.showTraces || t.side === "both") {
+      put(traceColors, i, palette.trace, 0);
+    } else {
+      put(traceColors, i, palette.trace, near ? dim : options.ghostOtherSide ? GHOST_ALPHA : 0);
+    }
+  }
+
   const partFillColors = new Uint8Array(parts.length * 4);
   const partOutlineColors = new Uint8Array(parts.length * 4);
   const partOutlineWidths = new Float32Array(parts.length);
@@ -119,5 +137,5 @@ export function computeStyle(
     }
   }
 
-  return { pinColors, testPointColors, partFillColors, partOutlineColors, partOutlineWidths, highlightedNet: net, selectedPart };
+  return { pinColors, testPointColors, traceColors, partFillColors, partOutlineColors, partOutlineWidths, highlightedNet: net, selectedPart };
 }

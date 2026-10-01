@@ -198,6 +198,16 @@ fn move_library_files(
         .map(|v| v.into_iter().map(|p| p.to_string_lossy().into_owned()).collect())
 }
 
+/// Moves library files to the Trash; returns how many were moved.
+#[tauri::command]
+fn trash_library_files(app: tauri::AppHandle, paths: Vec<String>) -> Result<usize, String> {
+    use tauri::Manager;
+    let root = library_dir(&app)?;
+    let bin = app.path().home_dir().map_err(|e| e.to_string())?.join(".Trash");
+    let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+    import::trash(&root, &bin, &paths)
+}
+
 /// Renames a file of the library; returns the new path.
 #[tauri::command]
 fn rename_library_file(path: String, name: String) -> Result<String, String> {
@@ -366,6 +376,7 @@ pub fn run() {
             board_words,
             rename_library_file,
             move_library_files,
+            trash_library_files,
             load_notes,
             save_notes,
             export_json,

@@ -74,6 +74,11 @@ export function moveLibraryFiles(paths: string[], folder: string): Promise<strin
   return invoke<string[]>("move_library_files", { paths, folder });
 }
 
+/** Moves library files to the macOS Trash. */
+export function trashLibraryFiles(paths: string[]): Promise<number> {
+  return invoke<number>("trash_library_files", { paths });
+}
+
 /** Renames a library file; resolves to its new path. */
 export function renameLibraryFile(path: string, name: string): Promise<string> {
   return invoke<string>("rename_library_file", { path, name });

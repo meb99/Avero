@@ -330,6 +330,34 @@ pub fn move_into(root: &Path, paths: &[PathBuf], folder: &str) -> Result<Vec<Pat
     Ok(moved)
 }
 
+/// Moves library files to `trash` (the user's Trash) instead of deleting
+/// them for good. Only files inside the library root; folders left empty
+/// are removed. Returns how many files were moved.
+pub fn trash(root: &Path, trash: &Path, paths: &[PathBuf]) -> Result<usize, String> {
+    let root = root.canonicalize().map_err(|e| format!("{}: {e}", root.display()))?;
+    std::fs::create_dir_all(trash).map_err(|e| format!("{}: {e}", trash.display()))?;
+    let mut count = 0;
+    for path in paths {
+        let real = path.canonicalize().map_err(|e| format!("{}: {e}", path.display()))?;
+        if !real.starts_with(&root) || !real.is_file() {
+            return Err(format!("{}: only files in the Avero library can be deleted", path.display()));
+        }
+        let name = real.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let plain = trash.join(&name);
+        let dest = if plain.exists() { free_name(trash, &name) } else { plain };
+        std::fs::rename(&real, &dest).map_err(|e| format!("{}: {e}", real.display()))?;
+        count += 1;
+        let mut dir = real.parent().map(Path::to_path_buf);
+        while let Some(d) = dir {
+            if d == root || !d.starts_with(&root) || std::fs::remove_dir(&d).is_err() {
+                break;
+            }
+            dir = d.parent().map(Path::to_path_buf);
+        }
+    }
+    Ok(count)
+}
+
 pub fn import(root: &Path, paths: &[PathBuf], folder: Option<&str>) -> ImportResult {
     let mut result = ImportResult::default();
     let mut sources = Vec::new();
@@ -458,6 +486,22 @@ mod tests {
         assert!(move_into(&lib, &[dest.join("taken.pdf")], "../../escape")
             .is_ok_and(|p| p[0].starts_with(lib.canonicalize().unwrap())));
         std::fs::remove_dir_all(&lib).unwrap();
+    }
+
+    #[test]
+    fn moves_deleted_files_to_the_trash() {
+        let lib = temp("trashlib");
+        let bin = temp("trashbin");
+        let dir = lib.join("Sony/PSP");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a.brd"), b"x").unwrap();
+        std::fs::write(bin.join("a.brd"), b"older").unwrap();
+        assert_eq!(trash(&lib, &bin, &[dir.join("a.brd")]).unwrap(), 1);
+        assert!(!dir.exists() && !lib.join("Sony").exists(), "empty folders go too");
+        assert!(bin.join("a (2).brd").exists());
+        assert!(trash(&lib, &bin, &[bin.join("a.brd")]).is_err(), "nothing outside the library");
+        std::fs::remove_dir_all(&lib).unwrap();
+        std::fs::remove_dir_all(&bin).unwrap();
     }
 
     #[test]

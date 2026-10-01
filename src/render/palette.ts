@@ -21,6 +21,8 @@ export interface Palette {
   ratsnest: RGBA;
   nail: RGBA;
   via: RGBA;
+  /** Copper tracks of the side in view. */
+  trace: RGBA;
   label: string;
   labelHalo: string;
   labelPin: string;
@@ -46,6 +48,7 @@ export const DARK: Palette = {
   ratsnest: [255, 213, 79, 150],
   nail: [255, 167, 38, 255],
   via: [120, 144, 156, 255],
+  trace: [196, 128, 64, 150],
   label: "#dfe6ec",
   labelHalo: "rgba(10, 12, 16, 0.85)",
   labelPin: "#0e1014",
@@ -71,6 +74,7 @@ export const LIGHT: Palette = {
   ratsnest: [214, 120, 0, 170],
   nail: [230, 81, 0, 255],
   via: [120, 144, 156, 255],
+  trace: [184, 106, 40, 140],
   label: "#1f2933",
   labelHalo: "rgba(255, 255, 255, 0.85)",
   labelPin: "#ffffff",

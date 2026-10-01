@@ -10,7 +10,8 @@ import type { BoardStyle } from "./style";
  * Geometry is uploaded once per board; selection and side changes only
  * re-upload the per-element color buffers. Pins and test points are
  * instanced quads shaded as circles, squares or diamonds; outlines are
- * instanced screen-space line quads, so line width is independent of zoom.
+ * instanced screen-space line quads, so line width is independent of zoom;
+ * copper tracks use the same quads with their width in board units.
  */
 
 const LINE_VS = `#version 300 es
@@ -21,6 +22,7 @@ layout(location=3) in float a_width;
 uniform mat3 u_world;
 uniform vec2 u_viewport;
 uniform float u_dpr;
+uniform float u_scale;
 out vec4 v_color;
 void main() {
   vec2 p0 = (u_world * vec3(a_seg.xy, 1.0)).xy;
@@ -29,7 +31,8 @@ void main() {
   float len = length(d);
   vec2 dir = len > 1e-4 ? d / len : vec2(1.0, 0.0);
   vec2 n = vec2(-dir.y, dir.x);
-  float hw = a_width * u_dpr * 0.5;
+  // Negative widths are board units (tracks), positive ones CSS pixels.
+  float hw = (a_width < 0.0 ? max(-a_width * u_scale, u_dpr) : a_width * u_dpr) * 0.5;
   vec2 p = mix(p0, p1, a_corner.x) + dir * (a_corner.x * 2.0 - 1.0) * hw + n * a_corner.y * hw;
   vec2 clip = p / u_viewport * 2.0 - 1.0;
   gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
@@ -164,6 +167,7 @@ export class BoardRenderer {
 
   private pins?: InstanceSet;
   private testPoints?: InstanceSet;
+  private traces?: InstanceSet;
   private partLines?: InstanceSet;
   /** Part index per part outline segment, to expand per-part colors. */
   private partLineOwner = new Uint32Array(0);
@@ -182,7 +186,7 @@ export class BoardRenderer {
     const gl = canvas.getContext("webgl2", { antialias: true, stencil: true, alpha: false, preserveDrawingBuffer: true });
     if (!gl) throw new Error("WebGL 2 is not available");
     this.gl = gl;
-    this.lineProgram = this.compile(LINE_VS, COLOR_FS, ["u_world", "u_viewport", "u_dpr"]);
+    this.lineProgram = this.compile(LINE_VS, COLOR_FS, ["u_world", "u_viewport", "u_dpr", "u_scale"]);
     this.padProgram = this.compile(PAD_VS, PAD_FS, ["u_world", "u_viewport", "u_scale", "u_minRadius"]);
     this.fillProgram = this.compile(FILL_VS, COLOR_FS, ["u_world", "u_viewport"]);
     this.imageProgram = this.compile(IMAGE_VS, IMAGE_FS, ["u_world", "u_viewport", "u_tex", "u_opacity"]);
@@ -284,6 +288,16 @@ export class BoardRenderer {
     testPoints.forEach((t, i) => tpData.set([t.x, t.y, t.radius, t.kind === "nail" ? SHAPE_DIAMOND : SHAPE_CIRCLE], i * 4));
     this.testPoints = this.padSet(tpData, testPoints.length);
 
+    const traces = model.traces;
+    const traceData = new Float32Array(traces.length * 4);
+    const traceWidths = new Float32Array(traces.length);
+    traces.forEach((t, i) => {
+      traceData.set([t.x1, t.y1, t.x2, t.y2], i * 4);
+      traceWidths[i] = -Math.max(t.width, 0.01);
+    });
+    this.traces = this.lineSet(traceData, traces.length);
+    upload(gl, this.traces.widths!, traceWidths);
+
     const segs: number[] = [];
     const owner: number[] = [];
     parts.forEach((p, i) => {
@@ -350,6 +364,7 @@ export class BoardRenderer {
     if (!this.pins || !this.testPoints || !this.partLines || !this.partFill || !this.boardLines) return;
     upload(gl, this.pins.colors, style.pinColors);
     upload(gl, this.testPoints.colors, style.testPointColors);
+    if (this.traces && this.traces.count > 0) upload(gl, this.traces.colors, style.traceColors);
 
     const lineColors = new Uint8Array(this.partLineOwner.length * 4);
     const lineWidths = new Float32Array(this.partLineOwner.length);
@@ -491,16 +506,24 @@ export class BoardRenderer {
       gl.useProgram(fill.program);
     }
 
-    if (this.partFill) {
-      gl.bindVertexArray(this.partFill.vao);
-      gl.drawArrays(gl.TRIANGLES, 0, this.partFill.count);
-    }
-
     const line = this.lineProgram;
     gl.useProgram(line.program);
     gl.uniformMatrix3fv(line.uniforms.u_world, false, world);
     gl.uniform2f(line.uniforms.u_viewport, w, h);
     gl.uniform1f(line.uniforms.u_dpr, dpr);
+    gl.uniform1f(line.uniforms.u_scale, camera.scale * dpr);
+    if (this.traces && this.traces.count > 0) {
+      gl.bindVertexArray(this.traces.vao);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.traces.count);
+    }
+
+    if (this.partFill) {
+      gl.useProgram(fill.program);
+      gl.bindVertexArray(this.partFill.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, this.partFill.count);
+      gl.useProgram(line.program);
+    }
+
     for (const set of [this.boardLines, this.partLines]) {
       if (set && set.count > 0) {
         gl.bindVertexArray(set.vao);
@@ -537,7 +560,7 @@ export class BoardRenderer {
     for (const v of this.vaos) gl.deleteVertexArray(v);
     this.buffers = [];
     this.vaos = [];
-    this.pins = this.testPoints = this.partLines = this.boardLines = undefined;
+    this.pins = this.testPoints = this.traces = this.partLines = this.boardLines = undefined;
     this.partFill = undefined;
     this.boardFill = undefined;
   }

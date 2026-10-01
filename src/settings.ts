@@ -9,6 +9,8 @@ export interface Settings {
   ghostOtherSide: boolean;
   dimUnselected: boolean;
   showVias: boolean;
+  /** Copper tracks, for formats that have them. */
+  showTraces: boolean;
   partNames: boolean;
   pinNumbers: boolean;
   netNames: boolean;
@@ -36,6 +38,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ghostOtherSide: true,
   dimUnselected: true,
   showVias: false,
+  showTraces: true,
   partNames: true,
   pinNumbers: true,
   netNames: true,

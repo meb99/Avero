@@ -53,11 +53,24 @@ export interface TestPoint {
   name?: string;
 }
 
+/** Straight copper track segment, from formats that carry routing. */
+export interface Trace {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  width: number;
+  /** Outer layer; "both" marks an inner layer. */
+  side: Side;
+  net: number;
+}
+
 export interface Net {
   name: string;
   kind: NetKind;
   pins: number[];
   testPoints: number[];
+  traces?: number[];
 }
 
 export interface Board {
@@ -69,6 +82,8 @@ export interface Board {
   parts: Part[];
   pins: Pin[];
   testPoints: TestPoint[];
+  /** Copper tracks; missing or empty for most formats. */
+  traces?: Trace[];
   nets: Net[];
   warnings: string[];
   /** Encrypted parts left out (XinZhiZao without key). */

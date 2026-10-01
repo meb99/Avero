@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use crate::model::{
-    Board, Bounds, FormatId, Mount, Net, NetKind, Part, Pin, Point, Side, TestPoint, TestPointKind,
+    Board, Bounds, FormatId, Mount, Net, NetKind, Part, Pin, Point, Side, TestPoint, TestPointKind, Trace,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -52,6 +52,15 @@ pub(crate) struct RawTestPoint {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct RawTrace {
+    pub from: Point,
+    pub to: Point,
+    pub width: f64,
+    pub side: Side,
+    pub net: String,
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct RawBoard {
     pub format: FormatId,
     /// Outline given as a single point path (most text formats).
@@ -60,6 +69,7 @@ pub(crate) struct RawBoard {
     pub outline_segments: Vec<(Point, Point)>,
     pub parts: Vec<RawPart>,
     pub test_points: Vec<RawTestPoint>,
+    pub traces: Vec<RawTrace>,
     pub warnings: Vec<String>,
     pub locked_parts: u32,
 }
@@ -72,6 +82,7 @@ impl RawBoard {
             outline_segments: Vec::new(),
             parts: Vec::new(),
             test_points: Vec::new(),
+            traces: Vec::new(),
             warnings: Vec::new(),
             locked_parts: 0,
         }
@@ -158,6 +169,20 @@ impl RawBoard {
             });
         }
 
+        let mut traces = Vec::with_capacity(self.traces.len());
+        for t in self.traces {
+            let net = nets.add_trace(&t.net, traces.len() as u32);
+            traces.push(Trace {
+                x1: t.from.x,
+                y1: t.from.y,
+                x2: t.to.x,
+                y2: t.to.y,
+                width: t.width.max(0.0),
+                side: t.side,
+                net,
+            });
+        }
+
         let mut outline = Vec::new();
         if self.outline_path.len() >= 2 {
             outline.push(self.outline_path);
@@ -170,6 +195,10 @@ impl RawBoard {
         }
         for t in &test_points {
             content.include(Point::new(t.x, t.y));
+        }
+        for t in &traces {
+            content.include(Point::new(t.x1, t.y1));
+            content.include(Point::new(t.x2, t.y2));
         }
 
         if outline.is_empty() && !content.is_empty() {
@@ -209,6 +238,7 @@ impl RawBoard {
             parts,
             pins,
             test_points,
+            traces,
             nets: nets.finish(),
             warnings: self.warnings,
             locked_parts: self.locked_parts,
@@ -234,6 +264,7 @@ impl NetTable {
             kind: classify_net(name),
             pins: Vec::new(),
             test_points: Vec::new(),
+            traces: Vec::new(),
         });
         self.index.insert(name.to_string(), i);
         i
@@ -248,6 +279,12 @@ impl NetTable {
     fn add_test_point(&mut self, name: &str, tp: u32) -> u32 {
         let i = self.resolve(name);
         self.nets[i as usize].test_points.push(tp);
+        i
+    }
+
+    fn add_trace(&mut self, name: &str, trace: u32) -> u32 {
+        let i = self.resolve(name);
+        self.nets[i as usize].traces.push(trace);
         i
     }
 

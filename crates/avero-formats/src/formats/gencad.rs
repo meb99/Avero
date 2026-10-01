@@ -3,12 +3,12 @@
 //! Only what a boardview needs is read: units, board outline, pads and
 //! padstacks (for pad size and side), shapes (pin positions and body outline),
 //! components (placement), devices (value / part number), signals (nets) and
-//! route vias.
+//! routes (tracks and vias).
 
 use std::collections::{HashMap, HashSet};
 use std::f64::consts::{PI, TAU};
 
-use crate::builder::{RawBoard, RawPart, RawPin, RawTestPoint};
+use crate::builder::{RawBoard, RawPart, RawPin, RawTestPoint, RawTrace};
 use crate::model::{FormatId, Mount, Point, Side, TestPointKind};
 use crate::text::{contains, lines, trim, Fields};
 use crate::ParseError;
@@ -28,6 +28,7 @@ enum Section {
     Components,
     Devices,
     Signals,
+    Tracks,
     Routes,
     Other,
 }
@@ -92,8 +93,21 @@ struct Device {
     value: Option<String>,
 }
 
+/// A route segment before its layer is known to be top, inner or bottom.
+struct Track {
+    from: Point,
+    to: Point,
+    width: f64,
+    layer: String,
+    net: String,
+}
+
 struct Parser {
     scale: f64,
+    /// Units given as INCH; some converters write mils anyway.
+    inch: bool,
+    /// Ignore UNITS and read mils.
+    force_mils: bool,
     section: Section,
     outline: Vec<(Point, Point)>,
     pads: HashMap<String, Pad>,
@@ -103,12 +117,35 @@ struct Parser {
     devices: HashMap<String, Device>,
     signals: HashMap<(String, String), String>,
     vias: Vec<(String, Point)>,
+    track_widths: HashMap<String, f64>,
+    tracks: Vec<Track>,
+    /// Width and layer of the route being read.
+    width: f64,
+    layer: String,
     current: Option<String>,
 }
 
+/// Boards larger than this (100 inch) only come from misread units.
+const MAX_EXTENT_MILS: f64 = 100_000.0;
+
 pub fn parse(buf: &[u8]) -> Result<RawBoard, ParseError> {
+    let p = read(buf, false);
+    if p.components.is_empty() {
+        return Err(ParseError::invalid(FormatId::GenCad, "no $COMPONENTS found"));
+    }
+    if p.inch && p.extent() > MAX_EXTENT_MILS {
+        let mut board = read(buf, true).finish();
+        board.warn("UNITS says INCH but the coordinates are mils; read as mils");
+        return Ok(board);
+    }
+    Ok(p.finish())
+}
+
+fn read(buf: &[u8], force_mils: bool) -> Parser {
     let mut p = Parser {
         scale: 1.0,
+        inch: false,
+        force_mils,
         section: Section::None,
         outline: Vec::new(),
         pads: HashMap::new(),
@@ -118,18 +155,43 @@ pub fn parse(buf: &[u8]) -> Result<RawBoard, ParseError> {
         devices: HashMap::new(),
         signals: HashMap::new(),
         vias: Vec::new(),
+        track_widths: HashMap::new(),
+        tracks: Vec::new(),
+        width: 0.0,
+        layer: String::new(),
         current: None,
     };
     for line in lines(buf) {
         p.line(trim(line));
     }
-    if p.components.is_empty() {
-        return Err(ParseError::invalid(FormatId::GenCad, "no $COMPONENTS found"));
+    p
+}
+
+/// Net names are often quoted after SIGNAL and ROUTE.
+fn unquote(s: String) -> String {
+    match s.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
+        Some(inner) => inner.to_string(),
+        None => s,
     }
-    Ok(p.finish())
 }
 
 impl Parser {
+    /// Largest side of what was read, in mils.
+    fn extent(&self) -> f64 {
+        let mut b = crate::model::Bounds::EMPTY;
+        for (a, c) in &self.outline {
+            b.include(*a);
+            b.include(*c);
+        }
+        for c in &self.components {
+            b.include(c.place);
+        }
+        if b.is_empty() {
+            return 0.0;
+        }
+        (b.max_x - b.min_x).max(b.max_y - b.min_y)
+    }
+
     fn line(&mut self, line: &[u8]) {
         if line.is_empty() {
             return;
@@ -145,6 +207,7 @@ impl Parser {
                 b"$COMPONENTS" => Section::Components,
                 b"$DEVICES" => Section::Devices,
                 b"$SIGNALS" => Section::Signals,
+                b"$TRACKS" => Section::Tracks,
                 b"$ROUTES" => Section::Routes,
                 _ if line.starts_with(b"$END") => Section::None,
                 _ => Section::Other,
@@ -167,7 +230,7 @@ impl Parser {
             Section::Components => self.component_line(keyword, &mut f),
             Section::Devices => self.device_line(keyword, &mut f),
             Section::Signals => match keyword {
-                b"SIGNAL" => self.current = Some(f.rest_string()),
+                b"SIGNAL" => self.current = Some(unquote(f.rest_string())),
                 b"NODE" => {
                     if let (Some(net), Some(comp), Some(pin)) =
                         (self.current.clone(), f.quoted_or_plain(), f.quoted_or_plain())
@@ -177,8 +240,38 @@ impl Parser {
                 }
                 _ => {}
             },
+            Section::Tracks => {
+                if keyword == b"TRACK" {
+                    if let (Some(name), Some(w)) = (f.quoted_or_plain(), self.num(&mut f)) {
+                        self.track_widths.insert(name, w);
+                    }
+                }
+            }
             Section::Routes => match keyword {
-                b"ROUTE" => self.current = Some(f.rest_string()),
+                b"ROUTE" => {
+                    self.current = Some(unquote(f.rest_string()));
+                    self.width = 0.0;
+                }
+                b"TRACK" => {
+                    let name = f.quoted_or_plain().unwrap_or_default();
+                    self.width = self.track_widths.get(&name).copied().unwrap_or(0.0);
+                }
+                b"LAYER" => self.layer = f.string().unwrap_or_default().to_ascii_uppercase(),
+                b"LINE" | b"ARC" => {
+                    if let (Some(net), Some(segments)) =
+                        (self.current.clone(), self.geometry(keyword, &mut f))
+                    {
+                        for (from, to) in segments {
+                            self.tracks.push(Track {
+                                from,
+                                to,
+                                width: self.width,
+                                layer: self.layer.clone(),
+                                net: net.clone(),
+                            });
+                        }
+                    }
+                }
                 b"VIA" => {
                     let _padstack = f.quoted_or_plain();
                     if let (Some(net), Some(pos)) = (self.current.clone(), self.xy(&mut f)) {
@@ -193,6 +286,11 @@ impl Parser {
 
     fn units(&mut self, f: &mut Fields<'_>) {
         let unit = f.string().unwrap_or_default().to_ascii_uppercase();
+        self.inch = unit == "INCH";
+        if self.force_mils {
+            self.scale = 1.0;
+            return;
+        }
         let per = f.float().filter(|v| *v > 0.0);
         self.scale = match (unit.as_str(), per) {
             ("INCH", _) => 1000.0,
@@ -427,6 +525,18 @@ impl Parser {
                 board.parts.push(part);
                 continue;
             };
+            if shape.pins.is_empty() && shape.outline.is_empty() {
+                // Nothing but a placement: a small marker keeps it findable.
+                let (x, y, r) = (c.place.x, c.place.y, PLACE_MARKER);
+                part.outline = Some(vec![
+                    Point::new(x - r, y - r),
+                    Point::new(x + r, y - r),
+                    Point::new(x + r, y + r),
+                    Point::new(x - r, y + r),
+                ]);
+                board.parts.push(part);
+                continue;
+            }
 
             let transform = Transform::new(c.place, c.rotation, sref.mirror_x, sref.mirror_y);
             let mut through_hole = matches!(shape.insert.as_deref(), Some("TH" | "PTH" | "THRU" | "THROUGH"));
@@ -462,6 +572,16 @@ impl Parser {
             board.parts.push(part);
         }
 
+        let sides = layer_sides(self.tracks.iter().map(|t| t.layer.as_str()));
+        for t in self.tracks {
+            board.traces.push(RawTrace {
+                from: t.from,
+                to: t.to,
+                width: t.width,
+                side: sides.get(&t.layer).copied().unwrap_or(Side::Top),
+                net: t.net,
+            });
+        }
         for (net, pos) in self.vias {
             board.test_points.push(RawTestPoint {
                 kind: TestPointKind::Via,
@@ -478,6 +598,41 @@ impl Parser {
         }
         board
     }
+}
+
+/// Half size of the marker drawn for parts whose shape is empty.
+const PLACE_MARKER: f64 = 10.0;
+
+/// Which side each route layer is on. Named layers say so; numbered ones
+/// (LAYER_1 … LAYER_16) run from top to bottom, everything between is inner.
+fn layer_sides<'a>(layers: impl Iterator<Item = &'a str>) -> HashMap<String, Side> {
+    let names: HashSet<&str> = layers.collect();
+    let number = |n: &str| -> Option<u32> {
+        let digits: String = n.chars().rev().take_while(char::is_ascii_digit).collect();
+        digits.chars().rev().collect::<String>().parse().ok()
+    };
+    let numbers: Vec<u32> = names.iter().filter_map(|n| number(n)).collect();
+    let top = numbers.iter().copied().min();
+    // 16 is the bottom copper layer in 16-layer numbering; above it are
+    // non-copper layers.
+    let bottom = if numbers.contains(&16) { Some(16) } else { numbers.iter().copied().max() };
+    names
+        .into_iter()
+        .map(|n| {
+            let side = if n.contains("TOP") {
+                Side::Top
+            } else if n.contains("BOT") {
+                Side::Bottom
+            } else {
+                match number(n) {
+                    Some(k) if Some(k) == top => Side::Top,
+                    Some(k) if Some(k) == bottom && top != bottom => Side::Bottom,
+                    _ => Side::Both,
+                }
+            };
+            (n.to_string(), side)
+        })
+        .collect()
 }
 
 fn describe_device(name: &str, device: Option<&Device>) -> String {

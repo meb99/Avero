@@ -235,6 +235,11 @@ export function Details({ model, selection, side, settings, notes, updateNotes, 
           <dl className="props">
             <Row label={t("details.kind")}>{t(kindKey[net.kind])}</Row>
             <Row label={t("details.pins")}>{net.pins.length}</Row>
+            {(net.traces?.length ?? 0) > 0 && (
+              <Row label={t("details.traces")}>
+                {t("details.tracesSummary", { traces: net.traces!.length, vias: net.testPoints.length })}
+              </Row>
+            )}
           </dl>
           {measure(selection.net)}
           {netMembers(selection.net)}

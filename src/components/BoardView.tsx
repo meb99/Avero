@@ -74,6 +74,8 @@ function hitToSelection(hit: Hit | undefined): Selection {
       return { kind: "pin", pin: hit.pin };
     case "testPoint":
       return { kind: "testPoint", testPoint: hit.testPoint };
+    case "trace":
+      return { kind: "net", net: hit.net };
     case "part":
       return { kind: "part", part: hit.part };
   }
@@ -289,7 +291,12 @@ export function BoardView({
       model,
       side,
       selection,
-      { ghostOtherSide: settings.ghostOtherSide, showVias: settings.showVias, dimUnselected: settings.dimUnselected },
+      {
+        ghostOtherSide: settings.ghostOtherSide,
+        showVias: settings.showVias,
+        showTraces: settings.showTraces,
+        dimUnselected: settings.dimUnselected,
+      },
       palette,
     );
     Object.assign(stateRef.current, { model, side, selection, settings, palette, highlightedNet: style.highlightedNet });
@@ -354,7 +361,7 @@ export function BoardView({
   const hitAt = (p: Point): Hit | undefined => {
     const cam = cameraRef.current;
     const s = stateRef.current;
-    return s.model.hitTest(cam.toWorld(p), s.side, 4 / cam.scale, s.settings.showVias);
+    return s.model.hitTest(cam.toWorld(p), s.side, 4 / cam.scale, s.settings.showVias, s.settings.showTraces);
   };
 
   const describe = (hit: Hit | undefined): string | null => {
@@ -370,6 +377,8 @@ export function BoardView({
         const probe = tp.name ? ` ${tp.name}` : tp.probe !== undefined ? ` ${tp.probe}` : "";
         return `${tp.kind === "via" ? t("details.via") : t("details.testPoint")}${probe}  ·  ${m.nets[tp.net].name}`;
       }
+      case "trace":
+        return `${t("details.trace")}  ·  ${m.nets[hit.net].name}`;
       case "part": {
         const part = m.parts[hit.part];
         return part.device ? `${part.name}  ·  ${part.device}` : part.name;

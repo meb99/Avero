@@ -408,6 +408,36 @@ fn gencad_metric_units() {
     assert_close(b.part_pins(r1)[0].x, 0.5);
 }
 
+#[test]
+fn gencad_routes_and_misdeclared_units() {
+    // As written by XZZ converters: INCH declared, mils used, pinless shapes,
+    // quoted net names and connectivity only through routes.
+    let src = b"$HEADER\nGENCAD 1.4\nUNITS INCH\n$ENDHEADER\n\
+$BOARD\nLINE 50000 50000 56000 50000\nLINE 56000 50000 56000 54000\n\
+LINE 56000 54000 50000 54000\nLINE 50000 54000 50000 50000\n$ENDBOARD\n\
+$SHAPES\nSHAPE SHAPE_1\n$ENDSHAPES\n\
+$COMPONENTS\nCOMPONENT \"C-0402\"\nPLACE 52000 53000\nLAYER LAYER_0\nROTATION 0\nSHAPE SHAPE_1 0 0\n$ENDCOMPONENTS\n\
+$SIGNALS\nSIGNAL \"PP3V3\"\n$ENDSIGNALS\n\
+$TRACKS\nTRACK TRACE_1 4\n$ENDTRACKS\n\
+$ROUTES\nROUTE \"PP3V3\"\nTRACK TRACE_1\nLAYER LAYER_1\nLINE 51000 51000 52000 51000\n\
+ROUTE \"PP3V3\"\nTRACK TRACE_1\nLAYER LAYER_3\nLINE 52000 51000 52000 52000\n\
+ROUTE \"PP3V3\"\nTRACK TRACE_1\nLAYER LAYER_16\nLINE 52000 52000 53000 52000\n\
+VIA VIASTACK_1 52000 51000 ALL 0 VIA_1\n$ENDROUTES\n";
+    let b = parse(src, Some("board.cad")).unwrap();
+    assert_eq!(b.format, FormatId::GenCad);
+    assert_close(b.bounds.max_x - b.bounds.min_x, 6000.0);
+    assert!(b.warnings.iter().any(|w| w.contains("mils")));
+    assert_eq!(b.traces.len(), 3);
+    let sides: Vec<Side> = b.traces.iter().map(|t| t.side).collect();
+    assert_eq!(sides, [Side::Top, Side::Both, Side::Bottom]);
+    assert_close(b.traces[0].width, 4.0);
+    let net = &b.nets[b.find_net("PP3V3").unwrap()];
+    assert_eq!(net.kind, NetKind::Power);
+    assert_eq!((net.traces.len(), net.test_points.len()), (3, 1));
+    let c = part(&b, "C-0402");
+    assert!(c.outline.len() == 4 && c.bounds.min_x < 52000.0 && c.bounds.max_x > 52000.0);
+}
+
 fn cst_fixture() -> Vec<u8> {
     let mut v: Vec<u8> = Vec::new();
     let i16 = |v: &mut Vec<u8>, n: i16| v.extend_from_slice(&n.to_le_bytes());

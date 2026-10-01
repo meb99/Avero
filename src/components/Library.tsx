@@ -12,6 +12,7 @@ import {
   revealInFinder,
   saveLibrary,
   scanLibrary,
+  trashLibraryFiles,
   type ImportResult,
   type LibraryEntry,
   type LibraryFile,
@@ -28,7 +29,7 @@ import {
   type Category,
 } from "../workbench/catalog";
 import { Dialog } from "./Dialogs";
-import { CloseIcon, OpenIcon, RenameIcon, TagIcon } from "./Icons";
+import { CloseIcon, OpenIcon, RenameIcon, TagIcon, TrashIcon } from "./Icons";
 import { VirtualList } from "./VirtualList";
 
 /** Paths dropped on the window while the library is open. */
@@ -144,6 +145,28 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
           e.folder.toLowerCase().startsWith(`${b}/`);
     return filterEntries((library.scan?.entries ?? []).filter(inBranch), query);
   }, [library.scan, query, branch]);
+
+  // Only files in Avero's own folder; they go to the Trash, not away for good.
+  const remove = async (e: LibraryEntry) => {
+    const paths = [...e.boards, ...e.schematics, ...e.unsupported].map((f) => f.path);
+    const names = paths.map((p) => p.split("/").pop() ?? p);
+    const files = names.slice(0, 12).join("\n") + (names.length > 12 ? `\n+${names.length - 12}` : "");
+    const { ask } = await import("@tauri-apps/plugin-dialog");
+    const yes = await ask(t("library.deleteAsk", { name: e.title, files }), {
+      title: "Avero",
+      kind: "warning",
+      okLabel: t("library.deleteOk"),
+      cancelLabel: t("photo.cancel"),
+    });
+    if (!yes) return;
+    setError(null);
+    try {
+      await trashLibraryFiles(paths);
+    } catch (err) {
+      setError(String(err));
+    }
+    await rescan(library.folders);
+  };
 
   const addFolder = async () => {
     const folder = await pickFolder(t("library.addFolder"));
@@ -390,6 +413,16 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
                         title={t("rename.action")}
                       >
                         <RenameIcon />
+                      </button>
+                    )}
+                    {first && e.root === root && (
+                      <button
+                        className="tool icon-only reveal danger"
+                        onClick={() => void remove(e)}
+                        aria-label={t("library.delete")}
+                        title={t("library.delete")}
+                      >
+                        <TrashIcon />
                       </button>
                     )}
                     {first && (

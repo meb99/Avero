@@ -57,6 +57,7 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
     | "ghostOtherSide"
     | "dimUnselected"
     | "showVias"
+    | "showTraces"
     | "partNames"
     | "pinNumbers"
     | "netNames"
@@ -107,6 +108,7 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
         {check("ghostOtherSide", t("settings.ghost"))}
         {check("dimUnselected", t("settings.dim"))}
         {check("showVias", t("settings.vias"))}
+        {check("showTraces", t("settings.traces"))}
         {check("ratsnest", t("settings.ratsnest"))}
       </div>
       <h3>{t("settings.formats")}</h3>

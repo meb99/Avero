@@ -161,6 +161,13 @@ export const RenameIcon = () => (
   </Icon>
 );
 
+export const TrashIcon = () => (
+  <Icon>
+    <path d="M4 6h12M8 6V4h4v2M5.5 6l.8 10h7.4l.8-10" />
+    <path d="M8.5 9v4.5M11.5 9v4.5" />
+  </Icon>
+);
+
 export const TagIcon = () => (
   <Icon>
     <path d="M3 10.2V4a1 1 0 0 1 1-1h6.2L17 9.8 10.8 16z" />

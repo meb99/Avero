@@ -169,6 +169,20 @@ pub struct TestPoint {
     pub name: Option<String>,
 }
 
+/// A straight copper track segment, from formats that carry routing.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Trace {
+    pub x1: f64,
+    pub y1: f64,
+    pub x2: f64,
+    pub y2: f64,
+    pub width: f64,
+    /// Outer layer the track is on; `Both` marks an inner layer.
+    pub side: Side,
+    pub net: u32,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Net {
@@ -176,6 +190,8 @@ pub struct Net {
     pub kind: NetKind,
     pub pins: Vec<u32>,
     pub test_points: Vec<u32>,
+    /// Indices into [`Board::traces`].
+    pub traces: Vec<u32>,
 }
 
 /// Identifies the file format a board was read from.
@@ -232,6 +248,8 @@ pub struct Board {
     pub parts: Vec<Part>,
     pub pins: Vec<Pin>,
     pub test_points: Vec<TestPoint>,
+    /// Copper tracks; empty for most boardview formats.
+    pub traces: Vec<Trace>,
     pub nets: Vec<Net>,
     /// Problems that did not prevent loading, such as skipped lines.
     pub warnings: Vec<String>,

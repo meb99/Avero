@@ -1,5 +1,5 @@
 import { GridIndex } from "./spatial";
-import type { Board, Bounds, Net, Part, Pin, Point, Selection, Side, TestPoint } from "./types";
+import type { Board, Bounds, Net, Part, Pin, Point, Selection, Side, TestPoint, Trace } from "./types";
 
 export type ViewSide = "top" | "bottom";
 
@@ -23,6 +23,7 @@ const ZERO_OHM = /^(0|0R|0R0|0\.0|0Ω|0 ?OHMS?)\b/i;
 export type Hit =
   | { kind: "pin"; pin: number }
   | { kind: "testPoint"; testPoint: number }
+  | { kind: "trace"; trace: number; net: number }
   | { kind: "part"; part: number };
 
 /** A loaded board plus the lookup structures the UI needs. */
@@ -30,6 +31,7 @@ export class BoardModel {
   readonly partIndex: GridIndex;
   readonly pinIndex: GridIndex;
   readonly testPointIndex: GridIndex;
+  readonly traceIndex: GridIndex;
   private readonly partsByName = new Map<string, number>();
   private readonly netsByName = new Map<string, number>();
   /** Parts sorted by name for list views. */
@@ -44,6 +46,7 @@ export class BoardModel {
     this.partIndex = new GridIndex(b, board.parts.length);
     this.pinIndex = new GridIndex(b, board.pins.length);
     this.testPointIndex = new GridIndex(b, board.testPoints.length);
+    this.traceIndex = new GridIndex(b, this.traces.length);
 
     board.parts.forEach((p, i) => {
       this.partIndex.insert(i, p.bounds);
@@ -51,6 +54,7 @@ export class BoardModel {
     });
     board.pins.forEach((p, i) => this.pinIndex.insert(i, circleBounds(p)));
     board.testPoints.forEach((t, i) => this.testPointIndex.insert(i, circleBounds(t)));
+    this.traces.forEach((t, i) => this.traceIndex.insert(i, traceBounds(t)));
     board.nets.forEach((n, i) => this.netsByName.set(n.name.toUpperCase(), i));
 
     const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
@@ -78,6 +82,10 @@ export class BoardModel {
 
   get testPoints(): TestPoint[] {
     return this.board.testPoints;
+  }
+
+  get traces(): Trace[] {
+    return this.board.traces ?? [];
   }
 
   findPart(name: string): number | undefined {
@@ -232,6 +240,10 @@ export class BoardModel {
       case "net": {
         const net = this.nets[sel.net];
         const pts: Point[] = [...net.pins.map((i) => this.pins[i]), ...net.testPoints.map((i) => this.testPoints[i])];
+        for (const i of net.traces ?? []) {
+          const t = this.traces[i];
+          pts.push({ x: t.x1, y: t.y1 }, { x: t.x2, y: t.y2 });
+        }
         if (pts.length === 0) return undefined;
         const b = boundsOf(pts);
         return padBounds(b, 40);
@@ -244,7 +256,7 @@ export class BoardModel {
    * points win over part bodies; among bodies the smallest one wins so that
    * small parts inside connectors or shields stay clickable.
    */
-  hitTest(p: Point, view: ViewSide, tolerance: number, showVias: boolean): Hit | undefined {
+  hitTest(p: Point, view: ViewSide, tolerance: number, showVias: boolean, showTraces = true): Hit | undefined {
     const probe: Bounds = { minX: p.x - tolerance, minY: p.y - tolerance, maxX: p.x + tolerance, maxY: p.y + tolerance };
 
     let best: Hit | undefined;
@@ -269,6 +281,19 @@ export class BoardModel {
     });
     if (best) return best;
 
+    if (showTraces) {
+      this.traceIndex.query(probe, (i) => {
+        const t = this.traces[i];
+        if (t.side !== view) return;
+        const d = segmentDistance(p, t) - t.width / 2;
+        if (d <= tolerance && d < bestDist) {
+          bestDist = d;
+          best = { kind: "trace", trace: i, net: t.net };
+        }
+      });
+      if (best) return best;
+    }
+
     let bestArea = Infinity;
     this.partIndex.query(probe, (i) => {
       const part = this.parts[i];
@@ -284,6 +309,25 @@ export class BoardModel {
     });
     return best;
   }
+}
+
+export function traceBounds(t: Trace): Bounds {
+  const r = t.width / 2;
+  return {
+    minX: Math.min(t.x1, t.x2) - r,
+    minY: Math.min(t.y1, t.y2) - r,
+    maxX: Math.max(t.x1, t.x2) + r,
+    maxY: Math.max(t.y1, t.y2) + r,
+  };
+}
+
+/** Distance from `p` to the center line of a trace. */
+function segmentDistance(p: Point, t: Trace): number {
+  const dx = t.x2 - t.x1;
+  const dy = t.y2 - t.y1;
+  const len2 = dx * dx + dy * dy;
+  const k = len2 > 0 ? Math.max(0, Math.min(1, ((p.x - t.x1) * dx + (p.y - t.y1) * dy) / len2)) : 0;
+  return Math.hypot(p.x - (t.x1 + k * dx), p.y - (t.y1 + k * dy));
 }
 
 export function circleBounds(c: { x: number; y: number; radius: number }): Bounds {
