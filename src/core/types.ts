@@ -62,7 +62,15 @@ export interface Trace {
   width: number;
   /** Outer layer; "both" marks an inner layer. */
   side: Side;
+  /** Index into Board.layers. */
+  layer: number;
   net: number;
+}
+
+/** Copper layer that carries traces; "both" marks an inner layer. */
+export interface Layer {
+  name: string;
+  side: Side;
 }
 
 export interface Net {
@@ -84,6 +92,8 @@ export interface Board {
   testPoints: TestPoint[];
   /** Copper tracks; missing or empty for most formats. */
   traces?: Trace[];
+  /** Layers of the traces, top first. */
+  layers?: Layer[];
   nets: Net[];
   warnings: string[];
   /** Encrypted parts left out (XinZhiZao without key). */

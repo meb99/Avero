@@ -1,5 +1,5 @@
 import { GridIndex } from "./spatial";
-import type { Board, Bounds, Net, Part, Pin, Point, Selection, Side, TestPoint, Trace } from "./types";
+import type { Board, Bounds, Net, Part, Pin, Point, Selection, Side, TestPoint, Trace, Layer } from "./types";
 
 export type ViewSide = "top" | "bottom";
 
@@ -86,6 +86,10 @@ export class BoardModel {
 
   get traces(): Trace[] {
     return this.board.traces ?? [];
+  }
+
+  get layers(): Layer[] {
+    return this.board.layers ?? [];
   }
 
   findPart(name: string): number | undefined {
@@ -256,7 +260,16 @@ export class BoardModel {
    * points win over part bodies; among bodies the smallest one wins so that
    * small parts inside connectors or shields stay clickable.
    */
-  hitTest(p: Point, view: ViewSide, tolerance: number, showVias: boolean, showTraces = true): Hit | undefined {
+  hitTest(
+    p: Point,
+    view: ViewSide,
+    tolerance: number,
+    showVias: boolean,
+    showTraces = true,
+    hiddenLayers: ReadonlySet<number> = new Set(),
+  ): Hit | undefined {
+    // On boards with routing, vias are part of the copper and always shown.
+    showVias ||= this.traces.length > 0;
     const probe: Bounds = { minX: p.x - tolerance, minY: p.y - tolerance, maxX: p.x + tolerance, maxY: p.y + tolerance };
 
     let best: Hit | undefined;
@@ -284,7 +297,7 @@ export class BoardModel {
     if (showTraces) {
       this.traceIndex.query(probe, (i) => {
         const t = this.traces[i];
-        if (t.side !== view) return;
+        if (t.side !== view || hiddenLayers.has(t.layer)) return;
         const d = segmentDistance(p, t) - t.width / 2;
         if (d <= tolerance && d < bestDist) {
           bestDist = d;

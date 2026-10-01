@@ -579,6 +579,7 @@ impl Parser {
                 to: t.to,
                 width: t.width,
                 side: sides.get(&t.layer).copied().unwrap_or(Side::Top),
+                layer: t.layer,
                 net: t.net,
             });
         }

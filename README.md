@@ -28,7 +28,7 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - Suche nach Bauteil, Netz oder Pin: `U3000`, `PP3V3`, `U3000.21`, `U1000 A12`.
 - **Befehlspalette** (`⌘K`): jeder Befehl, jedes Bauteil, Netz und jeder Pin in einer Liste.
 - **Verbindungslinien** (Ratsnest) zwischen den Pins des gewählten Netzes, jeweils zum nächsten Nachbarn.
-- **Leiterbahnen**, wo die Datei sie enthält (GenCAD `$ROUTES`): Bahnen der sichtbaren Seite in Kupferfarbe, das gewählte Netz auf allen Lagen hervorgehoben; ein Klick auf eine Bahn wählt ihr Netz. Abschaltbar in den Einstellungen.
+- **Leiterbahnen und Lagen**, wo die Datei sie enthält (GenCAD `$ROUTES`): jede Lage in eigener Farbe (oben rot, unten blau, Innenlagen bunt), die sichtbare Seite kräftig, Innenlagen und Rückseite schwächer, Vias als Punkte. Im Reiter „Lagen“ lässt sich jede Lage einzeln schalten („Nur oben“, „Nur unten“, „Alle an/aus“). Ein gewähltes Netz leuchtet auf allen Lagen, der Rest tritt zurück; ein Klick auf eine Bahn wählt ihr Netz. Abschaltbar in den Einstellungen.
 - **Netze verfolgen** über Spulen, Ferrite, Sicherungen, Jumper und 0-Ω-Widerstände: Das Detailpanel zeigt „Weiter über", z. B. `PP1V8_SW` → `PP1V8` über `L3001`.
 - Ansicht als PNG exportieren (`⇧⌘E`), mit allen Beschriftungen.
 - **Tabs**: Jedes weitere Board öffnet sich in einem eigenen Tab, mit eigenem Schaltplan, eigener Auswahl und Ansicht. Eine schon offene Datei springt zu ihrem Tab.

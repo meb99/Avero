@@ -7,7 +7,8 @@
 use std::collections::HashMap;
 
 use crate::model::{
-    Board, Bounds, FormatId, Mount, Net, NetKind, Part, Pin, Point, Side, TestPoint, TestPointKind, Trace,
+    Board, Bounds, FormatId, Layer, Mount, Net, NetKind, Part, Pin, Point, Side, TestPoint, TestPointKind,
+    Trace,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -57,6 +58,7 @@ pub(crate) struct RawTrace {
     pub to: Point,
     pub width: f64,
     pub side: Side,
+    pub layer: String,
     pub net: String,
 }
 
@@ -169,8 +171,11 @@ impl RawBoard {
             });
         }
 
+        let layers = order_layers(&self.traces);
+        let layer_index: HashMap<&str, u32> =
+            layers.iter().enumerate().map(|(i, l)| (l.name.as_str(), i as u32)).collect();
         let mut traces = Vec::with_capacity(self.traces.len());
-        for t in self.traces {
+        for t in &self.traces {
             let net = nets.add_trace(&t.net, traces.len() as u32);
             traces.push(Trace {
                 x1: t.from.x,
@@ -179,6 +184,7 @@ impl RawBoard {
                 y2: t.to.y,
                 width: t.width.max(0.0),
                 side: t.side,
+                layer: layer_index[t.layer.as_str()],
                 net,
             });
         }
@@ -239,11 +245,35 @@ impl RawBoard {
             pins,
             test_points,
             traces,
+            layers,
             nets: nets.finish(),
             warnings: self.warnings,
             locked_parts: self.locked_parts,
         }
     }
+}
+
+/// Distinct trace layers: top, inner layers by number, bottom.
+fn order_layers(traces: &[RawTrace]) -> Vec<Layer> {
+    let mut seen: HashMap<&str, Side> = HashMap::new();
+    for t in traces {
+        seen.entry(t.layer.as_str()).or_insert(t.side);
+    }
+    let number = |name: &str| -> u32 {
+        let digits: String = name.chars().rev().take_while(char::is_ascii_digit).collect();
+        digits.chars().rev().collect::<String>().parse().unwrap_or(u32::MAX)
+    };
+    let rank = |s: Side| match s {
+        Side::Top => 0,
+        Side::Both => 1,
+        Side::Bottom => 2,
+    };
+    let mut layers: Vec<Layer> =
+        seen.into_iter().map(|(name, side)| Layer { name: name.to_string(), side }).collect();
+    layers.sort_by(|a, b| {
+        (rank(a.side), number(&a.name), &a.name).cmp(&(rank(b.side), number(&b.name), &b.name))
+    });
+    layers
 }
 
 #[derive(Default)]

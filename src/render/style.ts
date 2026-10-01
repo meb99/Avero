@@ -1,12 +1,14 @@
 import { visibleFrom, type BoardModel, type ViewSide } from "../core/board";
 import type { NetKind, Selection } from "../core/types";
-import type { Palette, RGBA } from "./palette";
+import { layerColor, type Palette, type RGBA } from "./palette";
 
 export interface DisplayOptions {
   /** Show parts and pins of the far side faintly. */
   ghostOtherSide: boolean;
   showVias: boolean;
   showTraces: boolean;
+  /** Trace layers switched off in the layer list. */
+  hiddenLayers?: ReadonlySet<number>;
   /** Fade everything that is not part of the current selection. */
   dimUnselected: boolean;
 }
@@ -26,6 +28,9 @@ export interface BoardStyle {
 const GHOST_ALPHA = 0.12;
 const FAR_HIGHLIGHT_ALPHA = 0.45;
 const DIM_ALPHA = 0.4;
+const TRACE_DIM_ALPHA = 0.22;
+const INNER_ALPHA = 0.55;
+const FAR_TRACE_ALPHA = 0.35;
 
 function put(out: Uint8Array, i: number, c: RGBA, alpha = 1): void {
   out[i * 4] = c[0];
@@ -88,7 +93,8 @@ export function computeStyle(
     const t = testPoints[i];
     const base = t.kind === "via" ? palette.via : palette.nail;
     const near = visibleFrom(t.side, view);
-    const shown = t.kind !== "via" || options.showVias;
+    // On boards with routing, vias belong to the copper and stay visible.
+    const shown = t.kind !== "via" || options.showVias || model.traces.length > 0;
     if (selection.kind === "testPoint" && selection.testPoint === i) {
       put(testPointColors, i, palette.pinSelected, near ? 1 : FAR_HIGHLIGHT_ALPHA);
     } else if (net !== undefined && t.net === net && (shown || near)) {
@@ -100,19 +106,27 @@ export function computeStyle(
     }
   }
 
-  // Tracks of the side in view; inner layers and the far side only for the
-  // highlighted net, so it can be followed through the board.
+  // Every layer in its own color: the side in view strongest, inner layers
+  // weaker, the far side faint. A selection fades the rest so the net stands out.
   const traces = model.traces;
+  const layers = model.layers;
+  const hidden = options.hiddenLayers;
+  const layerColors = layers.map((_, i) => layerColor(palette, layers, i));
+  const traceDim = hasFocus && options.dimUnselected ? TRACE_DIM_ALPHA : 1;
   const traceColors = new Uint8Array(traces.length * 4);
   for (let i = 0; i < traces.length; i++) {
     const t = traces[i];
-    const near = t.side === view;
-    if (net !== undefined && t.net === net) {
-      put(traceColors, i, palette.pinHighlight, near ? 1 : FAR_HIGHLIGHT_ALPHA);
-    } else if (!options.showTraces || t.side === "both") {
-      put(traceColors, i, palette.trace, 0);
+    const color = layerColors[t.layer] ?? palette.trace;
+    if (!options.showTraces || hidden?.has(t.layer)) {
+      put(traceColors, i, color, 0);
+    } else if (net !== undefined && t.net === net) {
+      put(traceColors, i, palette.pinHighlight, 1);
+    } else if (t.side === view) {
+      put(traceColors, i, color, 0.9 * traceDim);
+    } else if (t.side === "both") {
+      put(traceColors, i, color, INNER_ALPHA * traceDim);
     } else {
-      put(traceColors, i, palette.trace, near ? dim : options.ghostOtherSide ? GHOST_ALPHA : 0);
+      put(traceColors, i, color, options.ghostOtherSide ? FAR_TRACE_ALPHA * traceDim : 0);
     }
   }
 

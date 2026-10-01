@@ -180,7 +180,18 @@ pub struct Trace {
     pub width: f64,
     /// Outer layer the track is on; `Both` marks an inner layer.
     pub side: Side,
+    /// Index into [`Board::layers`].
+    pub layer: u32,
     pub net: u32,
+}
+
+/// A copper layer that carries traces, ordered top to bottom.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Layer {
+    pub name: String,
+    /// `Both` for inner layers.
+    pub side: Side,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -250,6 +261,8 @@ pub struct Board {
     pub test_points: Vec<TestPoint>,
     /// Copper tracks; empty for most boardview formats.
     pub traces: Vec<Trace>,
+    /// Layers the tracks are on, top first.
+    pub layers: Vec<Layer>,
     pub nets: Vec<Net>,
     /// Problems that did not prevent loading, such as skipped lines.
     pub warnings: Vec<String>,

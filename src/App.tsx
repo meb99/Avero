@@ -122,6 +122,15 @@ export function App() {
   const [side, setSide] = useState<ViewSide>("top");
   const [rotation, setRotation] = useState(0);
   const [selection, setSelection] = useState<Selection>(NONE);
+  // Trace layers switched off, for the board they were chosen on.
+  const [layerChoice, setLayerChoice] = useState<{ model: BoardModel | null; hidden: ReadonlySet<number> }>({
+    model: null,
+    hidden: new Set(),
+  });
+  const hiddenLayers = useMemo(
+    () => (layerChoice.model === model ? layerChoice.hidden : new Set<number>()),
+    [layerChoice, model],
+  );
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<{ name: string; path?: string; error: LoadError } | null>(null);
   // A file that failed for lack of an XZZ key, reopened once the key is set.
@@ -1034,6 +1043,7 @@ export function App() {
                     selection={selection}
                     settings={settings}
                     palette={palette}
+                    hiddenLayers={hiddenLayers}
                     measured={measured}
                     initialView={initialView}
                     photo={photoLayer}
@@ -1114,6 +1124,9 @@ export function App() {
                   updateNotes={updateNotes}
                   onTolerance={(tolerance) => setSettings((s) => ({ ...s, tolerance }))}
                   onSelect={select}
+                  palette={palette}
+                  hiddenLayers={hiddenLayers}
+                  onHiddenLayers={(hidden) => setLayerChoice({ model, hidden })}
                 />
               )}
             </>

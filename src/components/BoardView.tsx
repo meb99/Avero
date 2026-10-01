@@ -43,6 +43,8 @@ interface Props {
   selection: Selection;
   settings: Settings;
   palette: Palette;
+  /** Trace layers switched off. */
+  hiddenLayers?: ReadonlySet<number>;
   /** Measurement state by net index, drawn as dots on pins. */
   measured?: ReadonlyMap<number, NetStatus>;
   /** View to show a newly set board with, instead of fitting it. */
@@ -64,6 +66,7 @@ interface Hover {
   text: string;
 }
 
+const NO_LAYERS: ReadonlySet<number> = new Set();
 const DRAG_THRESHOLD = 4;
 const FLY_MS = 280;
 
@@ -88,6 +91,7 @@ export function BoardView({
   selection,
   settings,
   palette,
+  hiddenLayers = NO_LAYERS,
   measured,
   initialView,
   photo,
@@ -112,6 +116,7 @@ export function BoardView({
     selection,
     settings,
     palette,
+    hiddenLayers,
     measured,
     highlightedNet: undefined as number | undefined,
   });
@@ -295,14 +300,15 @@ export function BoardView({
         ghostOtherSide: settings.ghostOtherSide,
         showVias: settings.showVias,
         showTraces: settings.showTraces,
+        hiddenLayers,
         dimUnselected: settings.dimUnselected,
       },
       palette,
     );
-    Object.assign(stateRef.current, { model, side, selection, settings, palette, highlightedNet: style.highlightedNet });
+    Object.assign(stateRef.current, { model, side, selection, settings, palette, hiddenLayers, highlightedNet: style.highlightedNet });
     rendererRef.current?.setStyle(style, palette);
     requestDraw();
-  }, [model, side, selection, settings, palette, requestDraw, rendererVersion]);
+  }, [model, side, selection, settings, palette, hiddenLayers, requestDraw, rendererVersion]);
 
   // Photo of the real board: new image or alignment re-uploads, opacity only redraws.
   const photoImage = photo?.image;
@@ -361,7 +367,7 @@ export function BoardView({
   const hitAt = (p: Point): Hit | undefined => {
     const cam = cameraRef.current;
     const s = stateRef.current;
-    return s.model.hitTest(cam.toWorld(p), s.side, 4 / cam.scale, s.settings.showVias, s.settings.showTraces);
+    return s.model.hitTest(cam.toWorld(p), s.side, 4 / cam.scale, s.settings.showVias, s.settings.showTraces, s.hiddenLayers);
   };
 
   const describe = (hit: Hit | undefined): string | null => {

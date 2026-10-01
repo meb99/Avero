@@ -7,8 +7,10 @@ import type { BoardNotes } from "../workbench/notes";
 import { Workbench } from "./Workbench";
 import { Details } from "./Details";
 import { VirtualList } from "./VirtualList";
+import { LayerList } from "./LayerList";
+import type { Palette } from "../render/palette";
 
-type Tab = "details" | "parts" | "nets" | "measure";
+type Tab = "details" | "parts" | "nets" | "layers" | "measure";
 
 interface Props {
   model: BoardModel;
@@ -20,9 +22,25 @@ interface Props {
   updateNotes(change: (n: BoardNotes) => BoardNotes): void;
   onTolerance(t: number): void;
   onSelect(selection: Selection, zoom: boolean): void;
+  palette: Palette;
+  hiddenLayers: ReadonlySet<number>;
+  onHiddenLayers(hidden: ReadonlySet<number>): void;
 }
 
-export function Sidebar({ model, selection, side, settings, notes, notesError, updateNotes, onTolerance, onSelect }: Props) {
+export function Sidebar({
+  model,
+  selection,
+  side,
+  settings,
+  notes,
+  notesError,
+  updateNotes,
+  onTolerance,
+  onSelect,
+  palette,
+  hiddenLayers,
+  onHiddenLayers,
+}: Props) {
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("details");
   const [partFilter, setPartFilter] = useState("");
@@ -44,20 +62,30 @@ export function Sidebar({ model, selection, side, settings, notes, notesError, u
     return q ? all.filter((i) => model.nets[i].name.toUpperCase().includes(q)) : all;
   }, [model, netFilter]);
 
+  const pinless = model.pins.length === 0 && model.traces.length > 0;
   const selectedPart = model.selectedPart(selection);
   const selectedNet = model.selectedNet(selection);
 
   return (
     <aside className="sidebar">
       <nav className="tabs" role="tablist">
-        {(["details", "parts", "nets", "measure"] as const).map((id) => (
+        {(["details", "parts", "nets", "layers", "measure"] as const)
+          .filter((id) => id !== "layers" || model.layers.length > 0)
+          .map((id) => (
           <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? "on" : ""} onClick={() => setTab(id)}>
             {t(`tab.${id}`)}
             {id === "parts" && <span className="count">{model.parts.length}</span>}
             {id === "nets" && <span className="count">{model.nets.length}</span>}
+            {id === "layers" && <span className="count">{model.layers.length}</span>}
           </button>
-        ))}
+          ))}
       </nav>
+
+      {tab === "layers" && model.layers.length > 0 && (
+        <div className="panel scroll">
+          <LayerList model={model} palette={palette} hidden={hiddenLayers} onChange={onHiddenLayers} />
+        </div>
+      )}
 
       {tab === "details" && (
         <div className="panel scroll">
@@ -123,7 +151,14 @@ export function Sidebar({ model, selection, side, settings, notes, notesError, u
                 <button className={`list-row${i === selectedNet ? " selected" : ""}`} onClick={() => onSelect({ kind: "net", net: i }, true)}>
                   <span className={`kind-bar kind-${n.kind}`} />
                   <span className="list-name">{n.name}</span>
-                  <span className="list-meta">{n.pins.length}</span>
+                  {/* Boards without pins connect through tracks: count those instead. */}
+                  {pinless ? (
+                    <span className="list-meta" title={t("list.netTraces")}>
+                      {n.traces?.length ?? 0}
+                    </span>
+                  ) : (
+                    <span className="list-meta">{n.pins.length}</span>
+                  )}
                 </button>
               );
             }}

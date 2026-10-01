@@ -168,6 +168,8 @@ export class BoardRenderer {
   private pins?: InstanceSet;
   private testPoints?: InstanceSet;
   private traces?: InstanceSet;
+  /** Trace index per instance: inner layers drawn first, top last. */
+  private traceOrder = new Uint32Array(0);
   private partLines?: InstanceSet;
   /** Part index per part outline segment, to expand per-part colors. */
   private partLineOwner = new Uint32Array(0);
@@ -289,9 +291,12 @@ export class BoardRenderer {
     this.testPoints = this.padSet(tpData, testPoints.length);
 
     const traces = model.traces;
+    const rank = { both: 0, bottom: 1, top: 2 } as const;
+    this.traceOrder = Uint32Array.from(traces.keys()).sort((a, b) => rank[traces[a].side] - rank[traces[b].side] || traces[a].layer - traces[b].layer);
     const traceData = new Float32Array(traces.length * 4);
     const traceWidths = new Float32Array(traces.length);
-    traces.forEach((t, i) => {
+    this.traceOrder.forEach((ti, i) => {
+      const t = traces[ti];
       traceData.set([t.x1, t.y1, t.x2, t.y2], i * 4);
       traceWidths[i] = -Math.max(t.width, 0.01);
     });
@@ -364,7 +369,11 @@ export class BoardRenderer {
     if (!this.pins || !this.testPoints || !this.partLines || !this.partFill || !this.boardLines) return;
     upload(gl, this.pins.colors, style.pinColors);
     upload(gl, this.testPoints.colors, style.testPointColors);
-    if (this.traces && this.traces.count > 0) upload(gl, this.traces.colors, style.traceColors);
+    if (this.traces && this.traces.count > 0) {
+      const colors = new Uint8Array(this.traceOrder.length * 4);
+      this.traceOrder.forEach((ti, i) => colors.set(style.traceColors.subarray(ti * 4, ti * 4 + 4), i * 4));
+      upload(gl, this.traces.colors, colors);
+    }
 
     const lineColors = new Uint8Array(this.partLineOwner.length * 4);
     const lineWidths = new Float32Array(this.partLineOwner.length);
