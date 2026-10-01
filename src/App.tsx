@@ -48,6 +48,7 @@ import { pickImport, type LibraryEntry, type LibraryFile } from "./workbench/lib
 import {
   addMarker,
   boardKey,
+  idTokens,
   netStatuses,
   newMarkerId,
   removeMarker,
@@ -57,6 +58,17 @@ import {
   type NetStatus,
 } from "./workbench/notes";
 import { MarkerEditor, PinnedLegend } from "./components/Markers";
+import { KnowledgePanel } from "./components/KnowledgePanel";
+import {
+  EMPTY_KNOWLEDGE,
+  loadKnowledge,
+  mergeKnowledge,
+  pagesForBoard,
+  pickKnowledgeFiles,
+  saveKnowledge,
+  type KnowledgeBase,
+} from "./knowledge/store";
+import { guessCategory } from "./workbench/catalog";
 import { PIN_COLORS } from "./render/palette";
 import { alignPhoto } from "./workbench/photo";
 import { loadPhotoImage } from "./workbench/photoImage";
@@ -379,6 +391,45 @@ export function App() {
   placingMarkerRef.current = placingMarker;
   const togglePinnedRef = useRef(togglePinned);
   togglePinnedRef.current = togglePinned;
+
+  // Repair knowledge (imported wiki pages), for the device in view.
+  const [knowledge, setKnowledge] = useState<KnowledgeBase>(EMPTY_KNOWLEDGE);
+  const [knowledgeBusy, setKnowledgeBusy] = useState(false);
+  const [knowledgeMessage, setKnowledgeMessage] = useState<string | null>(null);
+  useEffect(() => {
+    loadKnowledge()
+      .then(setKnowledge)
+      .catch(() => {
+        // Outside the desktop app there is nothing stored.
+      });
+  }, []);
+  const boardDevice = useMemo(() => guessCategory([source?.path ?? source?.name ?? ""]), [source]);
+  const boardNumbers = useMemo(() => {
+    const name = (source?.path ?? source?.name ?? "").split("/").slice(-2).join(" ");
+    return idTokens(name.replace(/\.[^.]+$/, ""));
+  }, [source]);
+  const knowledgeForBoard = useMemo(
+    () => pagesForBoard(knowledge, boardDevice, boardNumbers).length,
+    [knowledge, boardDevice, boardNumbers],
+  );
+  const importKnowledge = useCallback(async () => {
+    setKnowledgeBusy(true);
+    setKnowledgeMessage(null);
+    try {
+      const { pages, errors } = await pickKnowledgeFiles(t("kb.import"));
+      if (pages.length) {
+        const next = mergeKnowledge(knowledge, pages);
+        await saveKnowledge(next);
+        setKnowledge(next);
+      }
+      if (pages.length || errors.length)
+        setKnowledgeMessage([pages.length ? t("kb.imported", { n: pages.length }) : "", ...errors].filter(Boolean).join(" · "));
+    } catch (e) {
+      setKnowledgeMessage(String(e));
+    } finally {
+      setKnowledgeBusy(false);
+    }
+  }, [knowledge, t]);
 
   // A page in the occurrence list: show the schematic there.
   const jumpInSchematic = useCallback((text: string, hit: number) => {
@@ -1312,6 +1363,25 @@ export function App() {
                   pinnedNets={pinnedNets}
                   onTogglePin={togglePinned}
                   onShowMarker={showMarker}
+                  knowledgeCount={knowledgeForBoard}
+                  knowledge={
+                    <KnowledgePanel
+                      model={model}
+                      base={knowledge}
+                      device={boardDevice}
+                      boardNumbers={boardNumbers}
+                      busy={knowledgeBusy}
+                      message={knowledgeMessage}
+                      onImport={() => void importKnowledge()}
+                      onRemove={(page) => {
+                        const next = { ...knowledge, pages: knowledge.pages.filter((x) => x !== page) };
+                        setKnowledge(next);
+                        void saveKnowledge(next).catch((e) => setKnowledgeMessage(String(e)));
+                      }}
+                      onOpenUrl={(url) => openExternal(url)}
+                      onSelect={select}
+                    />
+                  }
                 />
               )}
             </>

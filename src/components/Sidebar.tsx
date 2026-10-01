@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { BoardModel, ViewSide } from "../core/board";
 import type { Selection } from "../core/types";
 import { useI18n } from "../i18n";
@@ -11,7 +11,7 @@ import { LayerList } from "./LayerList";
 import type { Palette, RGBA } from "../render/palette";
 import type { SchematicDocument } from "../schematic/document";
 
-type Tab = "details" | "parts" | "nets" | "layers" | "measure";
+type Tab = "details" | "parts" | "nets" | "layers" | "knowledge" | "measure";
 
 interface Props {
   model: BoardModel;
@@ -34,6 +34,9 @@ interface Props {
   pinnedNets: ReadonlyMap<number, RGBA>;
   onTogglePin(net: number): void;
   onShowMarker(id: string): void;
+  /** Contents of the "Knowledge" tab. */
+  knowledge: ReactNode;
+  knowledgeCount: number;
 }
 
 export function Sidebar({
@@ -56,6 +59,8 @@ export function Sidebar({
   pinnedNets,
   onTogglePin,
   onShowMarker,
+  knowledge,
+  knowledgeCount,
 }: Props) {
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("details");
@@ -86,7 +91,7 @@ export function Sidebar({
   return (
     <aside className="sidebar">
       <nav className="tabs" role="tablist">
-        {(["details", "parts", "nets", "layers", "measure"] as const)
+        {(["details", "parts", "nets", "layers", "knowledge", "measure"] as const)
           .filter((id) => id !== "layers" || model.layers.length > 0)
           .map((id) => (
           <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? "on" : ""} onClick={() => setTab(id)}>
@@ -94,9 +99,12 @@ export function Sidebar({
             {id === "parts" && <span className="count">{model.parts.length}</span>}
             {id === "nets" && <span className="count">{model.nets.length}</span>}
             {id === "layers" && <span className="count">{model.layers.length}</span>}
+            {id === "knowledge" && knowledgeCount > 0 && <span className="count">{knowledgeCount}</span>}
           </button>
           ))}
       </nav>
+
+      {tab === "knowledge" && <div className="panel scroll">{knowledge}</div>}
 
       {tab === "layers" && model.layers.length > 0 && (
         <div className="panel scroll">

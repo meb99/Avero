@@ -418,7 +418,7 @@ const RULES: Rule[] = [
 
 /** Lower case with separators unified, so `\b` works across `_`. */
 function normalize(texts: string[]): string {
-  return texts.join(" ").toLowerCase().replace(/_+/g, " ");
+  return texts.join(" ").toLowerCase().replace(/[_/\\]+/g, " ");
 }
 
 export interface GuessOptions {

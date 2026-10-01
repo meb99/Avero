@@ -279,6 +279,22 @@ fn remove_photo(app: tauri::AppHandle, path: String) -> Result<(), String> {
     notes::remove_photo(&photos_dir(&app)?, Path::new(&path))
 }
 
+fn data_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    use tauri::Manager;
+    app.path().app_data_dir().map_err(|e| e.to_string())
+}
+
+/// Imported repair knowledge (wiki pages), one JSON file.
+#[tauri::command]
+fn load_knowledge(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    notes::load(&data_dir(&app)?, "knowledge")
+}
+
+#[tauri::command]
+fn save_knowledge(app: tauri::AppHandle, data: String) -> Result<(), String> {
+    notes::save(&data_dir(&app)?, "knowledge", &data)
+}
+
 fn text_index_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     use tauri::Manager;
     app.path().app_data_dir().map(|d| d.join("text-index")).map_err(|e| e.to_string())
@@ -413,6 +429,8 @@ pub fn run() {
             import_photo,
             remove_photo,
             load_text_index,
+            load_knowledge,
+            save_knowledge,
             save_text_index,
             check_update,
             install_update,

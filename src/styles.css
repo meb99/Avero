@@ -2462,3 +2462,96 @@ button.danger {
 .autosort-note {
   color: var(--text);
 }
+
+/* Repair knowledge */
+
+.kb,
+.kb-page {
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.kb-bar,
+.kb-page-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.kb-bar input {
+  flex: 1;
+  min-width: 0;
+}
+
+.kb h3 {
+  font-size: 12px;
+  margin: 10px 0 4px;
+}
+
+.kb-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.kb-list li {
+  padding: 3px 0;
+}
+
+.kb-empty ol {
+  padding-left: 18px;
+}
+
+.kb-page h2 {
+  font-size: 16px;
+  margin: 6px 0 2px;
+}
+
+.kb-page h3 {
+  font-size: 14px;
+  margin: 14px 0 4px;
+}
+
+.kb-page h4 {
+  font-size: 13px;
+  margin: 10px 0 4px;
+}
+
+.kb-page ol,
+.kb-page ul {
+  padding-left: 18px;
+}
+
+.kb-note {
+  border-left: 3px solid var(--accent);
+  padding: 4px 8px;
+  background: var(--surface-2);
+}
+
+.kb-note.kb-warning {
+  border-left-color: var(--danger);
+}
+
+.kb-table-wrap {
+  overflow-x: auto;
+}
+
+.kb-table {
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 6px 0;
+}
+
+.kb-table th,
+.kb-table td {
+  border: 1px solid var(--border);
+  padding: 3px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.kb-source {
+  margin-top: 16px;
+  font-size: 11px;
+}
