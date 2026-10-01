@@ -2672,3 +2672,25 @@ button.danger {
   flex-wrap: wrap;
   margin: 4px 0 8px;
 }
+
+.pin-function {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--accent);
+  cursor: help;
+}
+
+.pinout-note {
+  font-size: 11px;
+  padding: 4px 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+}
+
+.pinout-note.pinout-mismatch {
+  border-left: 3px solid var(--danger);
+}
+
+.pinout-note.pinout-plausible {
+  border-left: 3px solid #d9a400;
+}

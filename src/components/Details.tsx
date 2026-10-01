@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { chipFor, type ChipInfo } from "../knowledge/chips";
+import { chipFor, type ChipInfo, type ChipPin } from "../knowledge/chips";
+import { checkPinout, type PinoutCheck } from "../knowledge/pinout";
 import { netReadings, partValues, type ObdData } from "../knowledge/obdata";
 import type { SchematicDocument } from "../schematic/document";
 import { SchematicHits } from "./SchematicHits";
@@ -33,6 +34,16 @@ interface Props {
   obdata?: ObdData | null;
 }
 
+/** Datasheet name of a pin, its function and target value on hover. */
+function PinFunction({ pin }: { pin?: ChipPin }) {
+  if (!pin) return <td />;
+  return (
+    <td className="pin-function" title={[pin.role, pin.expect].filter(Boolean).join(" — ")}>
+      {pin.name}
+    </td>
+  );
+}
+
 /** Labels of OpenBoardData component values. */
 const OBD_PART_KINDS: Record<string, MessageKey> = {
   v: "obd.value",
@@ -44,8 +55,19 @@ const OBD_PART_KINDS: Record<string, MessageKey> = {
 };
 
 /** What the maker's datasheet says about a known chip. */
-function ChipCard({ chip }: { chip: ChipInfo }) {
+function ChipCard({ chip, check }: { chip: ChipInfo; check: PinoutCheck | null }) {
   const { t } = useI18n();
+  const pinoutNote =
+    check && chip.pinout
+      ? check.status === "mismatch"
+        ? t(`pinout.mismatch.${check.reason ?? "pins"}`, {
+            bad: check.ground.total - check.ground.ok,
+            fit: check.names.fit,
+            n: check.names.total,
+            source: chip.pinout.source,
+          })
+        : t(`pinout.${check.status}`, { gOk: check.ground.ok, g: check.ground.total, fit: check.names.fit, n: check.names.total })
+      : null;
   const open = () => void openUrl(chip.url).catch(() => window.open(chip.url, "_blank"));
   return (
     <section className="details-section chip-card">
@@ -62,6 +84,11 @@ function ChipCard({ chip }: { chip: ChipInfo }) {
           ))}
           {chip.usedIn && <Row label={t("chip.usedIn")}>{chip.usedIn}</Row>}
         </dl>
+      )}
+      {pinoutNote && (
+        <p className={`pinout-note pinout-${check!.status}`} title={chip.pinout!.source}>
+          {pinoutNote}
+        </p>
       )}
       <button className="small" onClick={open}>
         {t("chip.source")}
@@ -307,6 +334,7 @@ export function Details({
     case "part": {
       const part = model.parts[selection.part];
       const chip = chipFor(part.device);
+      const pinCheck = chip?.pinout ? checkPinout(model, selection.part, chip.pinout) : null;
       const obdValues = obdata ? partValues(obdata, part.name) : [];
       const b = part.bounds;
       return (
@@ -317,7 +345,7 @@ export function Details({
             {part.device && <p className="details-device">{part.device}</p>}
           </header>
           {part.estimated && <p className="muted estimated-note">{t("details.estimated")}</p>}
-          {chip && <ChipCard chip={chip} />}
+          {chip && <ChipCard chip={chip} check={pinCheck} />}
           {obdValues.length > 0 && (
             <section className="details-section obd">
               <h3>
@@ -357,6 +385,7 @@ export function Details({
                         <span className={`net-chip kind-${net.kind}`}>{net.name}</span>
                       </td>
                       <td className="muted">{pin.name ?? ""}</td>
+                      {pinCheck && pinCheck.byPin.size > 0 && <PinFunction pin={pinCheck.byPin.get(index)} />}
                     </tr>
                   );
                 })}
@@ -370,6 +399,9 @@ export function Details({
     case "pin": {
       const pin = model.pins[selection.pin];
       const part = model.parts[pin.part];
+      const pinChip = chipFor(part.device);
+      // Only when the datasheet pinout fits this board (see checkPinout).
+      const datasheetPin = pinChip?.pinout ? checkPinout(model, pin.part, pinChip.pinout).byPin.get(selection.pin) : undefined;
       const net = model.nets[pin.net];
       return (
         <div className="details">
@@ -393,6 +425,12 @@ export function Details({
               {formatLength(pin.x, u)}, {formatLength(pin.y, u)}
             </Row>
             {pin.probe !== undefined && <Row label={t("details.probe")}>{pin.probe}</Row>}
+            {datasheetPin && (
+              <Row label={t("details.function")}>
+                <strong>{datasheetPin.name}</strong> – {datasheetPin.role}
+              </Row>
+            )}
+            {datasheetPin?.expect && <Row label={t("details.expected")}>{datasheetPin.expect}</Row>}
           </dl>
           {measure(pin.net)}
           {netMembers(pin.net, selection.pin)}
