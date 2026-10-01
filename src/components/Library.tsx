@@ -23,6 +23,7 @@ import {
 import { LibraryText } from "./LibraryText";
 import { RenameFiles, type RenameTarget } from "./RenameFiles";
 import { CategoryDialog, CategoryFields, CategoryTree } from "./Categories";
+import { DuplicatesDialog } from "./Duplicates";
 import {
   buildTree,
   categoryFolder,
@@ -76,6 +77,7 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<RenameTarget | null>(null);
+  const [dupes, setDupes] = useState(false);
   const handledDrop = useRef(drop?.nonce ?? 0);
 
   const rescan = async (folders: string[], own = root) => {
@@ -290,6 +292,9 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
           disabled={scanning}
         >
           {scanning ? t("library.scanning") : t("library.rescan")}
+        </button>
+        <button onClick={() => setDupes(true)} disabled={!root}>
+          {t("dupes.find")}
         </button>
       </div>
 
@@ -517,6 +522,16 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
           tree={tree}
           onDone={(changed) => {
             setSorting(null);
+            if (changed) void rescan(library.folders);
+          }}
+        />
+      )}
+      {dupes && root && (
+        <DuplicatesDialog
+          root={root}
+          folders={library.folders}
+          onDone={(changed) => {
+            setDupes(false);
             if (changed) void rescan(library.folders);
           }}
         />

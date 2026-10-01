@@ -2,6 +2,7 @@
 //! receives the finished board as JSON.
 
 mod conversion;
+mod duplicates;
 mod import;
 mod library;
 mod notes;
@@ -171,6 +172,14 @@ async fn read_file(path: String) -> Result<tauri::ipc::Response, LoadError> {
 async fn scan_library(folders: Vec<String>) -> library::LibraryScan {
     let roots: Vec<PathBuf> = folders.into_iter().map(PathBuf::from).collect();
     library::scan(&roots)
+}
+
+/// Files in the library folders with exactly the same content. Runs on a
+/// worker thread; same-size files are read completely.
+#[tauri::command]
+async fn find_duplicates(folders: Vec<String>) -> Vec<duplicates::DuplicateGroup> {
+    let roots: Vec<PathBuf> = folders.into_iter().map(PathBuf::from).collect();
+    duplicates::find(library::files(&roots))
 }
 
 /// Avero's own library folder, `~/Documents/Avero/Bibliothek`, created on demand.
@@ -396,6 +405,7 @@ pub fn run() {
             rename_library_file,
             move_library_files,
             trash_library_files,
+            find_duplicates,
             load_notes,
             save_notes,
             export_json,

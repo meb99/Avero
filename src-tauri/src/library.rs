@@ -180,6 +180,17 @@ impl Groups {
     }
 }
 
+/// Every board, schematic and unsupported boardview file under `roots`.
+pub fn files(roots: &[PathBuf]) -> Vec<LibraryFile> {
+    let mut found = Vec::new();
+    for (i, root) in roots.iter().enumerate() {
+        if root.is_dir() && !walk(root, root, 0, i, &mut found) {
+            break;
+        }
+    }
+    found.into_iter().map(|f| f.file).collect()
+}
+
 pub fn scan(roots: &[PathBuf]) -> LibraryScan {
     let mut found = Vec::new();
     let mut missing = Vec::new();

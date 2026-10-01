@@ -74,6 +74,16 @@ export function moveLibraryFiles(paths: string[], folder: string): Promise<strin
   return invoke<string[]>("move_library_files", { paths, folder });
 }
 
+/** Files with exactly the same content, oldest copy first. */
+export interface DuplicateGroup {
+  size: number;
+  files: LibraryFile[];
+}
+
+export function findDuplicates(folders: string[]): Promise<DuplicateGroup[]> {
+  return invoke<DuplicateGroup[]>("find_duplicates", { folders });
+}
+
 /** Moves library files to the macOS Trash. */
 export function trashLibraryFiles(paths: string[]): Promise<number> {
   return invoke<number>("trash_library_files", { paths });

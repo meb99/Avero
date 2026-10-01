@@ -2358,3 +2358,61 @@ button.danger {
   gap: 8px;
   padding: 3px 0;
 }
+
+/* Duplicate files */
+
+.dupes-dialog {
+  width: min(760px, 92vw);
+}
+
+.dupes-list {
+  max-height: 60vh;
+  overflow: auto;
+  margin: 8px 0;
+}
+
+.dupes-group h3 {
+  font-size: 13px;
+  margin: 10px 0 4px;
+}
+
+.dupes-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dupes-group li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 2px 0;
+}
+
+.dupes-group li .check {
+  flex: 1;
+  min-width: 0;
+}
+
+.dupes-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+}
+
+.dupes-group li.remove .dupes-path {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.dupes-dialog .dialog-footer .muted {
+  margin-right: auto;
+  font-size: 12px;
+}
+
+.dupes-group h3 {
+  text-transform: none;
+  letter-spacing: 0;
+}
