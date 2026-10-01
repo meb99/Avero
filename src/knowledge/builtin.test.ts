@@ -26,6 +26,14 @@ describe("tester screens", () => {
 });
 
 describe("built-in reference pages", () => {
+  it("leave out readings that are not references", () => {
+    const lite = BUILTIN_PAGES.find((p) => p.title.startsWith("Nintendo Switch Lite"))!;
+    const header = lite.blocks.flatMap((b) => (b.type === "table" ? [b.rows[0].join(" ")] : []));
+    expect(header.join(" ")).not.toContain("YCS Tail Plug");
+    const oled = BUILTIN_PAGES.find((p) => p.title.startsWith("Nintendo Switch OLED"))!;
+    expect(oled.blocks.filter((b) => b.type === "table")).toHaveLength(1);
+  });
+
   it("have tables of even width, no empty cells and a source", () => {
     for (const page of BUILTIN_PAGES) {
       expect(page.builtin).toBe(true);
@@ -42,8 +50,12 @@ describe("built-in reference pages", () => {
   it("show for their board only", () => {
     const base = withBuiltin(EMPTY_KNOWLEDGE, BUILTIN_PAGES);
     const titles = (brand: string, family: string, model: string) => pagesForBoard(base, { brand, family, model }, []).map((p) => p.title);
-    expect(titles("Nintendo", "Switch", "OLED")).toEqual(["Nintendo Switch OLED – USB-C Diodenwerte"]);
-    expect(titles("Nintendo", "Switch", "Lite")).toEqual(["Nintendo Switch Lite – USB-C Diodenwerte"]);
+    // Model pages first, then the family page that holds for every Switch.
+    expect(titles("Nintendo", "Switch", "OLED")).toEqual([
+      "Nintendo Switch OLED – USB-C Diodenwerte",
+      "Nintendo Switch – Ladeelektronik und Fremd-Docks",
+    ]);
+    expect(titles("Nintendo", "Switch", "Lite")[0]).toBe("Nintendo Switch Lite – USB-C Diodenwerte");
     expect(titles("Sony", "PlayStation", "5")).toEqual(["PlayStation 5 – Diodenwerte"]);
     expect(titles("Sony", "DualSense", "BDM-030")).toEqual(["DualSense – USB-C und Versionen"]);
     expect(titles("Microsoft", "Xbox", "Series X")).toEqual(["Xbox Series X – HDMI-Diodenwerte"]);

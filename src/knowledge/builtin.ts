@@ -8,7 +8,7 @@
  */
 import type { Category } from "../workbench/catalog";
 import type { KnowledgePage } from "./store";
-import type { Block, GalleryItem } from "./wikitext";
+import { LINK_CLOSE, LINK_MID, LINK_OPEN, type Block, type GalleryItem } from "./wikitext";
 
 const WIKI = "https://repair.wiki/w/";
 const wikiUrl = (title: string) => WIKI + encodeURIComponent(title.replace(/ /g, "_"));
@@ -112,6 +112,13 @@ function hdmiTable(caption: string, columns: [string, string[]][]): Block {
   };
 }
 
+const link = (label: string, url: string) => `${LINK_OPEN}${label}${LINK_MID}${url}${LINK_CLOSE}`;
+/** Where facts beyond repair.wiki come from, each checked against the original. */
+const sources = (...items: [string, string][]): Block[] => [
+  heading("Quellen"),
+  { type: "list", ordered: false, items: items.map(([label, url]) => link(label, url)) },
+];
+
 const note = (text: string, kind: "note" | "warning" | "tip" = "note"): Block => ({ type: "note", kind, text });
 const para = (text: string): Block => ({ type: "paragraph", text });
 const heading = (text: string): Block => ({ type: "heading", level: 2, text });
@@ -155,7 +162,7 @@ const HDMI = {
 };
 
 const HDMI_NOTE =
-  "Mechanic T-824 mit „HDMI Diode Test“-Adapter. Der Schirm (Pins 2, 5, 8, 11) und Pin 17 zeigen bei allen Konsolen 0.07 statt 0 – das liegt am Adapter.";
+  "Mechanic T-824 mit „HDMI Diode Test“-Adapter. Der Schirm (Pins 2, 5, 8, 11) und Pin 17 zeigen bei allen Konsolen 0.07 statt 0 – das liegt am Adapter. Im Betrieb liefert die Konsole auf Pin 18 +5 V (HDMI-Norm); fehlen sie, zuerst die 5-V-Versorgung des Ports prüfen.";
 
 const OLED = {
   t824: mechanicUsbC("GND OL OL .53 .50 .46 .46 .75 .53 OL OL GND GND OL OL .53 .75 .46 .46 .50 .53 OL OL GND"),
@@ -174,6 +181,7 @@ const LITE = {
   jcid: usbC("0 OL OL .548 .550 .810 .822 OL .548 OL OL 0", "0 OL OL .548 .550 .810 .822 OL .548 OL OL 0"),
   ibridge: usbC("GND OL OL .821 .564 .838 .845 OL .821 OL OL GND", "GND OL OL .821 .563 .838 .845 OL .821 OL OL GND"),
   tns360: usbC("GND OL OL .818 .559 .833 .840 OL .818 OL OL GND", "GND OL OL .818 .558 .833 .839 OL .818 OL OL GND"),
+  // Shown only in the note: this tester cannot read D± and CC on a Lite.
   ycsTail: usbC("GND OL OL .528 OL OL OL OL .528 OL OL GND", "GND OL OL .535 OL OL OL OL .537 OL OL GND"),
   uul: usbC("GND OL OL .526 .538 .803 .807 OL .525 OL OL GND", "GND OL OL .535 .548 .812 .815 OL .534 OL OL GND"),
 };
@@ -193,9 +201,9 @@ export const BUILTIN_PAGES: KnowledgePage[] = [
       ["2UUL PW31", OLED.uul],
     ]),
     note(
-      "Ein weiteres Mechanic-Foto einer ausgebauten Platine zeigt D+/D− bei 0.78 statt um 0.46–0.48 (Tabelle unten). Bei Abweichungen ein bekannt gutes Gerät mit demselben Tester gegenmessen.",
+      `Nicht als Referenz übernommen: Ein weiteres Mechanic-Foto (ausgebaute Platine) zeigt D+/D− ${combine([OLED.bare.A6, OLED.bare.A7])} statt um 0.46–0.48 auf demselben Testermodell, ohne erkennbaren Grund. Weicht dein Wert so ab, ein bekannt gutes Gerät mit demselben Tester gegenmessen.`,
+      "warning",
     ),
-    usbTable("Mechanic, ausgebaute Platine", [["Mechanic", OLED.bare]]),
     ...pictures(
       ["Nintendo_Switch_OLED_Diode_Readings_Mechanic_T824.jpg", "Mechanic T824"],
       ["Nintendo_Switch_OLED_Diode_Readings_Mechanic_T824SE.jpg", "Mechanic T824SE"],
@@ -204,7 +212,7 @@ export const BUILTIN_PAGES: KnowledgePage[] = [
       ["Nintendo_Switch_OLED_Diode_Readings_YCS_TNS_360.jpg", "YCS TNS 360"],
       ["Nintendo_Switch_OLED_Diode_Readings_YCS_Tail_Plug_Tester.jpg", "YCS Tail Plug Tester"],
       ["Nintendo_Switch_OLED_Diode_Readings_2UUL_PW31.jpg", "2UUL PW31"],
-      ["Switch_OLED_Mechanic_Readings.jpg", "Mechanic, ausgebaute Platine"],
+      ["Switch_OLED_Mechanic_Readings.jpg", "Mechanic, ausgebaute Platine (abweichend)"],
       ["Switch-oled-display-connector-diode-readings.jpg", "Display- und Spielkarten-Anschluss, Diodenwerte je Pin (nur im Bild)"],
     ),
   ]),
@@ -219,11 +227,10 @@ export const BUILTIN_PAGES: KnowledgePage[] = [
       ["JCID CD01", LITE.jcid],
       ["Qianli iBridge A3", LITE.ibridge],
       ["YCS TNS 360", LITE.tns360],
-      ["YCS Tail Plug", LITE.ycsTail],
       ["2UUL PW31", LITE.uul],
     ]),
     note(
-      "Der YCS Tail Plug Tester zeigt auf einer guten Switch Lite D+/D− und CC als OL und markiert sie als Fehler. Das liegt am Tester, nicht am Gerät – für D± und CC einen der anderen Tester verwenden.",
+      `Der YCS Tail Plug Tester taugt für die Switch Lite nicht: Auf einem guten Gerät zeigt er D+/D− und CC als OL und meldet Fehler, nur VBUS misst er (${combine([LITE.ycsTail.A4, LITE.ycsTail.B9])}). Deshalb steht er nicht in der Tabelle.`,
       "warning",
     ),
     ...pictures(
@@ -232,7 +239,7 @@ export const BUILTIN_PAGES: KnowledgePage[] = [
       ["Nintendo_Switch_Lite_Diode_Readings_JCID_CD01.jpg", "JCID CD01"],
       ["IBridge_USB-C_Diode_Readings.jpg", "Qianli iBridge A3"],
       ["YCS_USB-C_Diode_Readings.jpg", "YCS TNS 360"],
-      ["Nintendo_Switch_Lite_Diode_Readings_YCS_Tail_Plug.jpg", "YCS Tail Plug"],
+      ["Nintendo_Switch_Lite_Diode_Readings_YCS_Tail_Plug.jpg", "YCS Tail Plug (misst D± und CC nicht)"],
       ["Nintendo_Switch_Lite_Diode_Readings_2UUL_Tail_Plug.jpg", "2UUL PW31"],
     ),
   ]),
@@ -312,6 +319,70 @@ export const BUILTIN_PAGES: KnowledgePage[] = [
       ["M2_SSD.jpg", "M.2-SSD-Steckplatz (nur im Bild)"],
       ["Disk_Drive_DATA_FPC.jpg", "Laufwerk-Daten-Flexkabel (nur im Bild)"],
       ["LED_FPC.jpg", "LED-Flexkabel (nur im Bild)"],
+    ),
+  ]),
+
+  page("Nintendo Switch – Ladeelektronik und Fremd-Docks", "Nintendo Switch", { brand: "Nintendo", family: "Switch", model: "" }, [
+    para(
+      "Bauteile des Ladewegs laut Teileliste von repair.wiki (Switch HAC-001), Aufgaben und Grenzwerte aus den Datenblättern der Hersteller. Händler bieten den M92T36 auch für Switch Lite und OLED an.",
+    ),
+    {
+      type: "table",
+      header: true,
+      caption: "Ladeweg",
+      rows: [
+        ["Bauteil", "Aufgabe", "Wichtige Werte"],
+        ["M92T36 (ROHM)", "USB-C Power Delivery: handelt mit Netzteil/Dock die Spannung aus", "CC-Pin max. 6 V"],
+        ["BQ24193 (TI)", "Akkuladeregler mit Power-Path, USB-OTG", "Eingang 3,9–17 V, max. 22 V; Ladestrom bis 4,5 A"],
+        ["MAX17050 (Maxim)", "Ladestandsmessung (Fuel Gauge)", "–"],
+        ["MAX77620 (Maxim)", "System-PMIC, „großer PMIC“ auf Seite B", "13 Spannungsregler, RTC"],
+        ["MAX77621 (Maxim)", "Wandler für CPU und RAM („kleiner PMIC“)", "bis 16 A"],
+        ["PI3USB30532 (Diodes)", "Umschalter USB 3 / DisplayPort an der USB-C-Buchse (Bild am Dock)", "Versorgung 3,0–3,6 V"],
+      ],
+    },
+    note(
+      "Bekannte Ursache für tote Switches: Fremd-Docks (z. B. Nyko) legten 9 V auf den CC-Pin – 50 % über dem Grenzwert des M92T36 von 6 V. Der CC-Pin liegt nur 0,5 mm neben VBUS, das am Dock 15 V führt; verbogene oder verschmorte Kontakte in der Buchse können beide verbinden.",
+      "warning",
+    ),
+    para(
+      "Bei „lädt nicht“ daher zuerst die USB-C-Buchse unter dem Mikroskop prüfen, dann die Diodenwerte (Seite „USB-C Diodenwerte“ des Modells) und den M92T36.",
+    ),
+    ...sources(
+      ["repair.wiki: Nintendo Switch, Teileliste", wikiUrl("Nintendo Switch")],
+      ["ChargerLab: Ursachen für tote Switches (CC 9 V, Abstand zu VBUS)", "https://www.chargerlab.com/the-reasons-behind-the-nintendo-switch-bricking-situation"],
+      ["Texas Instruments: BQ24193 Datenblatt", "https://www.ti.com/product/BQ24193"],
+      ["Linux-Kernel: MAX77620 (Regler, RTC)", "https://www.kernel.org/doc/Documentation/devicetree/bindings/mfd/max77620.txt"],
+      ["Diodes Inc.: PI3USB30532", "https://diodes.com/part/PI3USB30532"],
+      ["Händler: M92T36 für Switch, Lite, OLED", "https://beetstech.com/product/nintendo-switch-usb-c-power-delivery-controller-ic-m92t36"],
+    ),
+  ]),
+
+  page("Konsolen – HDMI-Chips", "Category:Game Consoles", { brand: "", family: "", model: "" }, [
+    para(
+      "Welcher Chip das HDMI-Signal treibt – bei „kein Bild“ nach Port und Zuleitungen die nächste Station. Nur Angaben, die mindestens zwei Quellen übereinstimmend nennen; Versorgungsspannungen aus den Datenblättern.",
+    ),
+    {
+      type: "table",
+      header: true,
+      caption: "HDMI-Chips",
+      rows: [
+        ["Konsole", "Chip", "Versorgung"],
+        ["PlayStation 5", "Panasonic MN864739 (HDMI-Encoder)", "kein öffentliches Datenblatt"],
+        ["Xbox One X", "TI TDP158 (HDMI-Redriver)", "VDD 1,1 V, VCC 3,3 V"],
+        ["Xbox Series X / S", "Aufschrift NB7N621M; passt zu onsemi NB7NQ621M (HDMI-2.1-Redriver)", "3,3 V"],
+      ],
+    },
+    note(
+      "PS4: Händler und Foren ordnen MN86471A und MN864729 den Modellen widersprüchlich zu. Deshalb hier keine Angabe – die Aufschrift auf dem Board ablesen.",
+    ),
+    ...sources(
+      ["Händler: MN864739 für PS5 (5g-m)", "https://www.5g-m.com/en/spare-parts-playstation-5/32346-hdmi-ic-mn864739-ps5.html"],
+      ["Händler: MN864739 für PS5 (dalbani)", "https://dalbani.com/product/new-panasonic-hdmi-encoder-video-ic-chip-mn864739-for-sony-ps5/"],
+      ["Händler: TDP158 für Xbox One X (5g-m)", "https://www.5g-m.com/en/spare-parts-xbox/27427-ic-tdp158-hdmi-xbox-one-x.html"],
+      ["Händler: TDP158 für Xbox One X (dalbani)", "https://dalbani.com/product/oem-xbox-one-x-hdmi-tdp158-75dp159-retimer-ic-chip-display-interface-ic-interfac/"],
+      ["Texas Instruments: TDP158 Datenblatt", "https://www.ti.com/product/TDP158"],
+      ["Händler: NB7N621M für Xbox Series X/S (dalbani)", "https://dalbani.com/product/oem-nb7n621m-hdmi-retimer-ic-chip-driver-mainboard-for-xbox-series-x-s-console/"],
+      ["onsemi: NB7NQ621M Datenblatt", "https://www.onsemi.com/products/signal-conditioning-control/redrivers/nb7nq621m"],
     ),
   ]),
 
