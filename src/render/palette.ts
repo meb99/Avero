@@ -23,6 +23,10 @@ export interface Palette {
   ratsnest: RGBA;
   nail: RGBA;
   via: RGBA;
+  /** Body fill per package family, so parts are told apart at a glance. */
+  packageFill: Record<"passive" | "inductor" | "diode" | "crystal" | "ic" | "connector", RGBA>;
+  /** Pads of estimated footprints. */
+  padMark: RGBA;
   /** Markers of parts with known position only: chips and small parts. */
   markerChip: RGBA;
   markerSmall: RGBA;
@@ -59,6 +63,15 @@ export const DARK: Palette = {
   via: [120, 144, 156, 255],
   trace: [196, 128, 64, 150],
   markerChip: [245, 245, 245, 255],
+  packageFill: {
+    passive: [196, 156, 98, 210],
+    inductor: [120, 128, 138, 220],
+    diode: [96, 96, 104, 230],
+    crystal: [190, 196, 204, 220],
+    ic: [44, 48, 56, 235],
+    connector: [210, 214, 220, 60],
+  },
+  padMark: [214, 184, 110, 255],
   markerSmall: [176, 190, 197, 230],
   layerTop: [239, 83, 80, 255],
   layerBottom: [66, 133, 244, 255],
@@ -99,6 +112,15 @@ export const LIGHT: Palette = {
   via: [120, 144, 156, 255],
   trace: [184, 106, 40, 140],
   markerChip: [33, 33, 33, 255],
+  packageFill: {
+    passive: [190, 142, 76, 225],
+    inductor: [96, 104, 114, 230],
+    diode: [70, 70, 78, 235],
+    crystal: [150, 158, 168, 230],
+    ic: [40, 44, 52, 235],
+    connector: [90, 96, 104, 50],
+  },
+  padMark: [176, 140, 56, 255],
   markerSmall: [84, 110, 122, 230],
   layerTop: [211, 47, 47, 255],
   layerBottom: [21, 101, 192, 255],

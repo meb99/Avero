@@ -18,6 +18,15 @@ export interface Bounds {
   maxY: number;
 }
 
+export type Package = "passive" | "inductor" | "diode" | "crystal" | "ic" | "connector";
+
+/** Pad drawn for a part's shape only; no pin, no net. */
+export interface PadMark {
+  x: number;
+  y: number;
+  radius: number;
+}
+
 export interface Part {
   name: string;
   side: Side;
@@ -29,6 +38,10 @@ export interface Part {
   device?: string;
   /** Only the position is known: drawn as a marker, not as a body. */
   marker?: boolean;
+  package?: Package;
+  /** Body, side, pads and pins were estimated from the copper. */
+  estimated?: boolean;
+  pads?: PadMark[];
 }
 
 export interface Pin {

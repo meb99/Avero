@@ -437,9 +437,11 @@ VIA VIASTACK_1 52000 51000 ALL 0 VIA_1\n$ENDROUTES\n";
     let net = &b.nets[b.find_net("PP3V3").unwrap()];
     assert_eq!(net.kind, NetKind::Power);
     assert_eq!((net.traces.len(), net.test_points.len()), (3, 1));
+    // Without matching copper the part gets a typical 0402 body around its place.
     let c = part(&b, "C-0402");
     assert!(c.outline.len() == 4 && c.bounds.min_x < 52000.0 && c.bounds.max_x > 52000.0);
-    assert!(c.marker);
+    assert!(c.estimated && !c.marker);
+    assert_eq!(c.package, Some(avero_formats::Package::Passive));
 }
 
 fn cst_fixture() -> Vec<u8> {

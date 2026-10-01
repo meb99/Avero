@@ -7,8 +7,8 @@
 use std::collections::HashMap;
 
 use crate::model::{
-    Board, Bounds, FormatId, Layer, Mount, Net, NetKind, Part, Pin, Point, Side, TestPoint, TestPointKind,
-    Trace,
+    Board, Bounds, FormatId, Layer, Mount, Net, NetKind, Package, PadMark, Part, Pin, Point, Side, TestPoint,
+    TestPointKind, Trace,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -34,11 +34,27 @@ pub(crate) struct RawPart {
     pub outline: Option<Vec<Point>>,
     /// Only the position is known; `outline` is a small square around it.
     pub marker: bool,
+    pub package: Option<Package>,
+    /// Body, side, pads and pins estimated from the copper.
+    pub estimated: bool,
+    /// Pads drawn for the shape only.
+    pub pads: Vec<PadMark>,
 }
 
 impl RawPart {
     pub fn new(name: impl Into<String>, side: Side, mount: Mount) -> Self {
-        Self { name: name.into(), side, mount, device: None, pins: Vec::new(), outline: None, marker: false }
+        Self {
+            name: name.into(),
+            side,
+            mount,
+            device: None,
+            pins: Vec::new(),
+            outline: None,
+            marker: false,
+            package: None,
+            estimated: false,
+            pads: Vec::new(),
+        }
     }
 }
 
@@ -152,6 +168,9 @@ impl RawBoard {
                 bounds,
                 device: raw.device.filter(|d| !d.is_empty()),
                 marker: raw.marker,
+                package: raw.package,
+                estimated: raw.estimated,
+                pads: raw.pads,
             });
         }
 

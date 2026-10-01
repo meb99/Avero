@@ -171,6 +171,9 @@ export class BoardRenderer {
   private testPoints?: InstanceSet;
   private traces?: InstanceSet;
   private markers?: InstanceSet;
+  private padMarks?: InstanceSet;
+  /** Part index per shape-only pad. */
+  private padMarkOwner = new Uint32Array(0);
   /** Part index per marker instance. */
   private markerOwner = new Uint32Array(0);
   /** Trace index per instance: inner layers drawn first, top last. */
@@ -318,6 +321,16 @@ export class BoardRenderer {
       markerOwner.push(i);
     });
     this.markerOwner = Uint32Array.from(markerOwner);
+    const padData: number[] = [];
+    const padOwner: number[] = [];
+    parts.forEach((p, i) => {
+      for (const pad of p.pads ?? []) {
+        padData.push(pad.x, pad.y, pad.radius, SHAPE_SQUARE);
+        padOwner.push(i);
+      }
+    });
+    this.padMarkOwner = Uint32Array.from(padOwner);
+    this.padMarks = this.padSet(new Float32Array(padData), padOwner.length);
     this.markers = this.padSet(new Float32Array(markerData), markerOwner.length);
 
     const segs: number[] = [];
@@ -388,6 +401,11 @@ export class BoardRenderer {
     if (!this.pins || !this.testPoints || !this.partLines || !this.partFill || !this.boardLines) return;
     upload(gl, this.pins.colors, style.pinColors);
     upload(gl, this.testPoints.colors, style.testPointColors);
+    if (this.padMarks && this.padMarks.count > 0) {
+      const colors = new Uint8Array(this.padMarkOwner.length * 4);
+      this.padMarkOwner.forEach((part, i) => colors.set(style.padMarkColors.subarray(part * 4, part * 4 + 4), i * 4));
+      upload(gl, this.padMarks.colors, colors);
+    }
     if (this.markers && this.markers.count > 0) {
       const colors = new Uint8Array(this.markerOwner.length * 4);
       this.markerOwner.forEach((part, i) => colors.set(style.markerColors.subarray(part * 4, part * 4 + 4), i * 4));
@@ -571,7 +589,7 @@ export class BoardRenderer {
     gl.uniform1f(pad.uniforms.u_scale, camera.scale * dpr);
     gl.uniform1f(pad.uniforms.u_minRadius, 1.2 * dpr);
     gl.uniform1f(pad.uniforms.u_dpr, dpr);
-    for (const set of [this.pins, this.testPoints, this.markers]) {
+    for (const set of [this.padMarks, this.pins, this.testPoints, this.markers]) {
       if (set && set.count > 0) {
         gl.bindVertexArray(set.vao);
         gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, set.count);
@@ -594,7 +612,7 @@ export class BoardRenderer {
     for (const v of this.vaos) gl.deleteVertexArray(v);
     this.buffers = [];
     this.vaos = [];
-    this.pins = this.testPoints = this.traces = this.markers = this.partLines = this.boardLines = undefined;
+    this.pins = this.testPoints = this.traces = this.markers = this.padMarks = this.partLines = this.boardLines = undefined;
     this.partFill = undefined;
     this.boardFill = undefined;
   }

@@ -9,6 +9,7 @@ use std::collections::{HashMap, HashSet};
 use std::f64::consts::{PI, TAU};
 
 use crate::builder::{RawBoard, RawPart, RawPin, RawTestPoint, RawTrace};
+use crate::infer::{self, Placement};
 use crate::model::{FormatId, Mount, Point, Side, TestPointKind};
 use crate::text::{contains, lines, trim, Fields};
 use crate::ParseError;
@@ -501,6 +502,7 @@ impl Parser {
         board.outline_segments = self.outline;
         let mut placed: HashSet<(String, i64, i64, bool)> = HashSet::new();
         let mut missing_shapes = 0usize;
+        let mut placements = Vec::new();
 
         for c in &self.components {
             let mut part = RawPart::new(c.name.clone(), c.side, Mount::Smd);
@@ -535,6 +537,7 @@ impl Parser {
                     Point::new(x - r, y + r),
                 ]);
                 part.marker = true;
+                placements.push(Placement { part: board.parts.len(), center: c.place, rotation: c.rotation });
                 board.parts.push(part);
                 continue;
             }
@@ -597,6 +600,15 @@ impl Parser {
         }
         if missing_shapes > 0 {
             board.warn(format!("{missing_shapes} components reference shapes that are not defined"));
+        }
+        // Placements without shapes: estimate the parts from the copper.
+        if !placements.is_empty() && !board.traces.is_empty() {
+            let with_pins = infer::footprints(&mut board, &placements);
+            board.warn(format!(
+                "{} parts have no shape in the file; body, side and pads are estimated from the copper, \
+                 pins and nets for {with_pins} of them",
+                placements.len()
+            ));
         }
         board
     }

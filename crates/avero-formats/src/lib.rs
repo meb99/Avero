@@ -13,6 +13,7 @@
 mod builder;
 pub mod demo;
 pub mod formats;
+mod infer;
 pub mod model;
 mod text;
 

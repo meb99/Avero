@@ -118,6 +118,27 @@ impl Bounds {
     }
 }
 
+/// Package family of a part, when known.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Package {
+    /// Two-terminal chip: capacitor or resistor.
+    Passive,
+    Inductor,
+    Diode,
+    Crystal,
+    Ic,
+    Connector,
+}
+
+/// A pad drawn for the part's shape only; it has no pin and no net.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct PadMark {
+    pub x: f64,
+    pub y: f64,
+    pub radius: f64,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Part {
@@ -136,6 +157,14 @@ pub struct Part {
     /// Only the position is known (no pins, no body): drawn as a marker.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub marker: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub package: Option<Package>,
+    /// Body, side, pads and pins were estimated from the copper.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub estimated: bool,
+    /// Pads without pin, for the part's shape.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub pads: Vec<PadMark>,
 }
 
 #[derive(Debug, Clone, Serialize)]

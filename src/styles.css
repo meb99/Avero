@@ -2108,3 +2108,8 @@ button.danger {
   margin-top: 12px;
   font-size: 12px;
 }
+
+.estimated-note {
+  font-size: 12px;
+  margin: 0 0 8px;
+}

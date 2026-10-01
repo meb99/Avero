@@ -137,7 +137,9 @@ export function Details({ model, selection, side, settings, notes, updateNotes, 
             <h2>{part.name}</h2>
             {part.device && <p className="details-device">{part.device}</p>}
           </header>
+          {part.estimated && <p className="muted estimated-note">{t("details.estimated")}</p>}
           <dl className="props">
+            {part.package && <Row label={t("details.package")}>{t(`package.${part.package}`)}</Row>}
             <Row label={t("details.side")}>{t(sideKey[part.side])}</Row>
             <Row label={t("details.mount")}>{t(part.mount === "th" ? "mount.th" : "mount.smd")}</Row>
             <Row label={t("details.pins")}>{part.pinCount}</Row>

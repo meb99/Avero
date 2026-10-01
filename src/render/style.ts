@@ -18,6 +18,8 @@ export interface BoardStyle {
   pinColors: Uint8Array;
   testPointColors: Uint8Array;
   traceColors: Uint8Array;
+  /** Per part; colors the shape-only pads of estimated parts. */
+  padMarkColors: Uint8Array;
   /** Per part; only used for parts drawn as markers. */
   markerColors: Uint8Array;
   partFillColors: Uint8Array;
@@ -141,6 +143,7 @@ export function computeStyle(
     else put(markerColors, i, markerSize(part) > 4 ? palette.markerChip : palette.markerSmall, near ? dim : options.ghostOtherSide ? GHOST_ALPHA : 0);
   }
 
+  const padMarkColors = new Uint8Array(parts.length * 4);
   const partFillColors = new Uint8Array(parts.length * 4);
   const partOutlineColors = new Uint8Array(parts.length * 4);
   const partOutlineWidths = new Float32Array(parts.length);
@@ -148,6 +151,15 @@ export function computeStyle(
     const near = visibleFrom(parts[i].side, view);
     const far = near ? 1 : options.ghostOtherSide ? GHOST_ALPHA : 0;
     partOutlineWidths[i] = 1;
+    put(padMarkColors, i, palette.padMark, near ? dim : far);
+    const pkg = parts[i].package;
+    if (pkg && i !== selectedPart) {
+      // Package families in their own colors: caps tan, coils grey, chips black.
+      put(partFillColors, i, palette.packageFill[pkg], near ? (partsOnNet.has(i) ? 1 : dim) : far);
+      put(partOutlineColors, i, partsOnNet.has(i) ? palette.partOnNetOutline : palette.partOutline, near ? (partsOnNet.has(i) ? 1 : dim) : far);
+      partOutlineWidths[i] = partsOnNet.has(i) ? 2 : 1;
+      continue;
+    }
     if (i === selectedPart) {
       put(partFillColors, i, palette.partSelectedFill, near ? 1 : FAR_HIGHLIGHT_ALPHA);
       put(partOutlineColors, i, palette.partSelectedOutline, near ? 1 : FAR_HIGHLIGHT_ALPHA);
@@ -162,5 +174,5 @@ export function computeStyle(
     }
   }
 
-  return { pinColors, testPointColors, traceColors, markerColors, partFillColors, partOutlineColors, partOutlineWidths, highlightedNet: net, selectedPart };
+  return { pinColors, testPointColors, traceColors, markerColors, padMarkColors, partFillColors, partOutlineColors, partOutlineWidths, highlightedNet: net, selectedPart };
 }
