@@ -7,6 +7,7 @@
  * pins here, so each value is copied only once.
  */
 import type { Category } from "../workbench/catalog";
+import { CHIPS } from "./chips";
 import type { KnowledgePage } from "./store";
 import { LINK_CLOSE, LINK_MID, LINK_OPEN, type Block, type GalleryItem } from "./wikitext";
 
@@ -186,8 +187,36 @@ const LITE = {
   uul: usbC("GND OL OL .526 .538 .803 .807 OL .525 OL OL GND", "GND OL OL .535 .548 .812 .815 OL .534 OL OL GND"),
 };
 
+/** All known chips on one page, so search finds them; the same facts show on a part with that device. */
+const CHIP_PAGE: KnowledgePage = {
+  title: "Chip-Datenbank – häufige Reparatur-ICs",
+  url: "https://github.com/meb99/Avero",
+  categories: ["Chips", "Datenblätter"],
+  device: { brand: "", family: "", model: "" },
+  imported: "2026-10-01T00:00:00Z",
+  source: "Herstellerangaben",
+  license: "Fakten aus Datenblättern",
+  builtin: true,
+  blocks: [
+    para(
+      "Laderegler, Spannungswandler, PD- und HDMI-Chips, die bei Reparaturen oft auffallen. Alle Werte stammen aus dem Datenblatt oder von der Produktseite des Herstellers. Steht der Typ in der Boarddatei (z. B. ISL88739AHRZ), zeigt Avero diese Angaben direkt beim Bauteil.",
+    ),
+    {
+      type: "table",
+      header: true,
+      caption: "Chips",
+      rows: [
+        ["Chip", "Hersteller", "Aufgabe", "Werte"],
+        ...CHIPS.map((c) => [c.name, c.maker, c.role, c.facts.map(([k, v]) => `${k}: ${v}`).join("\n") || "–"]),
+      ],
+    },
+    ...sources(...CHIPS.map((c): [string, string] => [`${c.name} (${c.maker})`, c.url])),
+  ],
+};
+
 /** Pages built into Avero; they show like imported pages but cannot be removed. */
 export const BUILTIN_PAGES: KnowledgePage[] = [
+  CHIP_PAGE,
   page("Nintendo Switch OLED – USB-C Diodenwerte", "Nintendo Switch OLED", { brand: "Nintendo", family: "Switch", model: "OLED" }, [
     note(`${TESTERS_DIFFER} Beispiel: VBUS zeigt 0,53 auf Mechanic und JCID, aber 0,81 auf YCS TNS 360 und iBridge.`, "warning"),
     para(`${USB_C_INTRO} Platine HEG-CPU-01.`),

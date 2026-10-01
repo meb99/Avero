@@ -35,6 +35,8 @@ export const en = {
   "list.netTraces": "Track segments (this board has no pins)",
 
   "details.empty": "Click a part, pin or net to see details. Double-click zooms to it.",
+  "chip.usedIn": "Used in",
+  "chip.source": "Open source",
   "details.part": "Part",
   "details.pin": "Pin",
   "details.net": "Net",

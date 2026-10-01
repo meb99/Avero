@@ -37,8 +37,10 @@ describe("built-in reference pages", () => {
   it("have tables of even width, no empty cells and a source", () => {
     for (const page of BUILTIN_PAGES) {
       expect(page.builtin).toBe(true);
-      expect(page.license).toBe("CC BY-SA 3.0");
-      expect(page.url).toMatch(/^https:\/\/repair\.wiki\/w\//);
+      if (page.source === "repair.wiki") {
+        expect(page.license).toBe("CC BY-SA 3.0");
+        expect(page.url).toMatch(/^https:\/\/repair\.wiki\/w\//);
+      } else expect(page.license).toBeTruthy();
       for (const b of page.blocks)
         if (b.type === "table") {
           expect(new Set(b.rows.map((r) => r.length)).size).toBe(1);

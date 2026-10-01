@@ -1,4 +1,6 @@
 import { useState, type ReactNode } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { chipFor, type ChipInfo } from "../knowledge/chips";
 import type { SchematicDocument } from "../schematic/document";
 import { SchematicHits } from "./SchematicHits";
 import type { RGBA } from "../render/palette";
@@ -26,6 +28,33 @@ interface Props {
   /** Nets pinned in their own colors on the board. */
   pinnedNets?: ReadonlyMap<number, RGBA>;
   onTogglePin?(net: number): void;
+}
+
+/** What the maker's datasheet says about a known chip. */
+function ChipCard({ chip }: { chip: ChipInfo }) {
+  const { t } = useI18n();
+  const open = () => void openUrl(chip.url).catch(() => window.open(chip.url, "_blank"));
+  return (
+    <section className="details-section chip-card">
+      <h3>
+        {chip.name} <span className="muted">· {chip.maker}</span>
+      </h3>
+      <p>{chip.role}</p>
+      {(chip.facts.length > 0 || chip.usedIn) && (
+        <dl className="props">
+          {chip.facts.map(([label, value]) => (
+            <Row key={label} label={label}>
+              {value}
+            </Row>
+          ))}
+          {chip.usedIn && <Row label={t("chip.usedIn")}>{chip.usedIn}</Row>}
+        </dl>
+      )}
+      <button className="small" onClick={open}>
+        {t("chip.source")}
+      </button>
+    </section>
+  );
 }
 
 /** Inline editor for a net's own name; empty gives the file name back. */
@@ -199,6 +228,7 @@ export function Details({
 
     case "part": {
       const part = model.parts[selection.part];
+      const chip = chipFor(part.device);
       const b = part.bounds;
       return (
         <div className="details">
@@ -208,6 +238,7 @@ export function Details({
             {part.device && <p className="details-device">{part.device}</p>}
           </header>
           {part.estimated && <p className="muted estimated-note">{t("details.estimated")}</p>}
+          {chip && <ChipCard chip={chip} />}
           <dl className="props">
             {part.package && <Row label={t("details.package")}>{t(`package.${part.package}`)}</Row>}
             <Row label={t("details.side")}>{t(sideKey[part.side])}</Row>

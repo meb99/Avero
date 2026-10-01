@@ -37,6 +37,8 @@ export const de: Record<MessageKey, string> = {
   "list.netTraces": "Leiterbahn-Stücke (dieses Board hat keine Pins)",
 
   "details.empty": "Klicke auf ein Bauteil, einen Pin oder ein Netz, um Details zu sehen. Doppelklick zoomt hin.",
+  "chip.usedIn": "Verbaut in",
+  "chip.source": "Quelle öffnen",
   "details.part": "Bauteil",
   "details.pin": "Pin",
   "details.net": "Netz",

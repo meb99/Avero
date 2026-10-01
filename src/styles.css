@@ -2630,3 +2630,13 @@ button.danger {
 .kb-table th {
   white-space: pre-line;
 }
+
+.chip-card {
+  border-left: 3px solid var(--accent);
+  padding-left: 8px;
+  margin-bottom: 12px;
+}
+
+.chip-card p {
+  margin: 2px 0 6px;
+}
