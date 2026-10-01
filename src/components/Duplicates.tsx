@@ -38,7 +38,8 @@ export function DuplicatesDialog({ root, folders, onDone }: Props) {
 
   useEffect(() => {
     let alive = true;
-    findDuplicates([root, ...folders])
+    // Each folder once; the Rust side also drops paths listed twice.
+    findDuplicates([...new Set([root, ...folders])])
       .then((found) => {
         if (!alive) return;
         setGroups(found);

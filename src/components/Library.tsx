@@ -110,26 +110,28 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
    * Puts freshly imported boards into Brand › Family › Model: by their
    * names, or by their schematic text when the names say nothing.
    */
-  const sortImported = async (scan: LibraryScan, imported: string[], own: string) => {
+  const sortImported = async (scan: LibraryScan, imported: string[], own: string): Promise<Map<string, string>> => {
     const wanted = new Set(imported);
     const entries = unsortedEntries(scan.entries, own).filter((e) =>
       [...e.boards, ...e.schematics, ...e.unsupported].some((f) => wanted.has(f.path)),
     );
-    if (entries.length === 0) return;
+    if (entries.length === 0) return new Map();
     const tree = buildTree(scan.entries.filter((e) => isSorted(e.folder)).map((e) => e.folder));
     const plans: SortPlan[] = [];
     for (const e of entries) {
       const plan = planFor(e, tree) ?? (e.schematics.length ? planFor(e, tree, await schematicWords(e, () => false)) : null);
       if (plan) plans.push(plan);
     }
-    if (plans.length === 0) return;
-    const { moved } = await applyPlans(plans);
+    if (plans.length === 0) return new Map();
+    const { moved, paths, errors } = await applyPlans(plans);
+    if (errors.length) setError(errors.join("\n"));
     if (moved > 0) {
       setSortedNote(
         t("autosort.done", { n: moved, where: [...new Set(plans.map((p) => p.target.split("/").slice(0, 3).join(" › ")))].join(", ") }),
       );
       await rescan(library.folders, own);
     }
+    return paths;
   };
 
   // Find the own library folder, then refresh a stale scan.
@@ -156,7 +158,8 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
       setSortedNote(null);
       const scan = await rescan(library.folders);
       // A category typed above wins; otherwise sort on its own.
-      if (!device && autoSort && scan && root) await sortImported(scan, imported.imported, root);
+      const moved = !device && autoSort && scan && root ? await sortImported(scan, imported.imported, root) : new Map<string, string>();
+      imported.imported = imported.imported.map((p) => moved.get(p) ?? p);
       // Downloads often have meaningless names: offer to rename right away.
       if (imported.imported.length > 0)
         setRenaming({ title: t("rename.imported"), paths: imported.imported });

@@ -1,7 +1,7 @@
 //! Files that are in the library more than once with exactly the same
 //! content, whatever their names.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
@@ -20,21 +20,30 @@ pub struct DuplicateGroup {
 
 const CHUNK: usize = 1 << 20;
 
-/// FNV-1a over the whole file; only used to sort candidates into buckets.
-fn content_hash(path: &Path) -> Option<u64> {
-    let mut reader = BufReader::with_capacity(CHUNK, File::open(path).ok()?);
-    let mut buf = vec![0u8; CHUNK];
+/// Bytes hashed from the start and the end of a file to pick candidates.
+const SAMPLE: u64 = 64 * 1024;
+
+/// FNV-1a over the first and last 64 KB: only sorts candidates into
+/// buckets; equal files are confirmed byte for byte afterwards.
+fn content_hash(path: &Path, size: u64) -> Option<u64> {
+    use std::io::{Seek, SeekFrom};
+    let mut file = File::open(path).ok()?;
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    loop {
-        let n = reader.read(&mut buf).ok()?;
-        if n == 0 {
-            return Some(hash);
-        }
-        for &b in &buf[..n] {
+    let mut feed = |bytes: &[u8]| {
+        for &b in bytes {
             hash ^= u64::from(b);
             hash = hash.wrapping_mul(0x0100_0000_01b3);
         }
+    };
+    let mut buf = vec![0u8; SAMPLE as usize];
+    let n = read_full(&mut file, &mut buf).ok()?;
+    feed(&buf[..n]);
+    if size > 2 * SAMPLE {
+        file.seek(SeekFrom::End(-(SAMPLE as i64))).ok()?;
+        let n = read_full(&mut file, &mut buf).ok()?;
+        feed(&buf[..n]);
     }
+    Some(hash)
 }
 
 /// Byte-for-byte comparison, so a hash collision never counts as a duplicate.
@@ -69,8 +78,10 @@ fn read_full(r: &mut impl Read, buf: &mut [u8]) -> std::io::Result<usize> {
 /// Groups of identical files, largest first. Only files of equal size are
 /// read at all.
 pub fn find(files: Vec<LibraryFile>) -> Vec<DuplicateGroup> {
+    // A folder linked twice (or inside the own library) lists its files twice.
+    let mut seen = HashSet::new();
     let mut by_size: HashMap<u64, Vec<LibraryFile>> = HashMap::new();
-    for f in files.into_iter().filter(|f| f.size > 0) {
+    for f in files.into_iter().filter(|f| f.size > 0 && seen.insert(f.path.clone())) {
         by_size.entry(f.size).or_default().push(f);
     }
     let mut groups = Vec::new();
@@ -80,7 +91,7 @@ pub fn find(files: Vec<LibraryFile>) -> Vec<DuplicateGroup> {
         }
         let mut by_hash: HashMap<u64, Vec<LibraryFile>> = HashMap::new();
         for f in same_size {
-            if let Some(h) = content_hash(Path::new(&f.path)) {
+            if let Some(h) = content_hash(Path::new(&f.path), size) {
                 by_hash.entry(h).or_default().push(f);
             }
         }
@@ -152,7 +163,9 @@ mod tests {
         let c = file(&dir, "c.pdf", &other);
         assert!(same_bytes(Path::new(&a.path), Path::new(&b.path)));
         assert!(!same_bytes(Path::new(&a.path), Path::new(&c.path)));
-        assert_eq!(find(vec![a, b, c]).len(), 1);
+        assert_eq!(find(vec![a.clone(), b, c]).len(), 1);
+        // The same path listed twice is not a duplicate of itself.
+        assert!(find(vec![a.clone(), a]).is_empty());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

@@ -52,6 +52,8 @@ describe("guessCategory", () => {
     expect(g("NM-B481.pdf")).toBe("Lenovo/Notebook/NM-B481");
     expect(g("HP EliteBook 840 G5.pdf")).toBe("HP/EliteBook/840 G5");
     expect(g("ASUS UX430UA.pdf")).toBe("ASUS/ZenBook/UX430UA");
+    expect(g("ASUS_X515EA_rev2.0.brd")).toBe("ASUS/VivoBook/X515EA");
+    expect(g("asus g513qr.pdf")).toBe("ASUS/ROG/G513QR");
     expect(g("Acer Nitro 5 AN515-54.pdf")).toBe("Acer/Nitro/AN515-54");
     expect(g("MS-16J1.pdf")).toBe("MSI/Notebook/MS-16J1");
     expect(g("MSI RTX 3080 Gaming X Trio.pdf")).toBe("MSI/Grafikkarten/RTX 3080");
@@ -63,6 +65,8 @@ describe("guessCategory", () => {
     expect(guessCategory(["SAMSUNG K4A8G165WC LPDDR4"], { strict: true }).brand).toBe("");
     expect(guessCategory(["samsung notebook.pdf"]).brand).toBe("Samsung");
     expect(categoryFolder(guessCategory(["SONY", "EDM-020", "APU"], { strict: true }))).toBe("Sony/PlayStation/5");
+    // Signal names that look like devices: MIPI DSI, PS/2 keyboard, "switch" on a board.
+    expect(guessCategory(["MIPI_DSI_D0P", "PS2_CLK", "POWER SWITCH", "BOARD ID"], { strict: true }).brand).toBe("");
   });
 
   it("leaves unknown names empty", () => {

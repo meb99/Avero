@@ -30,12 +30,29 @@ function decodeEntities(s: string): string {
     .replace(/&([a-z]+);/gi, (m, name: string) => ENTITIES[name.toLowerCase()] ?? m);
 }
 
+/** Template parameters: split at `|`, except inside `[[link|label]]`. */
+function splitParams(body: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let current = "";
+  for (let i = 0; i < body.length; i++) {
+    if (body.startsWith("[[", i)) depth++;
+    else if (body.startsWith("]]", i) && depth > 0) depth--;
+    if (body[i] === "|" && depth === 0) {
+      out.push(current);
+      current = "";
+    } else current += body[i];
+  }
+  out.push(current);
+  return out;
+}
+
 /** Removes `{{…}}` templates, innermost first, handing each to `keep`. */
 function stripTemplates(text: string, keep: (name: string, params: string[]) => string): string {
   let out = text;
   for (let guard = 0; guard < 50 && out.includes("{{"); guard++) {
     const next = out.replace(/\{\{([^{}]*)\}\}/g, (_, body: string) => {
-      const [name, ...params] = body.split("|");
+      const [name, ...params] = splitParams(body);
       return keep(name.trim(), params);
     });
     if (next === out) break;

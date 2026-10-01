@@ -31,6 +31,7 @@ export function mapSelection(from: BoardModel, to: BoardModel, sel: Selection): 
 }
 
 function mapNet(from: BoardModel, to: BoardModel, net: number): Selection {
-  const other = to.findNet(from.nets[net].name);
+  // By the name in the file: own names (Net10 -> GND) belong to one board.
+  const other = to.findNet(from.fileNetName(net)) ?? to.findNet(from.nets[net].name);
   return other === undefined || to.nets[other].kind === "unconnected" ? NONE : { kind: "net", net: other };
 }

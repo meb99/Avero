@@ -12,23 +12,31 @@ interface Props {
   onDone(changed: boolean): void;
 }
 
-/** Moves the files of each plan into its category folder. Returns the number moved. */
-export async function applyPlans(plans: SortPlan[]): Promise<{ moved: number; errors: string[] }> {
-  let moved = 0;
-  const errors: string[] = [];
+export interface ApplyResult {
+  moved: number;
+  /** Keys of the entries that were moved. */
+  done: Set<string>;
+  /** New path of every moved file, by its old path. */
+  paths: Map<string, string>;
+  errors: string[];
+}
+
+/** Moves the files of each plan into its category folder. */
+export async function applyPlans(plans: SortPlan[]): Promise<ApplyResult> {
+  const result: ApplyResult = { moved: 0, done: new Set(), paths: new Map(), errors: [] };
   for (const plan of plans) {
     const e = plan.entry;
+    const from = [...e.boards, ...e.schematics, ...e.unsupported].map((f) => f.path);
     try {
-      await moveLibraryFiles(
-        [...e.boards, ...e.schematics, ...e.unsupported].map((f) => f.path),
-        plan.target,
-      );
-      moved++;
+      const to = await moveLibraryFiles(from, plan.target);
+      from.forEach((old, i) => result.paths.set(old, to[i] ?? old));
+      result.done.add(e.key);
+      result.moved++;
     } catch (err) {
-      errors.push(`${e.title}: ${String(err)}`);
+      result.errors.push(`${e.title}: ${String(err)}`);
     }
   }
-  return { moved, errors };
+  return result;
 }
 
 /**
@@ -49,6 +57,8 @@ export function AutoSortDialog({ entries, tree, onDone }: Props) {
   const [reading, setReading] = useState<{ done: number; total: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  // Some entries were moved: the library must be rescanned on close.
+  const [changed, setChanged] = useState(false);
   const stopped = useRef(false);
 
   // Boards whose names say nothing: read their schematics, one after another.
@@ -82,15 +92,19 @@ export function AutoSortDialog({ entries, tree, onDone }: Props) {
     const chosen = [...plans.values()].filter((p) => checked.has(p.entry.key));
     const result = await applyPlans(chosen);
     if (result.errors.length) {
+      // Keep only what is left to do; what moved is gone from its old place.
       setErrors(result.errors);
+      setPlans((m) => new Map([...m].filter(([key]) => !result.done.has(key))));
+      setChecked((s) => new Set([...s].filter((key) => !result.done.has(key))));
+      if (result.moved > 0) setChanged(true);
       setBusy(false);
       return;
     }
-    onDone(result.moved > 0);
+    onDone(changed || result.moved > 0);
   };
 
   return (
-    <Dialog title={t("autosort.title")} onClose={() => onDone(false)} className="autosort-dialog">
+    <Dialog title={t("autosort.title")} onClose={() => onDone(changed)} className="autosort-dialog">
       <p className="muted">{t("autosort.hint")}</p>
       {reading && <p className="muted">{t("autosort.reading", { done: reading.done + 1, total: reading.total })}</p>}
       {errors.map((e) => (
@@ -136,7 +150,7 @@ export function AutoSortDialog({ entries, tree, onDone }: Props) {
         </details>
       )}
       <footer className="dialog-footer">
-        <button onClick={() => onDone(false)}>{t("photo.cancel")}</button>
+        <button onClick={() => onDone(changed)}>{t("photo.cancel")}</button>
         <button className="primary" disabled={busy || checked.size === 0} onClick={() => void apply()}>
           {t("autosort.apply", { n: [...checked].filter((k) => plans.has(k)).length })}
         </button>

@@ -21,7 +21,10 @@ export function SchematicHits({ doc, names, onJump }: Props) {
     return doc.subscribe(() => setIndexed(doc.indexedPages));
   }, [doc]);
 
+  // Callers pass a new array each render; the joined names keep the memo stable.
+  const namesKey = names.join("\u0000");
   const groups = useMemo(() => {
+    const names = namesKey.split("\u0000");
     const out: { text: string; page: number; first: number; count: number }[] = [];
     const seen = new Set<string>();
     for (const name of names) {
@@ -37,7 +40,7 @@ export function SchematicHits({ doc, names, onJump }: Props) {
     }
     return out;
     // `indexed` changes as more pages become searchable.
-  }, [doc, names, indexed]);
+  }, [doc, namesKey, indexed]);
 
   const complete = indexed >= doc.pageCount;
   return (

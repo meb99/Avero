@@ -67,11 +67,19 @@ const MAX_RECENT = 10;
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return migrate({ ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<Settings>) });
+    if (raw) return fromStored(JSON.parse(raw) as Partial<Settings>);
   } catch {
     // ignore
   }
   return DEFAULT_SETTINGS;
+}
+
+/**
+ * Settings as stored, completed with defaults. The stored revision (none for
+ * settings older than revisions) decides the migrations, not the default's.
+ */
+export function fromStored(stored: Partial<Settings>): Settings {
+  return migrate({ ...DEFAULT_SETTINGS, ...stored, revision: stored.revision });
 }
 
 /** Applies default changes to settings saved by older versions. */

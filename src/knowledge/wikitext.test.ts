@@ -31,6 +31,11 @@ Intro with a [[PS5 HDMI Port Replacement|HDMI guide]] and '''bold''' text.<ref>s
     expect(blocks[6]).toEqual({ type: "table", header: true, rows: [["Rail", "Diode"], ["PP3V3", "0.420"], ["PP1V8", "OL"]] });
   });
 
+  it("keeps piped links inside note templates", () => {
+    const { blocks } = parseWikitext("{{Warning|Check [[PP3V3_G3H|the G3H rail]] first}}");
+    expect(blocks).toEqual([{ type: "note", kind: "warning", text: "Check the G3H rail first" }]);
+  });
+
   it("decodes entities and external links", () => {
     expect(inlineText("[https://x.org/a the site] 5&nbsp;V &amp; more")).toBe("the site 5 V & more");
   });
