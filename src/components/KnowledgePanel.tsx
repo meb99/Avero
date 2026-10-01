@@ -20,6 +20,12 @@ interface Props {
   onRemove(page: KnowledgePage): void;
   onOpenUrl(url: string): void;
   onSelect(selection: Selection, zoom: boolean): void;
+  /** OpenBoardData ID in use for the board in view. */
+  boardObdata?: string | null;
+  /** OpenBoardData ID chosen by hand for the board in view. */
+  chosenObdata?: string | null;
+  /** Uses an OpenBoardData board for the board in view; null matches by board number again. */
+  onChooseObdata?(id: string | null): void;
 }
 
 const TOKEN = /([A-Za-z0-9_+./-]{2,})/;
@@ -186,6 +192,23 @@ export function KnowledgePanel(p: Props) {
     // Wiki address of the open page ("https://repair.wiki/w/").
     const base = open.url.replace(/[^/]*$/, "");
     const onLink = (target: string) => {
+      // OpenBoardData notes point at nets and pins of the board.
+      if (target.startsWith("net:")) {
+        const net = p.model.findNet(target.slice(4));
+        if (net !== undefined) p.onSelect({ kind: "net", net }, true);
+        return;
+      }
+      if (target.startsWith("part:")) {
+        const [, name, pinNumber] = target.split(":");
+        const part = p.model.findPart(name);
+        if (part === undefined) return;
+        const info = p.model.parts[part];
+        const pin = pinNumber
+          ? p.model.pins.slice(info.firstPin, info.firstPin + info.pinCount).findIndex((x) => x.number === pinNumber)
+          : -1;
+        p.onSelect(pin >= 0 ? { kind: "pin", pin: info.firstPin + pin } : { kind: "part", part }, true);
+        return;
+      }
       const title = target.startsWith("wiki:") ? target.slice(5) : target.startsWith(base) ? decodeURIComponent(target.slice(base.length)).replace(/_/g, " ") : null;
       if (title === null) return p.onOpenUrl(target);
       // Pages already in Avero open here, others on the wiki.
@@ -205,6 +228,27 @@ export function KnowledgePanel(p: Props) {
           </button>
         </div>
         <h2>{open.title}</h2>
+        {open.obdata && p.onChooseObdata && (
+          <div className="kb-obd-bar">
+            {p.boardObdata === open.obdata.id ? (
+              <>
+                <span className="muted">{t("obd.inUse")}</span>
+                {p.chosenObdata === open.obdata.id && (
+                  <button className="small" onClick={() => p.onChooseObdata!(null)}>
+                    {t("obd.unchoose")}
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                {p.boardObdata && <span className="muted">{t("obd.otherInUse", { id: p.boardObdata })}</span>}
+                <button className="small" onClick={() => p.onChooseObdata!(open.obdata!.id)}>
+                  {t("obd.choose")}
+                </button>
+              </>
+            )}
+          </div>
+        )}
         {open.device.brand && (
           <p className="muted">{[open.device.brand, open.device.family, open.device.model].filter(Boolean).join(" › ")}</p>
         )}
@@ -290,6 +334,9 @@ export function KnowledgePanel(p: Props) {
           </ol>
           <button className="small" onClick={() => p.onOpenUrl("https://repair.wiki/w/Special:Export")}>
             {t("kb.openExport")}
+          </button>{" "}
+          <button className="small" onClick={() => p.onOpenUrl("https://openboarddata.org")}>
+            {t("obd.open")}
           </button>
         </div>
       )}

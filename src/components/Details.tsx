@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { chipFor, type ChipInfo } from "../knowledge/chips";
+import { netReadings, partValues, type ObdData } from "../knowledge/obdata";
 import type { SchematicDocument } from "../schematic/document";
 import { SchematicHits } from "./SchematicHits";
 import type { RGBA } from "../render/palette";
@@ -28,7 +29,19 @@ interface Props {
   /** Nets pinned in their own colors on the board. */
   pinnedNets?: ReadonlyMap<number, RGBA>;
   onTogglePin?(net: number): void;
+  /** Known-good values of OpenBoardData for this board. */
+  obdata?: ObdData | null;
 }
+
+/** Labels of OpenBoardData component values. */
+const OBD_PART_KINDS: Record<string, MessageKey> = {
+  v: "obd.value",
+  p: "obd.package",
+  c: "obd.code",
+  r: "obd.rating",
+  m: "obd.misc",
+  s: "obd.status",
+};
 
 /** What the maker's datasheet says about a known chip. */
 function ChipCard({ chip }: { chip: ChipInfo }) {
@@ -130,6 +143,7 @@ export function Details({
   onRenameNet,
   pinnedNets,
   onTogglePin,
+  obdata,
 }: Props) {
   const { t } = useI18n();
   const u = settings.units;
@@ -143,10 +157,74 @@ export function Details({
     );
   };
 
-  const measure = (net: number) =>
-    notes && model.nets[net].kind !== "unconnected" ? (
-      <MeasureBlock key={model.nets[net].name} net={model.nets[net].name} notes={notes} update={updateNotes} tolerance={settings.tolerance} />
-    ) : null;
+  /** Known-good values of the net from OpenBoardData, under its shown or its file name. */
+  const obdNet = (net: number) => {
+    if (!obdata || model.nets[net].kind === "unconnected") return null;
+    const found = [model.nets[net].name, model.fileNetName(net)]
+      .map((name) => netReadings(obdata, name))
+      .find((r) => r.rows.length > 0 || r.related.length > 0);
+    if (!found) return null;
+    return (
+      <section className="details-section obd">
+        <h3>
+          OpenBoardData <span className="muted">{obdata.id}</span>
+        </h3>
+        {found.rows.length > 0 && (
+          <table className="obd-table">
+            <thead>
+              <tr>
+                <th>{t("obd.condition")}</th>
+                <th>{t("obd.diode")}</th>
+                <th>{t("obd.voltage")}</th>
+                <th>{t("obd.resistance")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {found.rows.flatMap((r) => [
+                <tr key={r.condition}>
+                  <td>{r.condition === "Default" ? t("obd.default") : r.condition}</td>
+                  <td className="mono">{r.d || "–"}</td>
+                  <td className="mono">{r.v || "–"}</td>
+                  <td className="mono">{r.r || "–"}</td>
+                </tr>,
+                ...(r.notes.length
+                  ? [
+                      <tr key={`${r.condition}-notes`} className="obd-note">
+                        <td colSpan={4}>{r.notes.join(" · ")}</td>
+                      </tr>,
+                    ]
+                  : []),
+              ])}
+            </tbody>
+          </table>
+        )}
+        {found.related.length > 0 && (
+          <p className="muted">
+            {t("obd.related")}{" "}
+            {found.related.map((name) => {
+              const other = model.findNet(name);
+              return other === undefined ? (
+                <span key={name}>{name} </span>
+              ) : (
+                <button key={name} className={`link net-chip kind-${model.nets[other].kind}`} onClick={() => onSelect({ kind: "net", net: other }, true)}>
+                  {name}
+                </button>
+              );
+            })}
+          </p>
+        )}
+      </section>
+    );
+  };
+
+  const measure = (net: number) => (
+    <>
+      {obdNet(net)}
+      {notes && model.nets[net].kind !== "unconnected" ? (
+        <MeasureBlock key={model.nets[net].name} net={model.nets[net].name} notes={notes} update={updateNotes} tolerance={settings.tolerance} />
+      ) : null}
+    </>
+  );
 
   const netMembers = (net: number, currentPin?: number) => {
     const n = model.nets[net];
@@ -229,6 +307,7 @@ export function Details({
     case "part": {
       const part = model.parts[selection.part];
       const chip = chipFor(part.device);
+      const obdValues = obdata ? partValues(obdata, part.name) : [];
       const b = part.bounds;
       return (
         <div className="details">
@@ -239,6 +318,20 @@ export function Details({
           </header>
           {part.estimated && <p className="muted estimated-note">{t("details.estimated")}</p>}
           {chip && <ChipCard chip={chip} />}
+          {obdValues.length > 0 && (
+            <section className="details-section obd">
+              <h3>
+                OpenBoardData <span className="muted">{obdata!.id}</span>
+              </h3>
+              <dl className="props">
+                {obdValues.map((v) => (
+                  <Row key={`${v.kind}${v.value}`} label={t(OBD_PART_KINDS[v.kind] ?? "obd.misc")}>
+                    {v.value}
+                  </Row>
+                ))}
+              </dl>
+            </section>
+          )}
           <dl className="props">
             {part.package && <Row label={t("details.package")}>{t(`package.${part.package}`)}</Row>}
             <Row label={t("details.side")}>{t(sideKey[part.side])}</Row>

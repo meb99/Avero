@@ -4,6 +4,8 @@
  * (headings, paragraphs, lists, tables) that Avero can show and search.
  */
 
+import type { ObdData } from "./obdata";
+
 export type Block =
   | { type: "heading"; level: number; text: string }
   | { type: "paragraph"; text: string }
@@ -60,6 +62,8 @@ export interface WikiPage {
   license?: string;
   /** Device the page is about, as the wiki names it (a guide's "Device" field). */
   about?: string;
+  /** Known-good values of an OpenBoardData file. */
+  obdata?: ObdData;
 }
 
 /** "CC BY-SA 3.0" from a link to creativecommons.org/licenses/by-sa/3.0/. */
@@ -444,6 +448,8 @@ export function pageText(page: WikiPage): string {
               ? b.items.map((i) => `${i.caption} ${i.file}`).join(" ")
               : b.text,
       ),
+      // Net names of OpenBoardData, so a search for a net finds the board.
+      ...(page.obdata ? [page.obdata.id, ...new Set(page.obdata.nets.map((n) => n.net))] : []),
     ].join(" "),
   );
 }

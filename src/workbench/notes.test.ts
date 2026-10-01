@@ -5,6 +5,7 @@ import {
   boardKey,
   caseToReference,
   emptyNotes,
+  linkObdata,
   mergeNotes,
   netStatuses,
   parseNotes,
@@ -131,5 +132,15 @@ describe("board markers", () => {
     const a = addMarker(emptyNotes("k", "k"), { id: "a", x: 1, y: 1, side: "top", text: "a" });
     const b = addMarker(emptyNotes("k", "k"), { id: "b", x: 2, y: 2, side: "bottom", text: "b" });
     expect(mergeNotes(a, b).markers?.map((m) => m.text)).toEqual(["a", "b"]);
+  });
+});
+
+describe("OpenBoardData choice", () => {
+  it("is kept with the board, survives a save and a merge, and can be cleared", () => {
+    const chosen = linkObdata(emptyNotes("820-00165", "A1466"), "820-00165");
+    expect(chosen.obdata).toBe("820-00165");
+    expect(parseNotes(JSON.stringify(chosen))?.obdata).toBe("820-00165");
+    expect(mergeNotes(emptyNotes("820-00165", "A1466"), chosen).obdata).toBe("820-00165");
+    expect(linkObdata(chosen, null).obdata).toBeUndefined();
   });
 });

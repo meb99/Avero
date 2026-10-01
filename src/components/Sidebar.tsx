@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
+import type { ObdData } from "../knowledge/obdata";
 import type { BoardModel, ViewSide } from "../core/board";
 import type { Selection } from "../core/types";
 import { useI18n } from "../i18n";
@@ -34,12 +35,15 @@ interface Props {
   pinnedNets: ReadonlyMap<number, RGBA>;
   onTogglePin(net: number): void;
   onShowMarker(id: string): void;
+  /** Known-good values of OpenBoardData for this board, if any. */
+  obdata: ObdData | null;
   /** Contents of the "Knowledge" tab. */
   knowledge: ReactNode;
   knowledgeCount: number;
 }
 
 export function Sidebar({
+  obdata,
   model,
   selection,
   side,
@@ -127,6 +131,7 @@ export function Sidebar({
             onRenameNet={onRenameNet}
             pinnedNets={pinnedNets}
             onTogglePin={onTogglePin}
+            obdata={obdata}
           />
         </div>
       )}

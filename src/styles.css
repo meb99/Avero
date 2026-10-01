@@ -2640,3 +2640,35 @@ button.danger {
 .chip-card p {
   margin: 2px 0 6px;
 }
+
+.obd-table {
+  border-collapse: collapse;
+  font-size: 12px;
+  width: 100%;
+}
+
+.obd-table th,
+.obd-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 2px 6px 2px 0;
+  text-align: left;
+}
+
+.obd-table th {
+  font-weight: 600;
+  color: var(--muted, inherit);
+}
+
+.obd-table .obd-note td {
+  font-size: 11px;
+  color: var(--accent);
+  white-space: pre-line;
+}
+
+.kb-obd-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 4px 0 8px;
+}

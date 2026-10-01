@@ -53,6 +53,8 @@ export interface BoardNotes {
   netNames?: Record<string, string>;
   /** Notes pinned to spots on the board. */
   markers?: BoardMarker[];
+  /** OpenBoardData board (its ID, e.g. 820-00165) chosen for this board by hand. */
+  obdata?: string;
   updated: string;
 }
 
@@ -255,6 +257,11 @@ export function setPhoto(notes: BoardNotes, side: PhotoSide, photo: BoardPhoto |
   return { ...notes, photos, updated: now() };
 }
 
+/** Uses an OpenBoardData board for this board; null goes back to matching by board number. */
+export function linkObdata(notes: BoardNotes, id: string | null): BoardNotes {
+  return { ...notes, obdata: id ?? undefined, updated: now() };
+}
+
 export function parseNotes(json: string): BoardNotes | null {
   try {
     const d = JSON.parse(json) as Partial<BoardNotes>;
@@ -272,6 +279,7 @@ export function parseNotes(json: string): BoardNotes | null {
       photos: parsePhotos(d.photos),
       netNames: parseNetNames(d.netNames),
       markers: parseMarkers(d.markers),
+      obdata: typeof d.obdata === "string" && d.obdata ? d.obdata : undefined,
       updated: typeof d.updated === "string" ? d.updated : new Date(0).toISOString(),
     };
   } catch {
@@ -315,6 +323,7 @@ export function mergeNotes(mine: BoardNotes, theirs: BoardNotes): BoardNotes {
     reference: mergeReadings(mine.reference, theirs.reference),
     netNames: theirs.netNames || mine.netNames ? { ...theirs.netNames, ...mine.netNames } : undefined,
     markers: mergeMarkers(mine.markers, theirs.markers),
+    obdata: mine.obdata ?? theirs.obdata,
     cases,
     activeCase: mine.activeCase ?? theirs.activeCase,
     updated: now(),

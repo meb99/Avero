@@ -69,7 +69,9 @@ import {
   saveKnowledge,
   type KnowledgeBase,
   withBuiltin,
+  obdataFor,
 } from "./knowledge/store";
+import { linkObdata } from "./workbench/notes";
 import { BUILTIN_PAGES } from "./knowledge/builtin";
 import { guessCategory } from "./workbench/catalog";
 import { PIN_COLORS } from "./render/palette";
@@ -416,6 +418,11 @@ export function App() {
   const knowledgeForBoard = useMemo(
     () => pagesForBoard(knowledgeView, boardDevice, boardNumbers).length,
     [knowledgeView, boardDevice, boardNumbers],
+  );
+  // OpenBoardData for this board: chosen by hand, or matched by board number.
+  const boardObdata = useMemo(
+    () => obdataFor(knowledgeView, boardNumbers, notes?.obdata),
+    [knowledgeView, boardNumbers, notes?.obdata],
   );
   const importKnowledge = useCallback(async () => {
     setKnowledgeBusy(true);
@@ -1370,6 +1377,7 @@ export function App() {
                   pinnedNets={pinnedNets}
                   onTogglePin={togglePinned}
                   onShowMarker={showMarker}
+                  obdata={boardObdata?.obdata ?? null}
                   knowledgeCount={knowledgeForBoard}
                   knowledge={
                     <KnowledgePanel
@@ -1387,6 +1395,9 @@ export function App() {
                       }}
                       onOpenUrl={(url) => openExternal(url)}
                       onSelect={select}
+                      boardObdata={boardObdata?.obdata?.id ?? null}
+                      chosenObdata={notes?.obdata ?? null}
+                      onChooseObdata={notes ? (id) => updateNotes((n) => linkObdata(n, id)) : undefined}
                     />
                   }
                 />
