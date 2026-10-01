@@ -67,6 +67,10 @@ export function computeStyle(
 ): BoardStyle {
   const { pins, parts, testPoints, nets } = model;
   const net = model.selectedNet(selection);
+  // Far side: faint when asked for, otherwise not drawn at all, not even
+  // highlighted members of a net (the sides are kept strictly apart).
+  const farGhost = options.ghostOtherSide ? GHOST_ALPHA : 0;
+  const farHighlight = options.ghostOtherSide ? FAR_HIGHLIGHT_ALPHA : 0;
   const selectedPart = model.selectedPart(selection);
   const hasFocus = selection.kind !== "none";
   const dim = hasFocus && options.dimUnselected ? DIM_ALPHA : 1;
@@ -81,18 +85,18 @@ export function computeStyle(
     const onNet = net !== undefined && pin.net === net;
     const selected = selection.kind === "pin" && selection.pin === i;
     if (selected) {
-      put(pinColors, i, palette.pinSelected, near ? 1 : FAR_HIGHLIGHT_ALPHA);
+      put(pinColors, i, palette.pinSelected, near ? 1 : farHighlight);
     } else if (onNet) {
       // Far-side members stay visible so you can see where the net goes.
-      put(pinColors, i, palette.pinHighlight, near ? 1 : FAR_HIGHLIGHT_ALPHA);
+      put(pinColors, i, palette.pinHighlight, near ? 1 : farHighlight);
     } else if (options.pinnedNets?.has(pin.net)) {
-      put(pinColors, i, options.pinnedNets.get(pin.net)!, near ? 1 : FAR_HIGHLIGHT_ALPHA);
+      put(pinColors, i, options.pinnedNets.get(pin.net)!, near ? 1 : farHighlight);
     } else if (selectedPart === pin.part) {
-      put(pinColors, i, palette.pinOfSelectedPart, near ? 1 : GHOST_ALPHA);
+      put(pinColors, i, palette.pinOfSelectedPart, near ? 1 : farGhost);
     } else if (near) {
       put(pinColors, i, pinBase(palette, nets[pin.net].kind), dim);
     } else {
-      put(pinColors, i, pinBase(palette, nets[pin.net].kind), options.ghostOtherSide ? GHOST_ALPHA : 0);
+      put(pinColors, i, pinBase(palette, nets[pin.net].kind), farGhost);
     }
   }
 
@@ -104,15 +108,15 @@ export function computeStyle(
     // On boards with routing, vias belong to the copper and stay visible.
     const shown = t.kind !== "via" || options.showVias || model.traces.length > 0;
     if (selection.kind === "testPoint" && selection.testPoint === i) {
-      put(testPointColors, i, palette.pinSelected, near ? 1 : FAR_HIGHLIGHT_ALPHA);
+      put(testPointColors, i, palette.pinSelected, near ? 1 : farHighlight);
     } else if (net !== undefined && t.net === net && (shown || near)) {
-      put(testPointColors, i, palette.pinHighlight, near ? 1 : FAR_HIGHLIGHT_ALPHA);
+      put(testPointColors, i, palette.pinHighlight, near ? 1 : farHighlight);
     } else if (options.pinnedNets?.has(t.net) && (shown || near)) {
-      put(testPointColors, i, options.pinnedNets.get(t.net)!, near ? 1 : FAR_HIGHLIGHT_ALPHA);
+      put(testPointColors, i, options.pinnedNets.get(t.net)!, near ? 1 : farHighlight);
     } else if (!shown) {
       put(testPointColors, i, base, 0);
     } else {
-      put(testPointColors, i, base, near ? dim : options.ghostOtherSide ? GHOST_ALPHA : 0);
+      put(testPointColors, i, base, near ? dim : farGhost);
     }
   }
 
@@ -127,7 +131,8 @@ export function computeStyle(
   for (let i = 0; i < traces.length; i++) {
     const t = traces[i];
     const color = layerColors[t.layer] ?? palette.trace;
-    if (!options.showTraces || hidden?.has(t.layer)) {
+    const otherSide = t.side !== view && t.side !== "both";
+    if (!options.showTraces || hidden?.has(t.layer) || (otherSide && !options.ghostOtherSide)) {
       put(traceColors, i, color, 0);
     } else if (net !== undefined && t.net === net) {
       put(traceColors, i, palette.pinHighlight, 1);
@@ -148,7 +153,7 @@ export function computeStyle(
     if (!part.marker) continue;
     const near = visibleFrom(part.side, view);
     if (i === selectedPart) put(markerColors, i, palette.partSelectedOutline, 1);
-    else put(markerColors, i, markerSize(part) > 4 ? palette.markerChip : palette.markerSmall, near ? dim : options.ghostOtherSide ? GHOST_ALPHA : 0);
+    else put(markerColors, i, markerSize(part) > 4 ? palette.markerChip : palette.markerSmall, near ? dim : farGhost);
   }
 
   const padMarkColors = new Uint8Array(parts.length * 4);
@@ -157,7 +162,7 @@ export function computeStyle(
   const partOutlineWidths = new Float32Array(parts.length);
   for (let i = 0; i < parts.length; i++) {
     const near = visibleFrom(parts[i].side, view);
-    const far = near ? 1 : options.ghostOtherSide ? GHOST_ALPHA : 0;
+    const far = near ? 1 : farGhost;
     partOutlineWidths[i] = 1;
     put(padMarkColors, i, palette.padMark, near ? dim : far);
     const pkg = parts[i].package;
@@ -169,12 +174,12 @@ export function computeStyle(
       continue;
     }
     if (i === selectedPart) {
-      put(partFillColors, i, palette.partSelectedFill, near ? 1 : FAR_HIGHLIGHT_ALPHA);
-      put(partOutlineColors, i, palette.partSelectedOutline, near ? 1 : FAR_HIGHLIGHT_ALPHA);
+      put(partFillColors, i, palette.partSelectedFill, near ? 1 : farHighlight);
+      put(partOutlineColors, i, palette.partSelectedOutline, near ? 1 : farHighlight);
       partOutlineWidths[i] = 2;
     } else if (partsOnNet.has(i)) {
       put(partFillColors, i, palette.partFill, far);
-      put(partOutlineColors, i, palette.partOnNetOutline, near ? 1 : FAR_HIGHLIGHT_ALPHA);
+      put(partOutlineColors, i, palette.partOnNetOutline, near ? 1 : farHighlight);
       partOutlineWidths[i] = 1.5;
     } else {
       put(partFillColors, i, palette.partFill, near ? dim : far);

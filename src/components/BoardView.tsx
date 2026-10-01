@@ -168,7 +168,7 @@ export function BoardView({
       dprRef.current,
       s.measured,
     );
-    drawMarkers(labels, cameraRef.current, s.markers, s.side, s.palette, dprRef.current, s.activeMarker);
+    drawMarkers(labels, cameraRef.current, s.markers, s.side, s.palette, dprRef.current, s.activeMarker, s.settings.ghostOtherSide);
   }, []);
 
   const requestDraw = useCallback(() => {
@@ -370,7 +370,10 @@ export function BoardView({
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer) return;
-    const edges = ratsnestNet === undefined || model.nets[ratsnestNet].kind === "ground" ? [] : model.ratsnest(ratsnestNet);
+    // Sides kept apart: only the lines between pins of the side in view.
+    const view = settings.ghostOtherSide ? undefined : side;
+    const edges =
+      ratsnestNet === undefined || model.nets[ratsnestNet].kind === "ground" ? [] : model.ratsnest(ratsnestNet, 2500, view);
     const segs = new Float32Array(edges.length * 4);
     edges.forEach(([a, b], i) => {
       const p = model.pins[a];
@@ -379,7 +382,7 @@ export function BoardView({
     });
     renderer.setOverlay(segs, palette.ratsnest, 1.4);
     requestDraw();
-  }, [model, ratsnestNet, palette, requestDraw, rendererVersion]);
+  }, [model, ratsnestNet, palette, requestDraw, rendererVersion, side, settings.ghostOtherSide]);
 
   useEffect(() => {
     stateRef.current.measured = measured;
@@ -490,7 +493,9 @@ export function BoardView({
         onPointPick(snapped ? { x: snapped.x, y: snapped.y } : cameraRef.current.toWorld(p));
         return;
       }
-      const marker = onMarkerClick && markerAt(cameraRef.current, stateRef.current.markers, p.x, p.y);
+      const s = stateRef.current;
+      const shown = s.settings.ghostOtherSide ? s.markers : s.markers.filter((m) => m.side === s.side);
+      const marker = onMarkerClick && markerAt(cameraRef.current, shown, p.x, p.y);
       if (marker) {
         onMarkerClick!(marker.id);
         return;

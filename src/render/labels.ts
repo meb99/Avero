@@ -289,7 +289,7 @@ export function markerAt(camera: Camera, markers: readonly MarkerMark[], x: numb
   return undefined;
 }
 
-/** Board notes as red pins with their text; the far side's ones faint. */
+/** Board notes as red pins with their text; the far side's ones faint, or hidden when sides are kept apart. */
 export function drawMarkers(
   ctx: CanvasRenderingContext2D,
   camera: Camera,
@@ -298,6 +298,7 @@ export function drawMarkers(
   palette: Palette,
   dpr: number,
   active: string | null,
+  showOtherSide = false,
 ): void {
   if (markers.length === 0) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -305,6 +306,7 @@ export function drawMarkers(
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
   for (const m of markers) {
+    if (m.side !== view && !showOtherSide) continue;
     const l = markerLayout(ctx, camera, m);
     ctx.globalAlpha = m.side === view ? 1 : 0.35;
     ctx.strokeStyle = "#7f1d1d";

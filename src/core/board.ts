@@ -53,7 +53,7 @@ export class BoardModel {
   readonly sortedParts: number[];
   /** Nets sorted by name, unconnected last. */
   sortedNets: number[] = [];
-  private readonly ratsnestCache = new Map<number, [number, number][]>();
+  private readonly ratsnestCache = new Map<string, [number, number][]>();
   private readonly seriesCache = new Map<number, SeriesLink[]>();
 
   constructor(readonly board: Board) {
@@ -225,10 +225,12 @@ export class BoardModel {
    * every pin is linked to its nearest neighbour without clutter. Returns
    * pairs of pin indices. Very large nets (ground) are skipped.
    */
-  ratsnest(net: number, maxPins = 2500): [number, number][] {
-    const cached = this.ratsnestCache.get(net);
+  ratsnest(net: number, maxPins = 2500, view?: ViewSide): [number, number][] {
+    const key = `${net}:${view ?? "all"}`;
+    const cached = this.ratsnestCache.get(key);
     if (cached) return cached;
-    const pins = this.nets[net].pins;
+    // With a side given, only the pins seen from it are connected.
+    const pins = view ? this.nets[net].pins.filter((p) => visibleFrom(this.pins[p].side, view)) : this.nets[net].pins;
     const n = pins.length;
     const edges: [number, number][] = [];
     if (n >= 2 && n <= maxPins) {
@@ -254,7 +256,7 @@ export class BoardModel {
         }
       }
     }
-    this.ratsnestCache.set(net, edges);
+    this.ratsnestCache.set(key, edges);
     return edges;
   }
 

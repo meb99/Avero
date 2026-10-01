@@ -1,6 +1,8 @@
 import type { Language } from "./i18n";
 
 export interface Settings {
+  /** Bumped when a default changes for everyone, see loadSettings. */
+  revision?: number;
   language: Language | "auto";
   theme: "system" | "dark" | "light";
   units: "mm" | "mil";
@@ -30,12 +32,16 @@ export interface Settings {
   fzKey: string;
 }
 
+/** Current settings revision. 2: sides are kept apart (no ghosting) by default. */
+const REVISION = 2;
+
 export const DEFAULT_SETTINGS: Settings = {
+  revision: REVISION,
   language: "auto",
   theme: "system",
   units: "mm",
   scroll: "pan",
-  ghostOtherSide: true,
+  ghostOtherSide: false,
   dimUnselected: true,
   showVias: false,
   showTraces: true,
@@ -61,11 +67,19 @@ const MAX_RECENT = 10;
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<Settings>) };
+    if (raw) return migrate({ ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<Settings>) });
   } catch {
     // ignore
   }
   return DEFAULT_SETTINGS;
+}
+
+/** Applies default changes to settings saved by older versions. */
+export function migrate(s: Settings): Settings {
+  const out = { ...s };
+  if ((out.revision ?? 1) < 2) out.ghostOtherSide = false;
+  out.revision = REVISION;
+  return out;
 }
 
 export function saveSettings(s: Settings): void {
