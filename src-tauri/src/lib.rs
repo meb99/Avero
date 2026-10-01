@@ -1,6 +1,7 @@
 //! Desktop shell. Parsing runs natively through `avero-formats`; the web UI
 //! receives the finished board as JSON.
 
+mod conversion;
 mod import;
 mod library;
 mod notes;
@@ -226,6 +227,23 @@ async fn import_files(
     Ok(import::import(&root, &paths, folder.as_deref()))
 }
 
+/// Runs the built-in converter on a worker and saves its result directly into
+/// the library. The UI selects paths, without asking for an output name.
+#[tauri::command]
+async fn convert_xzz_file(
+    app: tauri::AppHandle,
+    path: String,
+    folder: Option<String>,
+    xzz_key: Option<String>,
+) -> Result<conversion::ConvertedFile, String> {
+    let root = library_dir(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        conversion::convert_file(&root, Path::new(&path), folder.as_deref(), xzz_key.as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 fn notes_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     use tauri::Manager;
     app.path().app_data_dir().map(|d| d.join("boards")).map_err(|e| e.to_string())
@@ -373,6 +391,7 @@ pub fn run() {
             scan_library,
             library_root,
             import_files,
+            convert_xzz_file,
             board_words,
             rename_library_file,
             move_library_files,

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BOARD_EXTENSIONS } from "../core/loader";
+import { loadSettings } from "../settings";
+import { convertXzzFiles, pickXzz, type ConversionResult, type ConvertedFile } from "../workbench/conversion";
 import { useI18n } from "../i18n";
 import {
   badge,
@@ -68,6 +70,9 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
   const [sorting, setSorting] = useState<LibraryEntry | null>(null);
   const [scanning, setScanning] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [converting, setConverting] = useState<string | null>(null);
+  const [conversion, setConversion] = useState<ConversionResult | null>(null);
+  const conversionBusy = useRef(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<RenameTarget | null>(null);
@@ -104,7 +109,7 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
   }, []);
 
   const runImport = async (paths: string[]) => {
-    if (paths.length === 0) return;
+    if (paths.length === 0 || conversionBusy.current) return;
     setImporting(true);
     setError(null);
     try {
@@ -119,6 +124,44 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
     } finally {
       setImporting(false);
     }
+  };
+
+  const runConversion = async () => {
+    if (importing || conversionBusy.current) return;
+    conversionBusy.current = true;
+    setConverting(t("convert.choose"));
+    setError(null);
+    try {
+      const paths = await pickXzz(t("convert.choose"));
+      if (paths.length === 0) return;
+      setConversion(null);
+      const converted = await convertXzzFiles(paths, device, loadSettings().xzzKey,
+        (index, total, path) => setConverting(t("convert.progress", {
+          index, total, name: path.split(/[\\/]/).pop() ?? path,
+        })));
+      setConversion(converted);
+      const own = root ?? await libraryRoot();
+      setRoot(own);
+      await rescan(library.folders, own);
+      // Show the destination even when the user had another category selected.
+      if (converted.files.length > 0) { setBranch(""); setQuery(""); setMode("boards"); }
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      conversionBusy.current = false;
+      setConverting(null);
+    }
+  };
+
+  const openConverted = (file: ConvertedFile) => {
+    const entry = library.scan?.entries.find((e) => e.boards.some((b) => b.path === file.path));
+    const name = file.path.split(/[\\/]/).pop() ?? file.path;
+    onOpen(entry ? {
+      ...entry, boards: [...entry.boards].sort((a, b) => Number(b.path === file.path) - Number(a.path === file.path)),
+    } : {
+      key: file.path, title: name, folder: "", root: root ?? "",
+      boards: [{ path: file.path, name, size: 0, modified: 0 }], schematics: [], unsupported: [],
+    });
   };
 
   useEffect(() => {
@@ -258,7 +301,7 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
         />
         <button
           className="primary"
-          disabled={importing}
+          disabled={importing || converting !== null}
           onClick={() =>
             void pickImport(t("library.import"), BOARD_EXTENSIONS).then(
               runImport,
@@ -271,6 +314,32 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
           {summary ?? t("library.importHint")}
         </p>
       </div>
+
+      <section className="library-convert" aria-labelledby="convert-title" aria-busy={converting !== null}>
+        <div>
+          <h3 id="convert-title">{t("convert.title")}</h3>
+          <p className="muted">{t("convert.hint")}</p>
+        </div>
+        <button onClick={() => void runConversion()} disabled={importing || converting !== null}>
+          {t("convert.choose")}
+        </button>
+        <div className="conversion-status" role="status" aria-live="polite">
+          {converting ?? (conversion && t("convert.done", {
+            n: conversion.files.filter((f) => !f.duplicate).length,
+            duplicates: conversion.files.filter((f) => f.duplicate).length,
+            errors: conversion.errors.length,
+          }))}
+        </div>
+        <div className="conversion-results">
+        {conversion?.files.filter((f, i, all) => all.findIndex((other) => other.path === f.path) === i).map((file) => (
+          <div className="conversion-file" key={file.path}>
+            <span>{file.path.split(/[\\/]/).pop()} · {t("convert.counts", { parts: file.parts, pins: file.pins })}</span>
+            <button onClick={() => openConverted(file)}>{t("convert.open")}</button>
+          </div>
+        ))}
+        {conversion?.errors.map((message, i) => <p className="library-warn" key={`${i}-${message}`}>{message}</p>)}
+        </div>
+      </section>
 
       <div className="library-folders">
         {root && (

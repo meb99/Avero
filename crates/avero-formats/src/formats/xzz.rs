@@ -12,7 +12,8 @@
 //!   are DES-encrypted, test pads (9) are plain.
 //! - Coordinates are `u32` in 1/10000 mil.
 //!
-//! The DES key is not part of Avero; users enter it in the settings.
+//! This direct reader uses the DES key users enter in the settings. The separate
+//! library converter has its own compatibility default.
 //! Without it, everything but the parts is still readable: outline, nets
 //! and named test pads.
 
@@ -79,7 +80,7 @@ fn des_blocks(data: &[u8], key: u64, apply: impl Fn(&Des, &mut Block<Des>)) -> V
     out
 }
 
-fn des_decrypt(data: &[u8], key: u64) -> Vec<u8> {
+pub(crate) fn des_decrypt(data: &[u8], key: u64) -> Vec<u8> {
     des_blocks(data, key, |c, b| c.decrypt_block(b))
 }
 
