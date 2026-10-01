@@ -22,6 +22,8 @@ export const CATALOG: Record<string, Family[]> = {
     { name: "PlayStation", models: ["1", "2", "3", "4", "4 Slim", "4 Pro", "5", "5 Slim", "5 Pro"] },
     { name: "PSP", models: ["1000", "2000", "3000", "Go", "Street"] },
     { name: "PS Vita", models: ["1000", "2000"] },
+    { name: "DualSense", models: ["BDM-010", "BDM-020", "BDM-030", "BDM-040", "Edge"] },
+    { name: "DualShock 4" },
     { name: "Xperia" },
   ],
   Nintendo: [
@@ -38,6 +40,7 @@ export const CATALOG: Record<string, Family[]> = {
   ],
   Microsoft: [
     { name: "Xbox", models: ["Original", "360", "One", "One S", "One X", "Series S", "Series X"] },
+    { name: "Xbox Controller", models: ["Wireless", "Elite Series 2"] },
     { name: "Surface", models: ["Pro", "Laptop", "Book", "Go"] },
   ],
   Apple: [
@@ -221,6 +224,14 @@ function withContext(pattern: RegExp, also: RegExp): RegExp {
 
 // Most specific first; the first match wins.
 const RULES: Rule[] = [
+  // --- Controllers, before the consoles they belong to.
+  { pattern: /dualsense[\s-]*edge|\bcfi-zcp1/, make: () => c("Sony", "DualSense", "Edge") },
+  { pattern: /\bbdm-0([1-4])0\b/, make: (m) => c("Sony", "DualSense", `BDM-0${m[1]}0`) },
+  { pattern: /dualsense/, make: () => c("Sony", "DualSense") },
+  { pattern: /dualshock[\s-]*4|\bjdm-0\d0\b|\bcuh-zct/, make: () => c("Sony", "DualShock 4") },
+  { pattern: /xbox[\s\w-]*elite[\s\w-]*(series[\s-]*2|2)\b|\bmodel[\s-]*1797\b/, make: () => c("Microsoft", "Xbox Controller", "Elite Series 2") },
+  { pattern: /xbox[\s\w-]*controller|\bmodel[\s-]*1914\b/, make: () => c("Microsoft", "Xbox Controller", "Wireless") },
+
   // --- Sony PlayStation: model numbers (CFI/CUH/CECH/SCPH) and board numbers.
   { pattern: /\bps5[\s-]*pro\b|playstation[\s-]*5[\s-]*pro|\bcfi-7\d{3}/, make: () => c("Sony", "PlayStation", "5 Pro") },
   { pattern: /\bps5[\s-]*slim\b|playstation[\s-]*5[\s-]*slim|\bcfi-2\d{3}|\bedm-03\d/, make: () => c("Sony", "PlayStation", "5 Slim") },

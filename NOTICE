@@ -38,7 +38,7 @@ of its bundled decoders ship in node_modules/pdfjs-dist and are copied into
 the app under pdfjs/.
 
 The reference values in src/knowledge/builtin.ts are read off measurement
-pictures on Repair Wiki (https://repair.wiki/w/Nintendo_Switch_OLED), by its
-contributors, licensed under Creative Commons Attribution-ShareAlike 3.0
+pictures on Repair Wiki (https://repair.wiki; each page names its source), by
+its contributors, licensed under Creative Commons Attribution-ShareAlike 3.0
 (https://creativecommons.org/licenses/by-sa/3.0/). The values in that file
 are shared under the same license.

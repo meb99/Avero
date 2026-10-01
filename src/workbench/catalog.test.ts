@@ -37,6 +37,10 @@ describe("guessCategory", () => {
     expect(g("Xbox One S.brd")).toBe("Microsoft/Xbox/One S");
     expect(g("xbox 360 jasper.pdf")).toBe("Microsoft/Xbox/360");
     expect(g("Steam Deck mainboard.pdf")).toBe("Valve/Steam Deck");
+    expect(g("DualSense BDM-030 board.pdf")).toBe("Sony/DualSense/BDM-030");
+    expect(g("Sony Dualsense Controller")).toBe("Sony/DualSense");
+    expect(g("Xbox Elite Wireless Controller Series 2")).toBe("Microsoft/Xbox Controller/Elite Series 2");
+    expect(g("Xbox Wireless Controller")).toBe("Microsoft/Xbox Controller/Wireless");
   });
 
   it("sorts Apple by name, model number and board number", () => {
