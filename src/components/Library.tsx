@@ -8,22 +8,27 @@ import {
   filterEntries,
   importFiles,
   libraryRoot,
+  loadAutoSort,
   loadLibrary,
   pickFolder,
   pickImport,
   revealInFinder,
+  saveAutoSort,
   saveLibrary,
   scanLibrary,
   trashLibraryFiles,
   type ImportResult,
   type LibraryEntry,
   type LibraryFile,
+  type LibraryScan,
   type LibraryState,
 } from "../workbench/library";
 import { LibraryText } from "./LibraryText";
 import { RenameFiles, type RenameTarget } from "./RenameFiles";
 import { CategoryDialog, CategoryFields, CategoryTree } from "./Categories";
 import { DuplicatesDialog } from "./Duplicates";
+import { AutoSortDialog, applyPlans } from "./AutoSort";
+import { planFor, schematicWords, unsortedEntries, type SortPlan } from "../workbench/autosort";
 import {
   buildTree,
   categoryFolder,
@@ -78,6 +83,9 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<RenameTarget | null>(null);
   const [dupes, setDupes] = useState(false);
+  const [sortingAll, setSortingAll] = useState(false);
+  const [autoSort, setAutoSort] = useState(loadAutoSort);
+  const [sortedNote, setSortedNote] = useState<string | null>(null);
   const handledDrop = useRef(drop?.nonce ?? 0);
 
   const rescan = async (folders: string[], own = root) => {
@@ -89,10 +97,38 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
       const next = { folders, scan, scannedAt: new Date().toISOString() };
       setLibrary(next);
       saveLibrary(next);
+      return scan;
     } catch (e) {
       setError(String(e));
+      return null;
     } finally {
       setScanning(false);
+    }
+  };
+
+  /**
+   * Puts freshly imported boards into Brand › Family › Model: by their
+   * names, or by their schematic text when the names say nothing.
+   */
+  const sortImported = async (scan: LibraryScan, imported: string[], own: string) => {
+    const wanted = new Set(imported);
+    const entries = unsortedEntries(scan.entries, own).filter((e) =>
+      [...e.boards, ...e.schematics, ...e.unsupported].some((f) => wanted.has(f.path)),
+    );
+    if (entries.length === 0) return;
+    const tree = buildTree(scan.entries.filter((e) => isSorted(e.folder)).map((e) => e.folder));
+    const plans: SortPlan[] = [];
+    for (const e of entries) {
+      const plan = planFor(e, tree) ?? (e.schematics.length ? planFor(e, tree, await schematicWords(e, () => false)) : null);
+      if (plan) plans.push(plan);
+    }
+    if (plans.length === 0) return;
+    const { moved } = await applyPlans(plans);
+    if (moved > 0) {
+      setSortedNote(
+        t("autosort.done", { n: moved, where: [...new Set(plans.map((p) => p.target.split("/").slice(0, 3).join(" › ")))].join(", ") }),
+      );
+      await rescan(library.folders, own);
     }
   };
 
@@ -117,7 +153,10 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
     try {
       const imported = await importFiles(paths, device);
       setResult(imported);
-      await rescan(library.folders);
+      setSortedNote(null);
+      const scan = await rescan(library.folders);
+      // A category typed above wins; otherwise sort on its own.
+      if (!device && autoSort && scan && root) await sortImported(scan, imported.imported, root);
       // Downloads often have meaningless names: offer to rename right away.
       if (imported.imported.length > 0)
         setRenaming({ title: t("rename.imported"), paths: imported.imported });
@@ -293,6 +332,9 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
         >
           {scanning ? t("library.scanning") : t("library.rescan")}
         </button>
+        <button onClick={() => setSortingAll(true)} disabled={!root || scanning} title={t("autosort.buttonHint")}>
+          {t("autosort.button")}
+        </button>
         <button onClick={() => setDupes(true)} disabled={!root}>
           {t("dupes.find")}
         </button>
@@ -317,7 +359,19 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
         </button>
         <p className="muted import-hint">
           {summary ?? t("library.importHint")}
+          {sortedNote && <span className="autosort-note"> · {sortedNote}</span>}
         </p>
+        <label className="check autosort-toggle" title={t("autosort.toggleHint")}>
+          <input
+            type="checkbox"
+            checked={autoSort}
+            onChange={(e) => {
+              setAutoSort(e.target.checked);
+              saveAutoSort(e.target.checked);
+            }}
+          />
+          {t("autosort.toggle")}
+        </label>
       </div>
 
       <section className="library-convert" aria-labelledby="convert-title" aria-busy={converting !== null}>
@@ -522,6 +576,16 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
           tree={tree}
           onDone={(changed) => {
             setSorting(null);
+            if (changed) void rescan(library.folders);
+          }}
+        />
+      )}
+      {sortingAll && root && library.scan && (
+        <AutoSortDialog
+          entries={unsortedEntries(library.scan.entries, root)}
+          tree={tree}
+          onDone={(changed) => {
+            setSortingAll(false);
             if (changed) void rescan(library.folders);
           }}
         />

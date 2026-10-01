@@ -74,6 +74,25 @@ export function moveLibraryFiles(paths: string[], folder: string): Promise<strin
   return invoke<string[]>("move_library_files", { paths, folder });
 }
 
+const AUTO_SORT_KEY = "avero.autosort.v1";
+
+/** Whether imports are sorted into Brand › Family › Model on their own (default on). */
+export function loadAutoSort(): boolean {
+  try {
+    return localStorage.getItem(AUTO_SORT_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+export function saveAutoSort(on: boolean): void {
+  try {
+    localStorage.setItem(AUTO_SORT_KEY, on ? "1" : "0");
+  } catch {
+    // Not persisted; the choice holds for this session.
+  }
+}
+
 /** Files with exactly the same content, oldest copy first. */
 export interface DuplicateGroup {
   size: number;

@@ -2416,3 +2416,49 @@ button.danger {
   text-transform: none;
   letter-spacing: 0;
 }
+
+/* Automatic sorting */
+
+.autosort-dialog {
+  width: min(760px, 92vw);
+}
+
+.autosort-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  max-height: 55vh;
+  overflow: auto;
+  font-size: 12px;
+}
+
+.autosort-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.autosort-name {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+.autosort-target {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.autosort-unknown {
+  font-size: 12px;
+}
+
+.autosort-toggle {
+  font-size: 12px;
+}
+
+.autosort-note {
+  color: var(--text);
+}
