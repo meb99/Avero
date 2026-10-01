@@ -94,6 +94,8 @@ export interface Net {
   pins: number[];
   testPoints: number[];
   traces?: number[];
+  /** Ground by its vias across the whole board, not by its name. */
+  assumedGround?: boolean;
 }
 
 export interface Board {

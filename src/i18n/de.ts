@@ -48,6 +48,8 @@ export const de: Record<MessageKey, string> = {
   "details.mount": "Bestückung",
   "details.pins": "Pins",
   "details.package": "Typ",
+  "details.assumedGround": "Vermutlich Masse: Die Vias dieses Netzes verteilen sich über die ganze Platine.",
+  "list.assumedGround": "Masse?",
   "details.estimated": "Geschätzt: Die Datei enthält keine Form für dieses Bauteil. Seite, Größe und Pads sind aus den Leiterbahnen abgeleitet; Pins nur dort, wo eine Leiterbahn oder ein Via auf einem Pad endet.",
   "package.passive": "Kondensator / Widerstand",
   "package.inductor": "Spule",

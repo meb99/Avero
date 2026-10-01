@@ -192,6 +192,29 @@ fn field_half_size(all: &Grid, center: Point) -> Option<f64> {
     (30.0..=450.0).contains(&half).then_some(half)
 }
 
+/// The net that stitches the whole board with vias: ground, on boards whose
+/// nets have no names. It must cover clearly more of the board than any other.
+fn probable_ground(vias: &[Copper]) -> Option<String> {
+    const CELL: f64 = 500.0;
+    let mut cells: HashMap<&str, std::collections::HashSet<(i64, i64)>> = HashMap::new();
+    for v in vias.iter().filter(|v| !v.net.is_empty()) {
+        cells
+            .entry(&v.net)
+            .or_default()
+            .insert(((v.pos.x / CELL).floor() as i64, (v.pos.y / CELL).floor() as i64));
+    }
+    let mut ranked: Vec<(usize, &str)> = cells.iter().map(|(n, c)| (c.len(), *n)).collect();
+    ranked.sort_unstable_by(|a, b| b.cmp(a));
+    match ranked.as_slice() {
+        [(first, name), rest @ ..]
+            if *first >= 10 && rest.first().is_none_or(|(second, _)| *first * 2 >= *second * 3) =>
+        {
+            Some(name.to_string())
+        }
+        _ => None,
+    }
+}
+
 /// Gives each placement a package, side, body, pads and, where the copper
 /// shows them, pins with nets. Returns how many parts got pins.
 pub(crate) fn footprints(board: &mut RawBoard, placements: &[Placement]) -> usize {
@@ -213,6 +236,8 @@ pub(crate) fn footprints(board: &mut RawBoard, placements: &[Placement]) -> usiz
         .filter(|t| t.kind == TestPointKind::Via)
         .map(|t| Copper { pos: t.pos, net: t.net.clone() })
         .collect();
+    // Nets here are often anonymous (Net10 …): name the likely ground.
+    let ground = probable_ground(&vias);
     let all = Grid::new(top.iter().chain(&bottom).chain(&vias).cloned());
     let top = Grid::new(top.into_iter().chain(vias.iter().cloned()));
     let bottom = Grid::new(bottom.into_iter().chain(vias));
@@ -320,6 +345,9 @@ pub(crate) fn footprints(board: &mut RawBoard, placements: &[Placement]) -> usiz
         }
     }
 
+    if let Some(ground) = ground {
+        board.assumed_ground = Some(ground);
+    }
     for (part, package, side, outline, pads, pins) in updates {
         let p = &mut board.parts[part];
         with_pins += usize::from(!pins.is_empty());
@@ -348,6 +376,18 @@ mod tests {
         assert_eq!(footprint_class("C-0202-2"), "C-0202-2");
         assert_eq!(ball_grid("BGA-9*10-1"), Some((9.0, 10.0)));
         assert_eq!(half_from_code("C-0402"), Some(18.0));
+    }
+
+    #[test]
+    fn ground_is_the_net_whose_vias_cover_the_board() {
+        let via = |x: f64, y: f64, net: &str| Copper { pos: Point::new(x, y), net: net.to_string() };
+        let mut vias: Vec<Copper> = (0..12).map(|i| via(f64::from(i) * 600.0, 0.0, "Net10")).collect();
+        // A rail with many vias, but all under one chip.
+        vias.extend((0..40).map(|i| via(100.0 + f64::from(i), 100.0, "Net17")));
+        assert_eq!(probable_ground(&vias).as_deref(), Some("Net10"));
+        // Two nets equally spread: no guess.
+        vias.extend((0..12).map(|i| via(f64::from(i) * 600.0, 900.0, "Net8")));
+        assert_eq!(probable_ground(&vias), None);
     }
 
     #[test]

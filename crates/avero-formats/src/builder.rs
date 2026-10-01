@@ -90,6 +90,8 @@ pub(crate) struct RawBoard {
     pub parts: Vec<RawPart>,
     pub test_points: Vec<RawTestPoint>,
     pub traces: Vec<RawTrace>,
+    /// Net taken for ground although its name does not say so.
+    pub assumed_ground: Option<String>,
     pub warnings: Vec<String>,
     pub locked_parts: u32,
 }
@@ -103,6 +105,7 @@ impl RawBoard {
             parts: Vec::new(),
             test_points: Vec::new(),
             traces: Vec::new(),
+            assumed_ground: None,
             warnings: Vec::new(),
             locked_parts: 0,
         }
@@ -268,7 +271,16 @@ impl RawBoard {
             test_points,
             traces,
             layers,
-            nets: nets.finish(),
+            nets: {
+                let mut nets = nets.finish();
+                if let Some(ground) = &self.assumed_ground {
+                    for n in nets.iter_mut().filter(|n| &n.name == ground) {
+                        n.kind = NetKind::Ground;
+                        n.assumed_ground = true;
+                    }
+                }
+                nets
+            },
             warnings: self.warnings,
             locked_parts: self.locked_parts,
         }
@@ -317,6 +329,7 @@ impl NetTable {
             pins: Vec::new(),
             test_points: Vec::new(),
             traces: Vec::new(),
+            assumed_ground: false,
         });
         self.index.insert(name.to_string(), i);
         i

@@ -235,6 +235,9 @@ pub struct Net {
     pub test_points: Vec<u32>,
     /// Indices into [`Board::traces`].
     pub traces: Vec<u32>,
+    /// Ground by its vias across the whole board, not by its name.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub assumed_ground: bool,
 }
 
 /// Identifies the file format a board was read from.

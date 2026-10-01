@@ -151,6 +151,7 @@ export function Sidebar({
                 <button className={`list-row${i === selectedNet ? " selected" : ""}`} onClick={() => onSelect({ kind: "net", net: i }, true)}>
                   <span className={`kind-bar kind-${n.kind}`} />
                   <span className="list-name">{n.name}</span>
+                  {n.assumedGround && <span className="muted">{t("list.assumedGround")}</span>}
                   {/* Boards without pins connect through tracks: count those instead. */}
                   {pinless ? (
                     <span className="list-meta" title={t("list.netTraces")}>

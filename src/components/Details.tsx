@@ -233,6 +233,7 @@ export function Details({ model, selection, side, settings, notes, updateNotes, 
           <header className="details-head">
             <span className="details-type">{t("details.net")}</span>
             <h2 className={`kind-text-${net.kind}`}>{net.name}</h2>
+            {net.assumedGround && <p className="details-device">{t("details.assumedGround")}</p>}
           </header>
           <dl className="props">
             <Row label={t("details.kind")}>{t(kindKey[net.kind])}</Row>

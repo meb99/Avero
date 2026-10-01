@@ -46,6 +46,8 @@ export const en = {
   "details.mount": "Mounting",
   "details.pins": "Pins",
   "details.package": "Type",
+  "details.assumedGround": "Probably ground: its vias stitch the whole board.",
+  "list.assumedGround": "ground?",
   "details.estimated": "Estimated: the file has no shape for this part. Side, size and pads come from the copper; pins only where a track or via lands on a pad.",
   "package.passive": "Capacitor / resistor",
   "package.inductor": "Inductor",
