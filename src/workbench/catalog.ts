@@ -31,7 +31,10 @@ export const CATALOG: Record<string, Family[]> = {
     { name: "Wii U" },
     { name: "Wii" },
     { name: "GameCube" },
-    { name: "Game Boy", models: ["Pocket", "Color", "Advance", "Advance SP", "Micro"] },
+    { name: "Game Boy", models: ["Original", "Pocket", "Color", "Advance", "Advance SP", "Micro"] },
+    { name: "SNES" },
+    { name: "NES" },
+    { name: "N64" },
   ],
   Microsoft: [
     { name: "Xbox", models: ["Original", "360", "One", "One S", "One X", "Series S", "Series X"] },
@@ -256,9 +259,9 @@ const RULES: Rule[] = [
   },
   // Schematics say "switch" and "board" everywhere: names only.
   { pattern: /\bswitch\b.*\b(logic|mainboard|motherboard|board)\b/, make: () => c("Nintendo", "Switch", "Original"), weak: true },
-  { pattern: /new[\s-]*2ds[\s-]*xl|\bjan-0\d\d/, make: () => c("Nintendo", "3DS", "New 2DS XL") },
-  { pattern: /new[\s-]*3ds[\s-]*(xl|ll)|\bred-0\d\d/, make: () => c("Nintendo", "3DS", "New 3DS XL") },
-  { pattern: /new[\s-]*3ds|\bktr-0\d\d/, make: () => c("Nintendo", "3DS", "New 3DS") },
+  { pattern: /new[\s-]*(?:nintendo[\s-]*)?2ds[\s-]*xl|\bjan-0\d\d/, make: () => c("Nintendo", "3DS", "New 2DS XL") },
+  { pattern: /new[\s-]*(?:nintendo[\s-]*)?3ds[\s-]*(xl|ll)|\bred-0\d\d/, make: () => c("Nintendo", "3DS", "New 3DS XL") },
+  { pattern: /new[\s-]*(?:nintendo[\s-]*)?3ds|\bktr-0\d\d/, make: () => c("Nintendo", "3DS", "New 3DS") },
   { pattern: /\b3ds[\s-]*(xl|ll)\b|\bspr-0\d\d/, make: () => c("Nintendo", "3DS", "3DS XL") },
   { pattern: /\bftr-0\d\d/, make: () => c("Nintendo", "3DS", "2DS") },
   { pattern: /\b2ds\b/, make: () => c("Nintendo", "3DS", "2DS"), weak: true },
@@ -280,6 +283,12 @@ const RULES: Rule[] = [
   { pattern: /game[\s-]*boy[\s-]*color|\bcgb-0\d\d/, make: () => c("Nintendo", "Game Boy", "Color") },
   { pattern: /\bgbc\b/, make: () => c("Nintendo", "Game Boy", "Color"), weak: true },
   { pattern: /game[\s-]*boy[\s-]*micro|\boxy-0\d\d/, make: () => c("Nintendo", "Game Boy", "Micro") },
+  { pattern: /game[\s-]*boy[\s-]*pocket|\bmgb-0\d\d/, make: () => c("Nintendo", "Game Boy", "Pocket") },
+  { pattern: /\bgame[\s-]*boy\b|\bdmg-0\d\d/, make: () => c("Nintendo", "Game Boy", "Original") },
+  { pattern: /\bsnes\b|super[\s-]*(?:nintendo|famicom)|\bshvc-|\bsnsp?-/, make: () => c("Nintendo", "SNES") },
+  { pattern: /\bn64\b|nintendo[\s-]*64|\bnus-0\d\d/, make: () => c("Nintendo", "N64") },
+  { pattern: /\bfamicom\b|\bnes-0\d\d|\bhvc-0\d\d/, make: () => c("Nintendo", "NES") },
+  { pattern: /\bnes\b/, make: () => c("Nintendo", "NES"), weak: true },
 
   // --- Microsoft Xbox: names, code names and model numbers.
   { pattern: /xbox[\s-]*series[\s-]*x|\bxsx\b|\banaconda\b|model[\s-]*1882\b/, make: () => c("Microsoft", "Xbox", "Series X") },

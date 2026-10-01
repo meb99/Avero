@@ -27,6 +27,12 @@ describe("guessCategory", () => {
     expect(g("HAC-CPU-01.pdf")).toBe("Nintendo/Switch/Original");
     expect(g("HDH-CPU-01 boardview.bvr")).toBe("Nintendo/Switch/Lite");
     expect(g("New 3DS XL RED-001.pdf")).toBe("Nintendo/3DS/New 3DS XL");
+    expect(g("New Nintendo 2DS XL")).toBe("Nintendo/3DS/New 2DS XL");
+    expect(g("New Nintendo 3DS")).toBe("Nintendo/3DS/New 3DS");
+    expect(g("Gameboy")).toBe("Nintendo/Game Boy/Original");
+    expect(g("Gameboy Advance SP")).toBe("Nintendo/Game Boy/Advance SP");
+    expect(g("SNES Super Nintendo Entertainment System")).toBe("Nintendo/SNES");
+    expect(g("Nintendo 64 NUS-001.pdf")).toBe("Nintendo/N64");
     expect(g("Xbox_Series_X_mainboard.bdv")).toBe("Microsoft/Xbox/Series X");
     expect(g("Xbox One S.brd")).toBe("Microsoft/Xbox/One S");
     expect(g("xbox 360 jasper.pdf")).toBe("Microsoft/Xbox/360");

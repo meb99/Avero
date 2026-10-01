@@ -1,6 +1,16 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
-import { inlineText, pageText, parseExport, parseSavedHtml, parseWikitext } from "./wikitext";
+import {
+  inlineText,
+  measurementPictures,
+  pageText,
+  parseExport,
+  parseSavedHtml,
+  parseWikitext,
+  plainText,
+  textPieces,
+  type WikiPage,
+} from "./wikitext";
 
 describe("parseWikitext", () => {
   it("turns headings, lists, tables, notes and links into blocks", () => {
@@ -23,7 +33,8 @@ Intro with a [[PS5 HDMI Port Replacement|HDMI guide]] and '''bold''' text.<ref>s
     const { blocks, categories } = parseWikitext(src);
     expect(categories).toEqual(["PlayStation 5"]);
     expect(blocks[0]).toEqual({ type: "table", header: false, rows: [["name", "PlayStation 5"], ["board", "EDM-020"]] });
-    expect(blocks[1]).toEqual({ type: "paragraph", text: "Intro with a HDMI guide and bold text." });
+    expect(blocks[1].type === "paragraph" && plainText(blocks[1].text)).toBe("Intro with a HDMI guide and bold text.");
+    expect(blocks[1].type === "paragraph" && textPieces(blocks[1].text)[1]).toEqual({ text: "HDMI guide", target: "wiki:PS5 HDMI Port Replacement" });
     expect(blocks[2]).toEqual({ type: "heading", level: 2, text: "Diagnosis" });
     expect(blocks[3]).toEqual({ type: "note", kind: "warning", text: "Unplug the console first." });
     expect(blocks[4]).toEqual({ type: "list", ordered: true, items: ["Measure PP_VDD_SOC in diode mode", "Check fuse F4001"] });
@@ -33,11 +44,92 @@ Intro with a [[PS5 HDMI Port Replacement|HDMI guide]] and '''bold''' text.<ref>s
 
   it("keeps piped links inside note templates", () => {
     const { blocks } = parseWikitext("{{Warning|Check [[PP3V3_G3H|the G3H rail]] first}}");
-    expect(blocks).toEqual([{ type: "note", kind: "warning", text: "Check the G3H rail first" }]);
+    expect(blocks.map((b) => b.type === "note" && plainText(b.text))).toEqual(["Check the G3H rail first"]);
   });
 
   it("decodes entities and external links", () => {
     expect(inlineText("[https://x.org/a the site] 5&nbsp;V &amp; more")).toBe("the site 5 V & more");
+  });
+});
+
+describe("repair.wiki device pages", () => {
+  const src = `{{stub}}
+{{Device page
+|Manufacturer=Nintendo|Device type=Game Console}}
+
+== Guides ==
+{{List Guides}}
+
+== PCB pictures ==
+<gallery showthumbnails="1">
+File:Example pcb pictures.jpg
+</gallery>
+
+== Reference measurements (also schematics if available) ==
+<gallery showthumbnails="1">
+File:Switch OLED Mechanic Readings.jpg|Readings for the USB C port
+File:Switch oled PCB.jpg|alt=
+</gallery>
+
+== More Information/External Sources ==
+<!--
+You can manually link to external sources …
+-->You can manually link to external sources for additional information that might not fit here but are useful such as BIOS image dumps, firmware, etc!
+
+Boardview: https://www.sendspace.com/file/f4i6d0 and [https://repair.wiki/w/Caps known caps]
+{| class="wikitable"
+|+Guides
+!Problem!!Solution
+!
+|-
+|No Power||
+*Check the fuse
+**F1 near the jack
+|}`;
+  const { blocks } = parseWikitext(src);
+
+  it("keeps galleries, drops placeholders, boilerplate and empty sections", () => {
+    expect(blocks.filter((b) => b.type === "heading").map((b) => b.type === "heading" && b.text)).toEqual([
+      "Reference measurements (also schematics if available)",
+      "More Information/External Sources",
+    ]);
+    expect(blocks.find((b) => b.type === "gallery")).toEqual({
+      type: "gallery",
+      items: [
+        { file: "Switch OLED Mechanic Readings.jpg", caption: "Readings for the USB C port" },
+        { file: "Switch oled PCB.jpg", caption: "" },
+      ],
+    });
+    const text = blocks.map((b) => (b.type === "paragraph" ? b.text : "")).join(" ");
+    expect(text).not.toContain("You can manually link");
+    expect(textPieces(text)).toContainEqual({ text: "known caps", target: "https://repair.wiki/w/Caps" });
+  });
+
+  it("reads tables with captions, step lists in cells and no empty columns", () => {
+    expect(blocks.find((b) => b.type === "table" && b.header)).toEqual({
+      type: "table",
+      header: true,
+      caption: "Guides",
+      rows: [
+        ["Problem", "Solution"],
+        ["No Power", "• Check the fuse\n  • F1 near the jack"],
+      ],
+    });
+  });
+
+  it("counts reference measurement pictures", () => {
+    const page: WikiPage = { title: "Nintendo Switch OLED", url: "", categories: [], blocks };
+    expect(measurementPictures(page)).toHaveLength(2);
+  });
+
+  it("takes a guide's device from its fields", () => {
+    expect(parseWikitext("{{Repair Guide|Device=Nintendo Switch Lite|Affects part=M92T36}}\nText").about).toBe("Nintendo Switch Lite");
+    expect(parseWikitext("Board of the [[Device::PlayStation 5]].").about).toBe("PlayStation 5");
+    expect(inlineText("Board of the [[Device::PlayStation 5]].")).toBe("Board of the PlayStation 5.");
+  });
+
+  it("keeps nesting of lists", () => {
+    expect(parseWikitext("* a\n** b").blocks).toEqual([{ type: "list", ordered: false, items: ["a", "b"], levels: [1, 2] }]);
   });
 });
 
@@ -75,6 +167,26 @@ describe("parseSavedHtml", () => {
       { type: "heading", level: 2, text: "Steps" },
       { type: "list", ordered: true, items: ["Measure VBUS"] },
       { type: "table", header: true, rows: [["Net", "Value"], ["VSYS", "0.35"]] },
+    ]);
+  });
+
+  it("reads galleries and pictures of saved pages", () => {
+    const html = `<html><head><title>X - Repair Wiki</title></head><body><h1 id="firstHeading">Nintendo Switch OLED</h1>
+<div id="mw-content-text"><div class="mw-parser-output"><h2>Reference measurements</h2>
+<ul class="gallery mw-gallery-traditional"><li class="gallerybox"><div class="thumb"><a href="/w/File:Switch_OLED_Mechanic_Readings.jpg" class="mw-file-description"><img src="x"></a></div>
+<div class="gallerytext">USB C port readings</div></li>
+<li class="gallerybox"><a href="/w/File:Example_pcb_pictures.jpg"><img src="y"></a></li></ul>
+<figure><a href="/w/File:Board.png"><img src="z"></a><figcaption>Side A</figcaption></figure></div></div></body></html>`;
+    expect(parseSavedHtml(html)!.blocks).toEqual([
+      { type: "heading", level: 2, text: "Reference measurements" },
+      // Pictures in a row become one gallery.
+      {
+        type: "gallery",
+        items: [
+          { file: "Switch OLED Mechanic Readings.jpg", caption: "USB C port readings" },
+          { file: "Board.png", caption: "Side A" },
+        ],
+      },
     ]);
   });
 });

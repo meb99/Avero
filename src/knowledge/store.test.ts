@@ -1,6 +1,15 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
-import { EMPTY_KNOWLEDGE, deviceOf, mergeKnowledge, pagesForBoard, parseKnowledgeFile, searchKnowledge, toKnowledge } from "./store";
+import {
+  EMPTY_KNOWLEDGE,
+  deviceOf,
+  mergeKnowledge,
+  pagesForBoard,
+  parseKnowledgeFile,
+  relatedPages,
+  searchKnowledge,
+  toKnowledge,
+} from "./store";
 import type { WikiPage } from "./wikitext";
 
 const page = (title: string, categories: string[], text: string): WikiPage => ({
@@ -24,8 +33,11 @@ describe("knowledge", () => {
   });
 
   it("ranks pages for the board in view", () => {
-    const shown = pagesForBoard(base, { brand: "Sony", family: "PlayStation", model: "5" }, ["EDM-020"]);
-    expect(shown.map((p) => p.title)).toEqual(["PS5 No Power", "PS5 Slim HDMI"]);
+    const ps5board = { brand: "Sony", family: "PlayStation", model: "5" };
+    const shown = pagesForBoard(base, ps5board, ["EDM-020"]);
+    expect(shown.map((p) => p.title)).toEqual(["PS5 No Power"]);
+    // Other models of the family come separately.
+    expect(relatedPages(base, ps5board, shown).map((p) => p.title)).toEqual(["PS5 Slim HDMI"]);
     expect(pagesForBoard(base, { brand: "Apple", family: "iPhone", model: "13" }, [])).toEqual([]);
   });
 

@@ -8,8 +8,45 @@ export type Block =
   | { type: "heading"; level: number; text: string }
   | { type: "paragraph"; text: string }
   | { type: "note"; kind: "warning" | "note" | "tip"; text: string }
-  | { type: "list"; ordered: boolean; items: string[] }
-  | { type: "table"; rows: string[][]; header: boolean };
+  | { type: "list"; ordered: boolean; items: string[]; /** Nesting depth per item (1 = top), when nested. */ levels?: number[] }
+  | { type: "table"; rows: string[][]; header: boolean; caption?: string }
+  | { type: "gallery"; items: GalleryItem[] };
+
+/** A picture on the wiki, e.g. reference measurements on a board photo. */
+export interface GalleryItem {
+  /** File name on the wiki, without "File:". */
+  file: string;
+  caption: string;
+}
+
+/*
+ * Links in block text are kept as LINK_OPEN label LINK_MID target LINK_CLOSE.
+ * The target is a URL, or "wiki:Title" for a page of the same wiki.
+ */
+export const LINK_OPEN = "\u0002";
+export const LINK_MID = "\u0003";
+export const LINK_CLOSE = "\u0004";
+const LINKS = /\u0002([^\u0003]*)\u0003([^\u0004]*)\u0004/g;
+
+const link = (label: string, target: string) => `${LINK_OPEN}${label}${LINK_MID}${target}${LINK_CLOSE}`;
+
+/** Text without link markers: only the labels stay. */
+export function plainText(s: string): string {
+  return s.replace(LINKS, "$1");
+}
+
+/** Text split into plain pieces and links, in order. */
+export function textPieces(s: string): ({ text: string } | { text: string; target: string })[] {
+  const out: ({ text: string } | { text: string; target: string })[] = [];
+  let last = 0;
+  for (const m of s.matchAll(LINKS)) {
+    if (m.index > last) out.push({ text: s.slice(last, m.index) });
+    out.push({ text: m[1] || m[2], target: m[2] });
+    last = m.index + m[0].length;
+  }
+  if (last < s.length) out.push({ text: s.slice(last) });
+  return out;
+}
 
 export interface WikiPage {
   title: string;
@@ -21,6 +58,8 @@ export interface WikiPage {
   edited?: string;
   /** License named by the page itself, e.g. "CC BY-SA 3.0". */
   license?: string;
+  /** Device the page is about, as the wiki names it (a guide's "Device" field). */
+  about?: string;
 }
 
 /** "CC BY-SA 3.0" from a link to creativecommons.org/licenses/by-sa/3.0/. */
@@ -79,15 +118,22 @@ const NOTE_TEMPLATES: Record<string, "warning" | "note" | "tip"> = {
   hint: "tip",
 };
 
-/** Plain text of wiki inline markup. */
-export function inlineText(s: string): string {
+/**
+ * Plain text of wiki inline markup; with `links`, links stay as markers
+ * (see LINK_OPEN) so they can be opened.
+ */
+export function inlineText(s: string, links = false): string {
+  const wiki = (title: string, label: string) => (links ? link(label, `wiki:${title.trim()}`) : label);
+  const web = (url: string, label: string) => (links ? link(label, url.startsWith("//") ? `https:${url}` : url) : label);
   return decodeEntities(
     s
       .replace(/\[\[(?:file|image|datei|bild):[^\]]*(?:\[\[[^\]]*\]\][^\]]*)*\]\]/gi, "")
-      .replace(/\[\[[^\]|]*\|([^\]]*)\]\]/g, "$1")
-      .replace(/\[\[([^\]]*)\]\]/g, "$1")
-      .replace(/\[(?:https?:)?\/\/\S+\s+([^\]]+)\]/g, "$1")
-      .replace(/\[(?:https?:)?\/\/(\S+)\]/g, "$1")
+      // Semantic MediaWiki properties: [[Device::Nintendo Switch]] shows the value.
+      .replace(/\[\[[^\]|:]+::([^\]|]*)(?:\|([^\]]*))?\]\]/g, (_, value: string, label?: string) => label ?? value)
+      .replace(/\[\[:?([^\]|]*)\|([^\]]*)\]\]/g, (_, title: string, label: string) => wiki(title, label))
+      .replace(/\[\[:?([^\]]*)\]\]/g, (_, title: string) => wiki(title, title))
+      .replace(/\[((?:https?:)?\/\/\S+)\s+([^\]]+)\]/g, (_, url: string, label: string) => web(url, label))
+      .replace(/\[((?:https?:)?\/\/\S+)\]/g, (_, url: string) => (links ? url.replace(/^\/\//, "https://") : url.replace(/^(?:https?:)?\/\//, "")))
       .replace(/'{2,5}/g, "")
       .replace(/<br\s*\/?>/gi, "\n")
       .replace(/<[^>]+>/g, ""),
@@ -97,7 +143,7 @@ export function inlineText(s: string): string {
 }
 
 /** Cells of one wiki table row line (`| a || b` or `! a !! b`), without attributes. */
-function cells(line: string): string[] {
+function cells(line: string, links: boolean): string[] {
   const sep = line.startsWith("!") ? /!!|\|\|/ : /\|\|/;
   return line
     .slice(1)
@@ -106,16 +152,77 @@ function cells(line: string): string[] {
       // `style="…" | content`: the part after a single `|` is the content.
       const bar = cell.indexOf("|");
       const content = bar >= 0 && !cell.slice(0, bar).includes("[[") ? cell.slice(bar + 1) : cell;
-      return inlineText(content);
+      return inlineText(content, links);
     });
 }
 
+/** Removes columns that are empty in every row. */
+function dropEmptyColumns(rows: string[][]): string[][] {
+  const width = Math.max(0, ...rows.map((r) => r.length));
+  const keep = Array.from({ length: width }, (_, c) => rows.some((r) => (r[c] ?? "").trim() !== ""));
+  return rows.map((r) => r.filter((_, c) => keep[c]));
+}
+
+/** Placeholder pictures of the page template ("Example pcb pictures.jpg"). */
+const PLACEHOLDER = /^example[\s_]+(pcb|measurement|device)[\s_]+pictures?\.\w+$/i;
+/** Image options that are not a caption. */
+const IMAGE_OPTION = /^\s*(thumb|thumbnail|frame|frameless|border|left|right|center|centre|none|upright(=.*)?|\d+(x\d+)?px|(alt|link|page|class|lang)=.*)\s*$/i;
+
+function galleryItem(line: string): GalleryItem | null {
+  const [first, ...params] = splitParams(line.trim());
+  const file = first.replace(/^(?:file|image|datei|bild):/i, "").trim();
+  if (!file || !/\.\w{2,5}$/.test(file) || PLACEHOLDER.test(file)) return null;
+  const caption = [...params].reverse().find((p) => !IMAGE_OPTION.test(p)) ?? "";
+  return { file, caption: inlineText(caption) };
+}
+
+/**
+ * Drops the template's boilerplate and headings with nothing under them
+ * (repair.wiki device pages start with empty "Guides" and picture sections).
+ */
+function tidy(blocks: Block[]): Block[] {
+  const out: Block[] = [];
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const b = blocks[i];
+    const next = out[out.length - 1];
+    if (b.type === "heading" && (!next || (next.type === "heading" && next.level <= b.level))) continue;
+    // Pictures in a row become one gallery.
+    if (b.type === "gallery" && next?.type === "gallery") {
+      out[out.length - 1] = { type: "gallery", items: [...b.items, ...next.items] };
+      continue;
+    }
+    out.push(b);
+  }
+  return out.reverse();
+}
+
 /** Blocks and categories of a page's wikitext. */
-export function parseWikitext(source: string): { blocks: Block[]; categories: string[] } {
+export function parseWikitext(source: string): { blocks: Block[]; categories: string[]; about?: string } {
   const categories: string[] = [];
+  let about: string | undefined;
+  const property = /\[\[Device::([^\]|]+)/i.exec(source);
+  if (property) about = property[1].trim();
   const notes: Block[] = [];
+  const rich = (s: string) => inlineText(s, true);
+  const block = (b: Block) => {
+    notes.push(b);
+    return `\n\u0001${notes.length - 1}\n`;
+  };
   let text = source
     .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/You can manually link to external sources[^\n]*?etc!?/gi, "")
+    .replace(/<gallery[^>]*>([\s\S]*?)<\/gallery>/gi, (_, body: string) => {
+      const items = body
+        .split("\n")
+        .map(galleryItem)
+        .filter((i): i is GalleryItem => !!i);
+      return items.length ? block({ type: "gallery", items }) : "\n";
+    })
+    // Pictures on a line of their own; inline ones are dropped with the markup.
+    .replace(/^[ \t]*\[\[(?:file|image|datei|bild):((?:[^\][\n]|\[\[[^\]\n]*\]\])*)\]\][ \t]*$/gim, (_, body: string) => {
+      const item = galleryItem(body);
+      return item ? block({ type: "gallery", items: [item] }) : "";
+    })
     .replace(/<ref[^>]*\/>/gi, "")
     .replace(/<ref[^>]*>[\s\S]*?<\/ref>/gi, "")
     .replace(/__[A-Z]+__/g, "")
@@ -126,30 +233,31 @@ export function parseWikitext(source: string): { blocks: Block[]; categories: st
   text = stripTemplates(text, (name, params) => {
     const kind = NOTE_TEMPLATES[name.toLowerCase()];
     const positional = params.filter((p) => !/^\s*\w+\s*=/.test(p));
-    if (kind && positional.length) {
-      notes.push({ type: "note", kind, text: inlineText(positional.join(" ")) });
-      return `\n\u0001${notes.length - 1}\n`;
-    }
+    if (kind && positional.length) return block({ type: "note", kind, text: rich(positional.join(" ")) });
     // Infoboxes: key = value pairs become a small table.
     const pairs = params.map((p) => /^\s*([^=]+?)\s*=\s*([\s\S]*)$/.exec(p)).filter((m): m is RegExpExecArray => !!m && !!m[2].trim());
-    if (/infobox|device|specs/i.test(name) && pairs.length) {
-      notes.push({ type: "table", header: false, rows: pairs.map((m) => [inlineText(m[1]), inlineText(m[2])]) });
-      return `\n\u0001${notes.length - 1}\n`;
-    }
+    // Guides name their device in a field: {{Repair Guide|Device=Nintendo Switch|…}}.
+    const device = pairs.find((m) => /^device$/i.test(m[1].trim()));
+    if (device && !about) about = inlineText(device[2]);
+    if (/infobox|device|specs|guide/i.test(name) && pairs.length)
+      return block({ type: "table", header: false, rows: pairs.map((m) => [inlineText(m[1]), rich(m[2])]) });
     return "";
   });
 
   const blocks: Block[] = [];
   let paragraph: string[] = [];
-  let list: { ordered: boolean; items: string[] } | null = null;
-  let table: { rows: string[][]; header: boolean } | null = null;
+  let list: { ordered: boolean; items: string[]; levels: number[] } | null = null;
+  let table: { rows: string[][]; header: boolean; caption?: string } | null = null;
   const flushParagraph = () => {
-    const t = inlineText(paragraph.join(" "));
+    const t = rich(paragraph.join(" "));
     if (t) blocks.push({ type: "paragraph", text: t });
     paragraph = [];
   };
   const flushList = () => {
-    if (list?.items.length) blocks.push({ type: "list", ...list });
+    if (list?.items.length) {
+      const { levels, ...rest } = list;
+      blocks.push(levels.some((l) => l > 1) ? { type: "list", ...rest, levels } : { type: "list", ...rest });
+    }
     list = null;
   };
 
@@ -158,20 +266,24 @@ export function parseWikitext(source: string): { blocks: Block[]; categories: st
     if (table) {
       const t = line.trim();
       if (t.startsWith("|}")) {
-        if (table.rows.length) blocks.push({ type: "table", rows: table.rows.filter((r) => r.length), header: table.header });
+        const rows = dropEmptyColumns(table.rows.filter((r) => r.length));
+        if (rows.length) blocks.push({ type: "table", rows, header: table.header, ...(table.caption && { caption: table.caption }) });
         table = null;
       } else if (t.startsWith("|-")) {
         table.rows.push([]);
       } else if (t.startsWith("|+")) {
-        // Caption: ignore.
+        const caption = inlineText(t.slice(2));
+        if (caption) table.caption = caption;
       } else if (t.startsWith("|") || t.startsWith("!")) {
         if (t.startsWith("!") && table.rows.length <= 1) table.header = true;
         if (table.rows.length === 0) table.rows.push([]);
-        table.rows[table.rows.length - 1].push(...cells(t));
+        table.rows[table.rows.length - 1].push(...cells(t, true));
       } else if (t && table.rows.length) {
-        // Continuation of the last cell.
+        // Continuation of the last cell, often a list of steps.
         const row = table.rows[table.rows.length - 1];
-        if (row.length) row[row.length - 1] = `${row[row.length - 1]} ${inlineText(t)}`.trim();
+        const bullet = /^[*#]+/.exec(t);
+        const piece = bullet ? `${"  ".repeat(bullet[0].length - 1)}• ${rich(t.slice(bullet[0].length))}` : rich(t);
+        if (row.length) row[row.length - 1] = row[row.length - 1] ? `${row[row.length - 1]}\n${piece}` : piece;
       }
       continue;
     }
@@ -192,13 +304,16 @@ export function parseWikitext(source: string): { blocks: Block[]; categories: st
       const ordered = line.startsWith("#");
       if (!list || list.ordered !== ordered) {
         flushList();
-        list = { ordered, items: [] };
+        list = { ordered, items: [], levels: [] };
       }
-      const item = inlineText(line.replace(/^[*#:;]+/, ""));
-      if (item) list.items.push(item);
+      const item = rich(line.replace(/^[*#:;]+/, ""));
+      if (item) {
+        list.items.push(item);
+        list.levels.push(/^[*#:;]+/.exec(line)![0].length);
+      }
     } else if (/^[;:]/.test(line)) {
       flushList();
-      const t = inlineText(line.replace(/^[;:]+/, ""));
+      const t = rich(line.replace(/^[;:]+/, ""));
       if (t) blocks.push({ type: "paragraph", text: t });
     } else if (line.trim()) {
       flushList();
@@ -207,7 +322,7 @@ export function parseWikitext(source: string): { blocks: Block[]; categories: st
   }
   flushParagraph();
   flushList();
-  return { blocks, categories };
+  return { blocks: tidy(blocks), categories, ...(about && { about }) };
 }
 
 const BASE = "https://repair.wiki/w/";
@@ -231,9 +346,10 @@ export function parseExport(xml: string): WikiPage[] {
     const source = last?.getElementsByTagName("text")[0]?.textContent ?? "";
     // Main articles only; redirects carry no content.
     if (!title || (ns && ns !== "0") || /^#redirect/i.test(source.trim())) continue;
-    const { blocks, categories } = parseWikitext(source);
+    const { blocks, categories, about } = parseWikitext(source);
     if (blocks.length === 0) continue;
     pages.push({
+      ...(about && { about }),
       title,
       url: pageUrl(title, base),
       categories,
@@ -244,6 +360,17 @@ export function parseExport(xml: string): WikiPage[] {
   return pages;
 }
 
+/** A picture of a saved page: the file it links to and its caption. */
+function pictureOf(el: Element, captionSelector: string): GalleryItem | null {
+  const href = el.querySelector('a[href*="File:"], a[href*="Datei:"]')?.getAttribute("href") ?? "";
+  const m = /(?:File|Datei):([^?#]+)/.exec(href);
+  if (!m) return null;
+  const file = decodeURIComponent(m[1]).replace(/_/g, " ");
+  if (PLACEHOLDER.test(file)) return null;
+  const caption = (el.querySelector(captionSelector)?.textContent ?? "").replace(/\s+/g, " ").trim();
+  return { file, caption };
+}
+
 function elementBlocks(root: Element): Block[] {
   const blocks: Block[] = [];
   const text = (el: Element) => (el.textContent ?? "").replace(/\s+/g, " ").trim();
@@ -251,8 +378,14 @@ function elementBlocks(root: Element): Block[] {
     for (const child of Array.from(el.children)) {
       const tag = child.tagName.toLowerCase();
       const cls = child.getAttribute("class") ?? "";
-      if (/(^|\s)(toc|mw-editsection|reference|navbox|catlinks|printfooter|noprint)(\s|$)/.test(cls) || ["script", "style", "sup", "figure"].includes(tag)) continue;
-      if (/^h[2-6]$/.test(tag)) {
+      if (/(^|\s)(toc|mw-editsection|reference|navbox|catlinks|printfooter|noprint)(\s|$)/.test(cls) || ["script", "style", "sup"].includes(tag)) continue;
+      if (/(^|\s)gallery(\s|$)/.test(cls) || tag === "figure") {
+        const boxes = tag === "figure" ? [child] : Array.from(child.querySelectorAll("li.gallerybox"));
+        const items = boxes
+          .map((box) => pictureOf(box, tag === "figure" ? "figcaption" : ".gallerytext"))
+          .filter((i): i is GalleryItem => !!i);
+        if (items.length) blocks.push({ type: "gallery", items });
+      } else if (/^h[2-6]$/.test(tag)) {
         const t = text(child).replace(/\[\s*(edit|bearbeiten)[^\]]*\]/gi, "").trim();
         if (t) blocks.push({ type: "heading", level: Number(tag[1]), text: t });
       } else if (tag === "p") {
@@ -289,7 +422,7 @@ export function parseSavedHtml(html: string, fileName = ""): WikiPage | null {
   const categories = Array.from(doc.querySelectorAll("#catlinks a"))
     .map((a) => a.textContent?.trim() ?? "")
     .filter((c) => c && !/^(categories|kategorien)$/i.test(c));
-  const blocks = elementBlocks(root);
+  const blocks = tidy(elementBlocks(root));
   if (!title || blocks.length === 0) return null;
   const licenseLink = doc.querySelector('#footer-info-copyright a[href*="creativecommons.org"], a[rel="license"]');
   const license = licenseFromUrl(licenseLink?.getAttribute("href") ?? "");
@@ -298,11 +431,36 @@ export function parseSavedHtml(html: string, fileName = ""): WikiPage | null {
 
 /** All text of a page, for search. */
 export function pageText(page: WikiPage): string {
-  return [
-    page.title,
-    ...page.categories,
-    ...page.blocks.map((b) =>
-      b.type === "list" ? b.items.join(" ") : b.type === "table" ? b.rows.map((r) => r.join(" ")).join(" ") : b.text,
-    ),
-  ].join(" ");
+  return plainText(
+    [
+      page.title,
+      ...page.categories,
+      ...page.blocks.map((b) =>
+        b.type === "list"
+          ? b.items.join(" ")
+          : b.type === "table"
+            ? b.rows.map((r) => r.join(" ")).join(" ")
+            : b.type === "gallery"
+              ? b.items.map((i) => `${i.caption} ${i.file}`).join(" ")
+              : b.text,
+      ),
+    ].join(" "),
+  );
+}
+
+const MEASUREMENT = /measure|reading|diode|voltage|resistance|schematic|messwert|messung/i;
+
+/** Pictures of reference measurements on a page: under such a heading, or captioned so. */
+export function measurementPictures(page: WikiPage): GalleryItem[] {
+  const out: GalleryItem[] = [];
+  let under: number | null = null;
+  for (const b of page.blocks) {
+    if (b.type === "heading") {
+      if (under !== null && b.level <= under) under = null;
+      if (under === null && MEASUREMENT.test(b.text)) under = b.level;
+    } else if (b.type === "gallery") {
+      out.push(...b.items.filter((i) => under !== null || MEASUREMENT.test(i.caption) || MEASUREMENT.test(i.file)));
+    }
+  }
+  return out;
 }

@@ -32,8 +32,12 @@ function sourceOf(url: string): string {
   }
 }
 
-/** The device a page is about: from its title and categories, else its text. */
+/** The device a page is about: from the guide's device field, its title and categories, else its text. */
 export function deviceOf(page: WikiPage): Category {
+  if (page.about) {
+    const about = guessCategory([page.about]);
+    if (about.brand) return about;
+  }
   const named = guessCategory([page.title, ...page.categories]);
   return named.brand ? named : guessCategory([pageText(page).slice(0, 4000)], { strict: true });
 }
@@ -110,18 +114,21 @@ export async function pickKnowledgeFiles(title: string): Promise<{ pages: Knowle
 
 const same = (a: string, b: string) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
 
+const sameFamily = (a: Category, b: Category) => same(a.brand, b.brand) && same(a.family, b.family);
+/** Pages of another model of the family (Switch Lite for a Switch OLED). */
+const otherModel = (page: Category, device: Category) => sameFamily(page, device) && !!page.model && !!device.model && !same(page.model, device.model);
+
 /**
- * Pages for the board in view, best first: same model, then same device
- * family; pages naming the board number (EDM-020, 820-02100) rank highest.
+ * Pages for the board in view, best first: same model, or the family as a
+ * whole; pages naming the board number (EDM-020, 820-02100) rank highest.
  */
 export function pagesForBoard(base: KnowledgeBase, device: Category, boardNumbers: string[]): KnowledgePage[] {
   const numbers = boardNumbers.map((n) => n.toUpperCase()).filter((n) => n.length >= 5);
   const scored = base.pages.map((p) => {
     let score = 0;
-    if (same(p.device.brand, device.brand) && same(p.device.family, device.family)) {
+    if (sameFamily(p.device, device) && !otherModel(p.device, device)) {
       score += 2;
       if (same(p.device.model, device.model)) score += 2;
-      else if (p.device.model && device.model) score -= 1;
     }
     if (numbers.length) {
       const text = pageText(p).toUpperCase();
@@ -133,6 +140,12 @@ export function pagesForBoard(base: KnowledgeBase, device: Category, boardNumber
     .filter((s) => s.score > 0)
     .sort((a, b) => b.score - a.score || a.p.title.localeCompare(b.p.title))
     .map((s) => s.p);
+}
+
+/** Pages of the other models of the board's device family, not already shown for it. */
+export function relatedPages(base: KnowledgeBase, device: Category, shown: KnowledgePage[]): KnowledgePage[] {
+  const skip = new Set(shown);
+  return base.pages.filter((p) => !skip.has(p) && otherModel(p.device, device));
 }
 
 /** Pages containing every word of the query. */
