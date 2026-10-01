@@ -286,6 +286,8 @@ export const de: Record<MessageKey, string> = {
   "kb.noneForBoard": "Keine der {n} Seiten passt zu diesem Gerät. Suche oben oder importiere weitere Seiten.",
   "kb.related": "Andere Modelle dieser Gerätefamilie ({n})",
   "kb.measurements": "{n} Messbilder",
+  "kb.reference": "Referenz",
+  "kb.builtinNote": "Diese Referenzseite gehört zu Avero; die Werte sind aus den Messbildern von repair.wiki abgelesen.",
   "kb.results": "{n} Treffer",
   "kb.emptyTitle": "Noch kein Reparaturwissen importiert. So holst du es von repair.wiki:",
   "kb.step1": "Auf repair.wiki „Special:Export“ öffnen. Unter „Seiten aus Kategorie hinzufügen“ eine Kategorie ohne „Category:“ davor eintragen und auf „Hinzufügen“ klicken: „Repair guide“ und „Explanatory guide“ enthalten die Anleitungen mit Fehlersuche und Messwerten, Gerätekategorien wie „Nintendo Game Consoles“, „Phones“ oder „Laptops“ die Geräteseiten mit Messbildern. Das Textfeld muss sich mit Titeln füllen, dann exportieren. Einzelne Seiten gehen auch im Browser als „Webseite, nur HTML“.",

@@ -215,15 +215,19 @@ export function KnowledgePanel(p: Props) {
           {t("kb.source", { source: open.source, license: open.license || "–" })}
           {open.edited && ` · ${new Date(open.edited).toLocaleDateString()}`}
         </p>
-        <button
-          className="small danger"
-          onClick={() => {
-            p.onRemove(open);
-            setOpen(null);
-          }}
-        >
-          {t("kb.remove")}
-        </button>
+        {open.builtin ? (
+          <p className="muted">{t("kb.builtinNote")}</p>
+        ) : (
+          <button
+            className="small danger"
+            onClick={() => {
+              p.onRemove(open);
+              setOpen(null);
+            }}
+          >
+            {t("kb.remove")}
+          </button>
+        )}
       </div>
     );
   }
@@ -239,7 +243,10 @@ export function KnowledgePanel(p: Props) {
             {page.device.brand && (
               <span className="muted"> {[page.device.family, page.device.model].filter(Boolean).join(" ")}</span>
             )}
-            {measurements(page) > 0 && <span className="kb-badge">{t("kb.measurements", { n: measurements(page) })}</span>}
+            {page.builtin && <span className="kb-badge">{t("kb.reference")}</span>}
+            {!page.builtin && measurements(page) > 0 && (
+              <span className="kb-badge">{t("kb.measurements", { n: measurements(page) })}</span>
+            )}
           </li>
         ))}
       </ul>
@@ -254,19 +261,7 @@ export function KnowledgePanel(p: Props) {
         </button>
       </div>
       {p.message && <p className="muted">{p.message}</p>}
-      {p.base.pages.length === 0 ? (
-        <div className="kb-empty">
-          <p>{t("kb.emptyTitle")}</p>
-          <ol>
-            <li>{t("kb.step1")}</li>
-            <li>{t("kb.step2")}</li>
-            <li>{t("kb.step3")}</li>
-          </ol>
-          <button className="small" onClick={() => p.onOpenUrl("https://repair.wiki/w/Special:Export")}>
-            {t("kb.openExport")}
-          </button>
-        </div>
-      ) : found ? (
+      {found ? (
         <>
           <h3>{t("kb.results", { n: found.length })}</h3>
           {list(found)}
@@ -284,6 +279,19 @@ export function KnowledgePanel(p: Props) {
             </details>
           )}
         </>
+      )}
+      {!found && !p.base.pages.some((page) => !page.builtin) && (
+        <div className="kb-empty">
+          <p>{t("kb.emptyTitle")}</p>
+          <ol>
+            <li>{t("kb.step1")}</li>
+            <li>{t("kb.step2")}</li>
+            <li>{t("kb.step3")}</li>
+          </ol>
+          <button className="small" onClick={() => p.onOpenUrl("https://repair.wiki/w/Special:Export")}>
+            {t("kb.openExport")}
+          </button>
+        </div>
       )}
     </div>
   );

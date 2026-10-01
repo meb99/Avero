@@ -12,6 +12,8 @@ export interface KnowledgePage extends WikiPage {
   /** Site name and license, shown with the page. */
   source: string;
   license: string;
+  /** Ships with Avero (reference values); cannot be removed. */
+  builtin?: boolean;
 }
 
 export interface KnowledgeBase {
@@ -57,6 +59,11 @@ export function mergeKnowledge(base: KnowledgeBase, pages: KnowledgePage[]): Kno
 
 /** Marker of an export without pages; the UI shows its own text for it. */
 export const EMPTY_EXPORT = "the export contains no pages";
+
+/** The imported pages together with Avero's own reference pages. */
+export function withBuiltin(base: KnowledgeBase, builtin: KnowledgePage[]): KnowledgeBase {
+  return mergeKnowledge({ version: 1, pages: builtin }, base.pages);
+}
 
 /** Pages of an export or saved page, whichever the text is. */
 export function parseKnowledgeFile(text: string, fileName: string): WikiPage[] {

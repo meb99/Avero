@@ -2618,3 +2618,15 @@ button.danger {
   font-size: 12px;
   margin-top: 10px;
 }
+
+/* The first column (signal, rail) stays in view when a wide table scrolls. */
+.kb-table td:first-child,
+.kb-table th:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+}
+
+.kb-table th {
+  white-space: pre-line;
+}

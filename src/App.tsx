@@ -68,7 +68,9 @@ import {
   pickKnowledgeFiles,
   saveKnowledge,
   type KnowledgeBase,
+  withBuiltin,
 } from "./knowledge/store";
+import { BUILTIN_PAGES } from "./knowledge/builtin";
 import { guessCategory } from "./workbench/catalog";
 import { PIN_COLORS } from "./render/palette";
 import { alignPhoto } from "./workbench/photo";
@@ -395,6 +397,8 @@ export function App() {
 
   // Repair knowledge (imported wiki pages), for the device in view.
   const [knowledge, setKnowledge] = useState<KnowledgeBase>(EMPTY_KNOWLEDGE);
+  // What the panel shows: imported pages and Avero's reference pages.
+  const knowledgeView = useMemo(() => withBuiltin(knowledge, BUILTIN_PAGES), [knowledge]);
   const [knowledgeBusy, setKnowledgeBusy] = useState(false);
   const [knowledgeMessage, setKnowledgeMessage] = useState<string | null>(null);
   useEffect(() => {
@@ -410,8 +414,8 @@ export function App() {
     return idTokens(name.replace(/\.[^.]+$/, ""));
   }, [source]);
   const knowledgeForBoard = useMemo(
-    () => pagesForBoard(knowledge, boardDevice, boardNumbers).length,
-    [knowledge, boardDevice, boardNumbers],
+    () => pagesForBoard(knowledgeView, boardDevice, boardNumbers).length,
+    [knowledgeView, boardDevice, boardNumbers],
   );
   const importKnowledge = useCallback(async () => {
     setKnowledgeBusy(true);
@@ -1370,7 +1374,7 @@ export function App() {
                   knowledge={
                     <KnowledgePanel
                       model={model}
-                      base={knowledge}
+                      base={knowledgeView}
                       device={boardDevice}
                       boardNumbers={boardNumbers}
                       busy={knowledgeBusy}

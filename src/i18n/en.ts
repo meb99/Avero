@@ -284,6 +284,8 @@ export const en = {
   "kb.noneForBoard": "None of the {n} pages fits this device. Search above or import more pages.",
   "kb.related": "Other models of this device family ({n})",
   "kb.measurements": "{n} measurement pictures",
+  "kb.reference": "Reference",
+  "kb.builtinNote": "This reference page ships with Avero; its values are read off the measurement pictures of repair.wiki.",
   "kb.results": "{n} results",
   "kb.emptyTitle": "No repair knowledge imported yet. To get it from repair.wiki:",
   "kb.step1": "On repair.wiki open \"Special:Export\". Under \"Add pages from category\" enter a category without \"Category:\" and click \"Add\": \"Repair guide\" and \"Explanatory guide\" hold the guides with troubleshooting and measurements, device categories like \"Nintendo Game Consoles\", \"Phones\" or \"Laptops\" the device pages with measurement pictures. The text box must fill with titles; then export. Single pages also work saved from the browser as \"Web page, HTML only\".",
