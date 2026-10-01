@@ -63,11 +63,13 @@ describe("parseSavedHtml", () => {
 <body><h1 id="firstHeading">Switch No Charge</h1><div id="mw-content-text"><div class="mw-parser-output">
 <p>Check the M92T36.</p><h2>Steps<span class="mw-editsection">[edit]</span></h2><ol><li>Measure VBUS</li></ol>
 <table><tr><th>Net</th><th>Value</th></tr><tr><td>VSYS</td><td>0.35</td></tr></table></div></div>
-<div id="catlinks"><a>Categories</a><a>Nintendo Switch</a></div></body></html>`;
+<div id="catlinks"><a>Categories</a><a>Nintendo Switch</a></div>
+<footer><section id="footer-info-copyright">Content is available under <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC</a></section></footer></body></html>`;
     const page = parseSavedHtml(html)!;
     expect(page.title).toBe("Switch No Charge");
     expect(page.url).toBe("https://repair.wiki/w/Switch_No_Charge");
     expect(page.categories).toEqual(["Nintendo Switch"]);
+    expect(page.license).toBe("CC BY-SA 3.0");
     expect(page.blocks).toEqual([
       { type: "paragraph", text: "Check the M92T36." },
       { type: "heading", level: 2, text: "Steps" },

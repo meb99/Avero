@@ -283,7 +283,7 @@ export const en = {
   "kb.noneForBoard": "None of the {n} pages fits this device. Search above or import more pages.",
   "kb.results": "{n} results",
   "kb.emptyTitle": "No repair knowledge imported yet. To get it from repair.wiki:",
-  "kb.step1": "Open “Special:Export” on repair.wiki and enter pages or a category (e.g. “PlayStation 5”) – or save a single page in the browser as “Web page, HTML only”.",
+  "kb.step1": "Open “Special:Export” on repair.wiki. Enter a category under “Add pages from category” (e.g. “Game Consoles”, “Phones”, “Laptops”) – or copy all titles from “Special:AllPages” to get the whole wiki. Tick “Include only the current revision” and save. Single pages also work saved from the browser as “Web page, HTML only”.",
   "kb.step2": "Load the XML or HTML file here with “Import…”.",
   "kb.step3": "Avero files each page under its device and shows it with the matching board; nets and parts in the text are clickable.",
   "kb.openExport": "Open repair.wiki export",

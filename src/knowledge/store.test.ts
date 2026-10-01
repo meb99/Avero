@@ -19,7 +19,8 @@ describe("knowledge", () => {
   it("knows the device of a page and its license", () => {
     expect(deviceOf(page("x", ["Nintendo Switch OLED"], ""))).toEqual({ brand: "Nintendo", family: "Switch", model: "OLED" });
     expect(ps5.source).toBe("repair.wiki");
-    expect(ps5.license).toBe("CC BY-SA 4.0");
+    expect(ps5.license).toBe("CC BY-SA 3.0");
+    expect(toKnowledge({ ...page("x", [], ""), license: "CC BY-SA 4.0" }).license).toBe("CC BY-SA 4.0");
   });
 
   it("ranks pages for the board in view", () => {

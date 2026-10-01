@@ -285,7 +285,7 @@ export const de: Record<MessageKey, string> = {
   "kb.noneForBoard": "Keine der {n} Seiten passt zu diesem Gerät. Suche oben oder importiere weitere Seiten.",
   "kb.results": "{n} Treffer",
   "kb.emptyTitle": "Noch kein Reparaturwissen importiert. So holst du es von repair.wiki:",
-  "kb.step1": "Auf repair.wiki „Spezial:Exportieren“ öffnen und Seiten oder eine Kategorie (z. B. „PlayStation 5“) eintragen – oder eine einzelne Seite im Browser als „Webseite, nur HTML“ sichern.",
+  "kb.step1": "Auf repair.wiki „Spezial:Exportieren“ öffnen. Dort unter „Seiten aus Kategorie hinzufügen“ eine Kategorie eintragen (z. B. „Game Consoles“, „Phones“, „Laptops“) – oder unter „Spezial:Alle Seiten“ alle Titel kopieren und einfügen, dann ist das ganze Wiki dabei. Häkchen bei „Nur die aktuelle Version“ setzen und speichern. Einzelne Seiten gehen auch im Browser als „Webseite, nur HTML“.",
   "kb.step2": "Die XML- bzw. HTML-Datei hier mit „Importieren…“ laden.",
   "kb.step3": "Avero ordnet jede Seite ihrem Gerät zu und zeigt sie beim passenden Board; Netze und Bauteile im Text sind anklickbar.",
   "kb.openExport": "repair.wiki-Export öffnen",

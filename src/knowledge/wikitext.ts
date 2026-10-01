@@ -19,6 +19,14 @@ export interface WikiPage {
   blocks: Block[];
   /** Last edit on the wiki, ISO date, when known. */
   edited?: string;
+  /** License named by the page itself, e.g. "CC BY-SA 3.0". */
+  license?: string;
+}
+
+/** "CC BY-SA 3.0" from a link to creativecommons.org/licenses/by-sa/3.0/. */
+export function licenseFromUrl(url: string): string | undefined {
+  const m = /creativecommons\.org\/licenses\/([a-z-]+)\/(\d\.\d)/i.exec(url);
+  return m ? `CC ${m[1].toUpperCase()} ${m[2]}` : undefined;
 }
 
 const ENTITIES: Record<string, string> = { nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", ndash: "–", mdash: "—", deg: "°", ohm: "Ω", micro: "µ" };
@@ -283,7 +291,9 @@ export function parseSavedHtml(html: string, fileName = ""): WikiPage | null {
     .filter((c) => c && !/^(categories|kategorien)$/i.test(c));
   const blocks = elementBlocks(root);
   if (!title || blocks.length === 0) return null;
-  return { title, url: canonical || pageUrl(title), categories, blocks };
+  const licenseLink = doc.querySelector('#footer-info-copyright a[href*="creativecommons.org"], a[rel="license"]');
+  const license = licenseFromUrl(licenseLink?.getAttribute("href") ?? "");
+  return { title, url: canonical || pageUrl(title), categories, blocks, ...(license && { license }) };
 }
 
 /** All text of a page, for search. */

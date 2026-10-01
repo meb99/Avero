@@ -21,7 +21,8 @@ export interface KnowledgeBase {
 
 export const EMPTY_KNOWLEDGE: KnowledgeBase = { version: 1, pages: [] };
 
-const LICENSES: Record<string, string> = { "repair.wiki": "CC BY-SA 4.0" };
+/** License of a site's pages when the file does not say (XML exports). */
+const LICENSES: Record<string, string> = { "repair.wiki": "CC BY-SA 3.0" };
 
 function sourceOf(url: string): string {
   try {
@@ -39,7 +40,7 @@ export function deviceOf(page: WikiPage): Category {
 
 export function toKnowledge(page: WikiPage, now = new Date().toISOString()): KnowledgePage {
   const source = sourceOf(page.url) || "wiki";
-  return { ...page, device: deviceOf(page), imported: now, source, license: LICENSES[source] ?? "" };
+  return { ...page, device: deviceOf(page), imported: now, source, license: page.license ?? LICENSES[source] ?? "" };
 }
 
 /** Adds pages; a page with the same title and source replaces the old one. */
