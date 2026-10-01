@@ -51,10 +51,18 @@ export function mergeKnowledge(base: KnowledgeBase, pages: KnowledgePage[]): Kno
   return { version: 1, pages: [...byKey.values()].sort((a, b) => a.title.localeCompare(b.title)) };
 }
 
+/** Marker of an export without pages; the UI shows its own text for it. */
+export const EMPTY_EXPORT = "the export contains no pages";
+
 /** Pages of an export or saved page, whichever the text is. */
 export function parseKnowledgeFile(text: string, fileName: string): WikiPage[] {
   const head = text.slice(0, 2000).toLowerCase();
-  if (head.includes("<mediawiki")) return parseExport(text);
+  if (head.includes("<mediawiki")) {
+    const pages = parseExport(text);
+    // Special:Export without "Add" clicked gives a file with only <siteinfo>.
+    if (pages.length === 0) throw new Error(`${fileName}: ${EMPTY_EXPORT}`);
+    return pages;
+  }
   if (head.includes("<html") || head.includes("<!doctype html")) {
     const page = parseSavedHtml(text, fileName);
     return page ? [page] : [];

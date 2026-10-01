@@ -39,5 +39,9 @@ describe("knowledge", () => {
   it("tells exports, saved pages and other files apart", () => {
     expect(parseKnowledgeFile("<mediawiki><page><title>A</title><ns>0</ns><revision><text>hello</text></revision></page></mediawiki>", "a.xml")).toHaveLength(1);
     expect(() => parseKnowledgeFile("just text", "a.txt")).toThrow();
+    // An export made without clicking "Add" has only <siteinfo>.
+    expect(() => parseKnowledgeFile("<mediawiki><siteinfo><sitename>Repair Wiki</sitename></siteinfo></mediawiki>", "e.xml")).toThrow(
+      /no pages/,
+    );
   });
 });

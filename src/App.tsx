@@ -60,6 +60,7 @@ import {
 import { MarkerEditor, PinnedLegend } from "./components/Markers";
 import { KnowledgePanel } from "./components/KnowledgePanel";
 import {
+  EMPTY_EXPORT,
   EMPTY_KNOWLEDGE,
   loadKnowledge,
   mergeKnowledge,
@@ -416,7 +417,9 @@ export function App() {
     setKnowledgeBusy(true);
     setKnowledgeMessage(null);
     try {
-      const { pages, errors } = await pickKnowledgeFiles(t("kb.import"));
+      const picked = await pickKnowledgeFiles(t("kb.import"));
+      const pages = picked.pages;
+      const errors = picked.errors.map((e) => (e.endsWith(EMPTY_EXPORT) ? `${e.split(":")[0]}: ${t("kb.emptyExport")}` : e));
       if (pages.length) {
         const next = mergeKnowledge(knowledge, pages);
         await saveKnowledge(next);

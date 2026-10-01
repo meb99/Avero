@@ -277,6 +277,7 @@ export const de: Record<MessageKey, string> = {
   "kb.search": "Wissen durchsuchen …",
   "kb.import": "Importieren…",
   "kb.imported": "{n} Seiten importiert",
+  "kb.emptyExport": "Der Export enthält keine Seiten. Auf Special:Export nach dem Eintragen der Kategorie auf „Hinzufügen“ klicken – das Textfeld muss sich mit Seitentiteln füllen.",
   "kb.back": "Zurück",
   "kb.openOriginal": "Original öffnen",
   "kb.source": "Quelle: {source} · Lizenz {license}",

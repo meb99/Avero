@@ -275,6 +275,7 @@ export const en = {
   "kb.search": "Search knowledge …",
   "kb.import": "Import…",
   "kb.imported": "{n} pages imported",
+  "kb.emptyExport": "The export contains no pages. On Special:Export, click “Add” after entering the category – the text box must fill with page titles.",
   "kb.back": "Back",
   "kb.openOriginal": "Open original",
   "kb.source": "Source: {source} · license {license}",
