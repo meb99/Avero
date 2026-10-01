@@ -473,14 +473,23 @@ kbd {
 .tabs {
   display: flex;
   border-bottom: 1px solid var(--border);
+  /* Seven tabs do not always fit: scroll sideways instead of widening the sidebar. */
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .tabs button {
-  flex: 1;
+  flex: 1 0 auto;
+  white-space: nowrap;
   border: 0;
   border-radius: 0;
   background: transparent;
-  padding: 10px 6px;
+  padding: 10px 5px;
   color: var(--text-muted);
   border-bottom: 2px solid transparent;
 }
@@ -2693,4 +2702,101 @@ button.danger {
 
 .pinout-note.pinout-plausible {
   border-left: 3px solid #d9a400;
+}
+
+/* Fault-finding guide */
+
+.diagnosis {
+  padding: 12px;
+  font-size: 13px;
+}
+
+.diagnosis h2 {
+  font-size: 15px;
+  margin: 0 0 4px;
+}
+
+.diag-steps {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+
+.diag-step {
+  border-left: 3px solid var(--border);
+  padding: 2px 0 6px 10px;
+  margin-bottom: 12px;
+}
+
+.diag-step.diag-ok {
+  border-left-color: #2e9e5b;
+}
+
+.diag-step.diag-bad {
+  border-left-color: var(--danger);
+}
+
+.diag-step h3 {
+  font-size: 13px;
+  margin: 2px 0 4px;
+}
+
+.diag-mark {
+  display: inline-block;
+  width: 1.2em;
+}
+
+.diag-ok .diag-mark {
+  color: #2e9e5b;
+}
+
+.diag-bad .diag-mark {
+  color: var(--danger);
+}
+
+.diag-count {
+  font-weight: normal;
+  font-size: 11px;
+}
+
+.diag-step p {
+  margin: 0 0 6px;
+}
+
+.diag-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.diag-table td {
+  border-top: 1px solid var(--border);
+  padding: 4px 4px 4px 0;
+  vertical-align: top;
+}
+
+.diag-label,
+.diag-source {
+  font-size: 10px;
+}
+
+.diag-expect {
+  white-space: nowrap;
+}
+
+.diag-value input {
+  width: 72px;
+}
+
+.diag-hint {
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.diag-first {
+  margin: 8px 0;
+}
+
+.diag-case {
+  margin: 6px 0;
 }

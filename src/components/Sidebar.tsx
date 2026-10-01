@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { Diagnosis } from "./Diagnosis";
 import type { ObdData } from "../knowledge/obdata";
 import type { BoardModel, ViewSide } from "../core/board";
 import type { Selection } from "../core/types";
@@ -12,7 +13,7 @@ import { LayerList } from "./LayerList";
 import type { Palette, RGBA } from "../render/palette";
 import type { SchematicDocument } from "../schematic/document";
 
-type Tab = "details" | "parts" | "nets" | "layers" | "knowledge" | "measure";
+type Tab = "details" | "parts" | "nets" | "layers" | "knowledge" | "measure" | "diagnose";
 
 interface Props {
   model: BoardModel;
@@ -95,7 +96,7 @@ export function Sidebar({
   return (
     <aside className="sidebar">
       <nav className="tabs" role="tablist">
-        {(["details", "parts", "nets", "layers", "knowledge", "measure"] as const)
+        {(["details", "parts", "nets", "layers", "knowledge", "measure", "diagnose"] as const)
           .filter((id) => id !== "layers" || model.layers.length > 0)
           .map((id) => (
           <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? "on" : ""} onClick={() => setTab(id)}>
@@ -133,6 +134,12 @@ export function Sidebar({
             onTogglePin={onTogglePin}
             obdata={obdata}
           />
+        </div>
+      )}
+
+      {tab === "diagnose" && (
+        <div className="panel scroll">
+          <Diagnosis model={model} notes={notes} update={updateNotes} onSelect={onSelect} />
         </div>
       )}
 

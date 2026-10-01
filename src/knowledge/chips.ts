@@ -47,9 +47,13 @@ const GATE_HIGH = { aka: ["UG", "UGATE", "DRVH", "GH", "HDRV"] };
 const BOOT = { aka: ["BST", "BOOT", "BS", "BTST"] };
 const SWITCH_NODE = { aka: ["LX", "PHASE", "SW", "VSW"] };
 
+/** What a chip does in a power path, for the fault-finding guide. */
+export type ChipKind = "charger" | "system" | "ddr" | "vcore" | "driver" | "stage" | "buck" | "ldo" | "switch" | "usb" | "ec" | "pd" | "monitor" | "pmic" | "gauge" | "video";
+
 export interface ChipInfo {
   /** Part number as printed in device names (ISL88739AHRZ-T_QFN32 …). */
   match: RegExp;
+  kind: ChipKind;
   name: string;
   maker: string;
   /** What the chip does on the board. */
@@ -68,6 +72,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bISL88739A/i,
     name: "ISL88739A",
+    kind: "charger",
     maker: "Renesas",
     role: "Akku-Laderegler (Hybrid Power Boost oder Narrow VDC), SMBus",
     facts: [
@@ -119,6 +124,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bISL95520/i,
     name: "ISL95520",
+    kind: "charger",
     maker: "Renesas",
     role: "Akku-Laderegler (Hybrid Power Boost oder Narrow VDC), SMBus",
     facts: [
@@ -132,6 +138,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bRT6575[CD]/i,
     name: "RT6575C/D",
+    kind: "system",
     maker: "Richtek",
     role: "Systemversorgung: zwei Abwärtsregler plus feste 5-V- und 3,3-V-Linearregler",
     facts: [
@@ -145,6 +152,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bRT8207P/i,
     name: "RT8207P",
+    kind: "ddr",
     maker: "Richtek",
     role: "Speicherversorgung DDR: Abwärtsregler für VDDQ, Regler für VTT und VTTREF",
     facts: [
@@ -180,6 +188,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bRT8845B/i,
     name: "RT8845B",
+    kind: "vcore",
     maker: "Richtek",
     role: "Mehrphasen-Controller (4/3/2/1 Phasen) für Grafik- und Prozessor-Kernspannung",
     facts: [["Gehäuse", "WQFN-32, 4 × 4 mm"]],
@@ -188,6 +197,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bRT9069/i,
     name: "RT9069",
+    kind: "ldo",
     maker: "Richtek",
     role: "Linearregler (LDO) mit Enable",
     facts: [
@@ -199,6 +209,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bNCP81611/i,
     name: "NCP81611",
+    kind: "vcore",
     maker: "onsemi",
     role: "Mehrphasen-Controller (bis 4 Phasen) für Prozessor- oder Grafik-Kernspannung, PWM_VID und I²C",
     facts: [["Gehäuse", "QFN-40"]],
@@ -207,6 +218,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bNCP81253/i,
     name: "NCP81253",
+    kind: "driver",
     maker: "onsemi",
     role: "MOSFET-Treiber für High- und Low-Side eines Abwärtswandlers, Bootdiode integriert",
     facts: [
@@ -229,6 +241,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bNCP303151/i,
     name: "NCP303151",
+    kind: "stage",
     maker: "onsemi",
     role: "Leistungsstufe: Treiber plus High- und Low-Side-MOSFET, mit Strommessung",
     facts: [
@@ -262,6 +275,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bNCP302045/i,
     name: "NCP302045",
+    kind: "stage",
     maker: "onsemi",
     role: "Leistungsstufe: Treiber plus High- und Low-Side-MOSFET",
     facts: [
@@ -292,6 +306,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bNCP45491/i,
     name: "NCP45491",
+    kind: "monitor",
     maker: "onsemi",
     role: "Überwacht Spannung und Strom von bis zu vier Versorgungen und gibt sie gemultiplext aus",
     facts: [["Gehäuse", "QFN-32, 4 × 4 mm"]],
@@ -300,6 +315,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bSY8286/i,
     name: "SY8286",
+    kind: "buck",
     maker: "Silergy",
     role: "Abwärtswandler mit integrierten MOSFETs, Power-Good",
     facts: [
@@ -331,6 +347,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bSY8386/i,
     name: "SY8386",
+    kind: "buck",
     maker: "Silergy",
     role: "Abwärtswandler mit integrierten MOSFETs",
     facts: [["Strom", "6 A"]],
@@ -339,6 +356,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bSY828[48]/i,
     name: "SY8284 / SY8288",
+    kind: "buck",
     maker: "Silergy",
     role: "Abwärtswandler mit integrierten MOSFETs",
     facts: [],
@@ -347,6 +365,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bTPS2546/i,
     name: "TPS2546",
+    kind: "usb",
     maker: "Texas Instruments",
     role: "USB-Ladeport-Controller mit Leistungsschalter und USB-2.0-Datenumschalter (D+/D−); Laden auch im Aus-Zustand (S4/S5)",
     facts: [],
@@ -377,6 +396,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bTPS22966/i,
     name: "TPS22966",
+    kind: "switch",
     maker: "Texas Instruments",
     role: "Doppelter Lastschalter (zwei N-MOSFETs) mit Einschaltrampe",
     facts: [
@@ -405,6 +425,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bKB9542/i,
     name: "KB9542",
+    kind: "ec",
     maker: "ENE",
     role: "Embedded Controller (EC) des Notebooks",
     facts: [
@@ -418,6 +439,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bB?M92T36/i,
     name: "M92T36",
+    kind: "pd",
     maker: "ROHM",
     role: "USB-C Power Delivery: handelt mit Netzteil oder Dock die Spannung aus",
     facts: [["CC-Pin", "max. 6 V"]],
@@ -427,6 +449,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bBQ24193/i,
     name: "BQ24193",
+    kind: "charger",
     maker: "Texas Instruments",
     role: "Akku-Laderegler für 1 Zelle mit Power-Path und USB-OTG",
     facts: [
@@ -464,6 +487,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bMAX17050/i,
     name: "MAX17050",
+    kind: "gauge",
     maker: "Maxim (Analog Devices)",
     role: "Ladestandsmessung (Fuel Gauge)",
     facts: [],
@@ -473,6 +497,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bMAX77620/i,
     name: "MAX77620",
+    kind: "pmic",
     maker: "Maxim (Analog Devices)",
     role: "System-PMIC",
     facts: [["Ausstattung", "13 Spannungsregler, 8 GPIOs, RTC, Einschaltreihenfolge"]],
@@ -482,6 +507,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bMAX77621/i,
     name: "MAX77621",
+    kind: "buck",
     maker: "Maxim (Analog Devices)",
     role: "Dreiphasiger Abwärtswandler für CPU und RAM",
     facts: [["Strom", "bis 16 A"]],
@@ -491,6 +517,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bPI3USB30532/i,
     name: "PI3USB30532",
+    kind: "video",
     maker: "Diodes Inc.",
     role: "Umschalter USB 3 / DisplayPort an der USB-C-Buchse",
     facts: [["Versorgung", "3,0–3,6 V"]],
@@ -500,6 +527,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bMN864739/i,
     name: "MN864739",
+    kind: "video",
     maker: "Panasonic",
     role: "HDMI-Encoder",
     facts: [["Datenblatt", "nicht öffentlich"]],
@@ -509,6 +537,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\b(SN75)?TDP158/i,
     name: "TDP158",
+    kind: "video",
     maker: "Texas Instruments",
     role: "HDMI-Redriver (TMDS) bis 6 Gbit/s",
     facts: [["Versorgung", "VDD 1,1 V, VCC 3,3 V"]],
@@ -518,6 +547,7 @@ export const CHIPS: ChipInfo[] = [
   {
     match: /\bNB7NQ?621M/i,
     name: "NB7NQ621M",
+    kind: "video",
     maker: "onsemi",
     role: "HDMI-2.1-Redriver (linear, 4 Kanäle), I²C",
     facts: [["Versorgung", "3,3 V"]],
