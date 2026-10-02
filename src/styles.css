@@ -1462,7 +1462,10 @@ button.danger {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow-y: auto;
 }
+
+.library-dialog .library-list { min-height: 180px; }
 
 .library-bar {
   display: flex;
