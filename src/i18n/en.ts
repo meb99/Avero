@@ -442,6 +442,8 @@ export const en = {
   "export.saved": "Image saved: {name}",
   "export.failed": "Export failed: {message}",
   "settings.ratsnest": "Connection lines between the pins of the selected net",
+  "settings.overview": "Overview map in the corner (when zoomed in)",
+  "overview.hint": "Overview – click or drag to go there",
   "settings.updateCheck": "Check for a new version once a day",
   "help.palette": "⌘K",
   "help.paletteLabel": "Command palette: commands, parts and nets",

@@ -175,6 +175,20 @@ export function drawLabels(
       ctx.strokeText(part.name, c.x, y);
       ctx.fillStyle = size >= 16 ? palette.labelChip : palette.label;
       ctx.fillText(part.name, c.x, y);
+      // The value under the name once there is room, as FlexBV shows it ("1uF", "LT3957").
+      if (part.device && inside && y === spots[0] && size >= 10 && h >= size * 2.7) {
+        const small = Math.max(8, size * 0.55);
+        ctx.font = `500 ${small}px ${FONT}`;
+        let value = part.device.trim();
+        while (value.length > 3 && ctx.measureText(value).width > w * 0.92) value = value.slice(0, -2);
+        if (value !== part.device.trim()) value = `${value}…`;
+        const vy = y + size * 0.62 + small * 0.6;
+        ctx.strokeText(value, c.x, vy);
+        ctx.fillStyle = palette.label;
+        ctx.globalAlpha = 0.75;
+        ctx.fillText(value, c.x, vy);
+        ctx.globalAlpha = 1;
+      }
     }
   }
 

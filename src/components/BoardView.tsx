@@ -133,6 +133,9 @@ export function BoardView({
   const containerRef = useRef<HTMLDivElement>(null);
   const glRef = useRef<HTMLCanvasElement>(null);
   const labelRef = useRef<HTMLCanvasElement>(null);
+  const overviewRef = useRef<HTMLCanvasElement>(null);
+  /** The overview's static picture, redrawn when the board, sides or colors change. */
+  const overviewCache = useRef<{ key: string; image: HTMLCanvasElement } | null>(null);
   const rendererRef = useRef<BoardRenderer | null>(null);
   const cameraRef = useRef(new Camera());
   const frameRef = useRef(0);
@@ -178,6 +181,111 @@ export function BoardView({
     return s.dual ? s.layout.bounds : s.model.board.bounds;
   }, []);
 
+  /** Camera of the overview map: everything on screen, fitted into the little map. */
+  const overviewCamera = useCallback((): Camera | null => {
+    const main = cameraRef.current;
+    const bounds = allBounds();
+    const w = bounds.maxX - bounds.minX;
+    const h = bounds.maxY - bounds.minY;
+    if (w <= 0 || h <= 0) return null;
+    const sideways = (main.rotation & 1) === 1;
+    const aspect = sideways ? h / w : w / h;
+    const max = Math.min(220, main.width * 0.28);
+    const cam = new Camera();
+    cam.width = Math.round(aspect >= 1 ? max : max * aspect);
+    cam.height = Math.round(aspect >= 1 ? max / aspect : max);
+    cam.rotation = main.rotation;
+    cam.mirrored = main.mirrored;
+    cam.fit(bounds, 4);
+    return cam;
+  }, [allBounds]);
+
+  /** The overview map while zoomed in: the board, and the part of it on screen. */
+  const drawOverview = useCallback(() => {
+    const canvas = overviewRef.current;
+    const s = stateRef.current;
+    const main = cameraRef.current;
+    if (!canvas) return;
+    const mini = s.settings.overview ? overviewCamera() : null;
+    const view = main.visibleBounds();
+    const all = allBounds();
+    const zoomedIn = view.minX > all.minX || view.maxX < all.maxX || view.minY > all.minY || view.maxY < all.maxY;
+    if (!mini || !zoomedIn || main.width < 360) {
+      canvas.style.display = "none";
+      return;
+    }
+    const dpr = dprRef.current;
+    canvas.style.display = "block";
+    canvas.style.width = `${mini.width}px`;
+    canvas.style.height = `${mini.height}px`;
+    const pw = Math.round(mini.width * dpr);
+    const ph = Math.round(mini.height * dpr);
+    if (canvas.width !== pw) canvas.width = pw;
+    if (canvas.height !== ph) canvas.height = ph;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const key = [s.model.board.bounds.maxX, s.model.parts.length, s.side, s.dual, mini.rotation, mini.width, mini.height, dpr, s.palette.background.join()].join("|");
+    let cached = overviewCache.current;
+    if (!cached || cached.key !== key || cached.image.width !== canvas.width) {
+      const image = document.createElement("canvas");
+      image.width = canvas.width;
+      image.height = canvas.height;
+      const g = image.getContext("2d")!;
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const rgba = (c: readonly number[], a = c[3] / 255) => `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${a})`;
+      g.fillStyle = rgba(s.palette.background, 0.92);
+      g.fillRect(0, 0, mini.width, mini.height);
+      const views: [Camera, ViewSide][] = s.dual
+        ? [
+            [mini, "top"],
+            [bottomCamera(mini, s.layout), "bottom"],
+          ]
+        : [[mini, s.side]];
+      for (const [cam, side] of views) {
+        g.fillStyle = rgba(s.palette.boardFill);
+        g.strokeStyle = rgba(s.palette.boardEdge);
+        g.lineWidth = 1;
+        for (const path of s.model.board.outline) {
+          g.beginPath();
+          path.forEach((p, i) => {
+            const q = cam.toScreen(p);
+            if (i) g.lineTo(q.x, q.y);
+            else g.moveTo(q.x, q.y);
+          });
+          g.fill();
+          g.stroke();
+        }
+        g.fillStyle = rgba(s.palette.partOutline, 0.8);
+        for (const part of s.model.parts) {
+          if (part.side !== side && part.side !== "both") continue;
+          const a = cam.toScreen({ x: part.bounds.minX, y: part.bounds.minY });
+          const b = cam.toScreen({ x: part.bounds.maxX, y: part.bounds.maxY });
+          g.fillRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(Math.abs(b.x - a.x), 0.7), Math.max(Math.abs(b.y - a.y), 0.7));
+        }
+      }
+      cached = overviewCache.current = { key, image };
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(cached.image, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // The part of the board on screen.
+    const corners = [
+      { x: 0, y: 0 },
+      { x: main.width, y: 0 },
+      { x: main.width, y: main.height },
+      { x: 0, y: main.height },
+    ].map((p) => mini.toScreen(main.toWorld(p)));
+    ctx.beginPath();
+    corners.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+    ctx.closePath();
+    ctx.fillStyle = "rgba(79, 195, 247, 0.18)";
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "#4fc3f7";
+    ctx.stroke();
+  }, [allBounds, overviewCamera]);
+
   const draw = useCallback(() => {
     frameRef.current = 0;
     const renderer = rendererRef.current;
@@ -203,7 +311,8 @@ export function BoardView({
     );
     for (const v of views)
       drawMarkers(labels, v.camera, s.markers, v.side, s.palette, dprRef.current, s.activeMarker, !s.dual && s.settings.ghostOtherSide);
-  }, [sideViews]);
+    drawOverview();
+  }, [sideViews, drawOverview]);
 
   const requestDraw = useCallback(() => {
     if (!frameRef.current) frameRef.current = requestAnimationFrame(draw);
@@ -637,6 +746,18 @@ export function BoardView({
     };
   }, [requestDraw]);
 
+  /** Moves the view to the spot clicked on the overview map. */
+  const jumpOverview = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const mini = overviewCamera();
+    if (!mini) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const p = mini.toWorld({ x: e.clientX - r.left, y: e.clientY - r.top });
+    cancelAnimationFrame(animRef.current);
+    cameraRef.current.centerX = p.x;
+    cameraRef.current.centerY = p.y;
+    requestDraw();
+  };
+
   if (glError) return <div className="board-error">{t("error.webgl")}</div>;
 
   return (
@@ -657,6 +778,23 @@ export function BoardView({
     >
       <canvas ref={glRef} className="board-canvas" />
       <canvas ref={labelRef} className="board-labels" />
+      <canvas
+        ref={overviewRef}
+        className="board-overview"
+        title={t("overview.hint")}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          e.currentTarget.setPointerCapture(e.pointerId);
+          jumpOverview(e);
+        }}
+        onPointerMove={(e) => {
+          e.stopPropagation();
+          if (e.currentTarget.hasPointerCapture(e.pointerId)) jumpOverview(e);
+        }}
+        onPointerUp={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => e.stopPropagation()}
+        onWheel={(e) => e.stopPropagation()}
+      />
       {hover && (
         <div className="board-tooltip" style={{ left: hover.x + 14, top: hover.y + 16 }}>
           {hover.text}

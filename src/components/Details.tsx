@@ -11,7 +11,8 @@ import type { NetKind, Selection, Side } from "../core/types";
 import { formatLength, formatSize } from "../format";
 import { useI18n, type MessageKey } from "../i18n";
 import type { Settings } from "../settings";
-import type { BoardNotes } from "../workbench/notes";
+import { activeCase, readingsFor, type BoardNotes } from "../workbench/notes";
+import { formatValue } from "../workbench/measure";
 import { MeasureBlock } from "./MeasureBlock";
 
 interface Props {
@@ -172,8 +173,34 @@ export function Details({
   onTogglePin,
   obdata,
 }: Props) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const u = settings.units;
+
+  /**
+   * Diode reading of a net for the pin table, as FlexBV shows it: from the
+   * active repair case, else the reference, else OpenBoardData.
+   */
+  const diodeOf = (net: number): { text: string; source: string } | null => {
+    const n = model.nets[net];
+    if (n.kind === "unconnected") return null;
+    const kase = notes ? activeCase(notes) : undefined;
+    const sources: [string, BoardNotes["reference"] | undefined][] = [
+      [t("measure.case"), kase && notes ? readingsFor(notes, { caseId: kase.id }) : undefined],
+      [t("measure.reference"), notes?.reference],
+    ];
+    for (const [source, readings] of sources) {
+      const d = readings?.[n.name]?.diode;
+      if (d !== undefined) return { text: formatValue(d, "diode", lang), source };
+    }
+    if (obdata) {
+      for (const name of new Set([n.name, model.fileNetName(net)])) {
+        const rows = netReadings(obdata, name).rows;
+        const d = rows.find((r) => r.condition === "Default" && r.d)?.d ?? rows.find((r) => r.d)?.d;
+        if (d) return { text: d, source: `OpenBoardData ${obdata.id}` };
+      }
+    }
+    return null;
+  };
 
   const netLink = (net: number) => {
     const n = model.nets[net];
@@ -386,6 +413,14 @@ export function Details({
                       </td>
                       <td className="muted">{pin.name ?? ""}</td>
                       {pinCheck && pinCheck.byPin.size > 0 && <PinFunction pin={pinCheck.byPin.get(index)} />}
+                      {(() => {
+                        const d = diodeOf(pin.net);
+                        return (
+                          <td className="mono pin-diode" title={d ? `${t("measure.diode")} · ${d.source}` : undefined}>
+                            {d?.text ?? ""}
+                          </td>
+                        );
+                      })()}
                     </tr>
                   );
                 })}

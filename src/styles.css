@@ -438,6 +438,20 @@ kbd {
   z-index: 5;
 }
 
+/* Overview map of the whole board while zoomed in, as in FlexBV. */
+.board-overview {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: var(--shadow);
+  cursor: crosshair;
+  z-index: 4;
+  touch-action: none;
+}
+
 .board-cursor {
   position: absolute;
   left: 8px;
@@ -2925,4 +2939,11 @@ button.danger {
 
 .diag-case {
   margin: 6px 0;
+}
+
+/* Diode reading per pin in a part's pin table, as in FlexBV. */
+.pin-table td.pin-diode {
+  text-align: right;
+  color: var(--accent);
+  white-space: nowrap;
 }

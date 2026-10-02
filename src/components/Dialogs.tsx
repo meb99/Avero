@@ -62,6 +62,7 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
     | "pinNumbers"
     | "netNames"
     | "ratsnest"
+    | "overview"
     | "autoSchematic"
     | "updateCheck";
   const check = (key: Toggle, label: string) => (
@@ -110,6 +111,7 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
         {check("showVias", t("settings.vias"))}
         {check("showTraces", t("settings.traces"))}
         {check("ratsnest", t("settings.ratsnest"))}
+        {check("overview", t("settings.overview"))}
       </div>
       <h3>{t("settings.formats")}</h3>
       <div className="form-grid">

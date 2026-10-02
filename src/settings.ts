@@ -20,6 +20,8 @@ export interface Settings {
   netNames: boolean;
   /** Connection lines between the pins of the highlighted net. */
   ratsnest: boolean;
+  /** Small map of the whole board in a corner while zoomed in. */
+  overview: boolean;
   /** Look for a new release on GitHub once a day. */
   updateCheck: boolean;
   autoSchematic: boolean;
@@ -56,6 +58,7 @@ export const DEFAULT_SETTINGS: Settings = {
   pinNumbers: true,
   netNames: true,
   ratsnest: true,
+  overview: true,
   updateCheck: true,
   autoSchematic: true,
   showSidebar: true,

@@ -444,6 +444,8 @@ export const de: Record<MessageKey, string> = {
   "export.saved": "Bild gespeichert: {name}",
   "export.failed": "Export fehlgeschlagen: {message}",
   "settings.ratsnest": "Verbindungslinien zwischen den Pins des gewählten Netzes",
+  "settings.overview": "Übersichtskarte in der Ecke (beim Hineinzoomen)",
+  "overview.hint": "Übersicht – klicken oder ziehen, um dorthin zu springen",
   "settings.updateCheck": "Einmal täglich nach einer neuen Version suchen",
   "help.palette": "⌘K",
   "help.paletteLabel": "Befehlspalette: Befehle, Bauteile und Netze",
