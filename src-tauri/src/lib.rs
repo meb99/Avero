@@ -299,6 +299,24 @@ fn import_photo(app: tauri::AppHandle, key: String, side: String, path: String) 
         .map(|p| p.to_string_lossy().into_owned())
 }
 
+/// A board picture rendered by the app (PNG as the raw request body; board
+/// key and side in the `x-key` and `x-side` headers).
+#[tauri::command]
+fn store_photo_png(app: tauri::AppHandle, request: tauri::ipc::Request<'_>) -> Result<String, String> {
+    let tauri::ipc::InvokeBody::Raw(data) = request.body() else {
+        return Err("expected binary data".into());
+    };
+    let header = |name: &str| request.headers().get(name).and_then(|v| v.to_str().ok()).map(percent_decode);
+    let key = header("x-key").ok_or("missing key")?;
+    let side = header("x-side").ok_or("missing side")?;
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or_default();
+    notes::store_photo_png(&photos_dir(&app)?, &key, &side, data, stamp)
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
 #[tauri::command]
 fn remove_photo(app: tauri::AppHandle, path: String) -> Result<(), String> {
     notes::remove_photo(&photos_dir(&app)?, Path::new(&path))
@@ -454,6 +472,7 @@ pub fn run() {
             export_json,
             write_binary,
             import_photo,
+            store_photo_png,
             remove_photo,
             load_text_index,
             load_knowledge,

@@ -76,8 +76,8 @@ import { linkObdata } from "./workbench/notes";
 import { BUILTIN_PAGES } from "./knowledge/builtin";
 import { guessCategory } from "./workbench/catalog";
 import { PIN_COLORS } from "./render/palette";
-import { alignPhoto } from "./workbench/photo";
-import { loadPhotoImage } from "./workbench/photoImage";
+import { alignPhoto, fitToBounds } from "./workbench/photo";
+import { boardInPicture, loadPhotoImage, renderPageImage } from "./workbench/photoImage";
 import { useBoardNotes } from "./workbench/store";
 
 const NONE: Selection = { kind: "none" };
@@ -179,6 +179,9 @@ export function App() {
   const [installing, setInstalling] = useState(false);
   const [schematic, setSchematic] = useState<SchematicDocument | null>(null);
   const [schematicVisible, setSchematicVisible] = useState(true);
+  // The aligned photo beside the board (click a part on it to select it);
+  // it takes the schematic's place, two panes would squeeze the board.
+  const [photoPane, setPhotoPane] = useState(false);
   // The schematic is shown in its own window instead of the split view.
   const [detached, setDetached] = useState(false);
   const [focus, setFocus] = useState<SchematicFocus | null>(null);
@@ -215,7 +218,7 @@ export function App() {
   const palette = theme === "dark" ? DARK : LIGHT;
   const compared = compareTab !== null && compareTab !== activeTab ? tabs.find((t) => t.id === compareTab) : undefined;
   const compareModel = compared?.model ?? null;
-  const showSchematic = schematic !== null && schematicVisible && !detached && !compareModel;
+  const showSchematic = schematic !== null && schematicVisible && !detached && !compareModel && !photoPane;
   const compareSelection = useMemo(
     () => (model && compareModel ? mapSelection(model, compareModel, selection) : NONE),
     [model, compareModel, selection],
@@ -238,8 +241,6 @@ export function App() {
   const aligningRef = useRef(aligning);
   aligningRef.current = aligning;
   const [showPhoto, setShowPhoto] = useState(true);
-  // The aligned photo beside the board: click a part on it to select it.
-  const [photoPane, setPhotoPane] = useState(false);
   const storedPhoto = notes?.photos?.[side];
   const [photoImage, setPhotoImage] = useState<{ file: string; image: HTMLCanvasElement } | null>(null);
   const photoFile = storedPhoto?.file;
@@ -269,15 +270,65 @@ export function App() {
     }
   };
 
-  const addPhoto = async () => {
-    if (!model || !notes) return;
-    const path = await pickImage(t("photo.add"));
-    if (!path) return;
+  /** Deletes a stored photo unless the other side still shows it. */
+  const dropPhotoFile = (file: string, keep: (string | undefined)[]) => {
+    if (!keep.includes(file)) void invoke("remove_photo", { path: file }).catch(() => {});
+  };
+
+  /**
+   * The board picture in the open PDF (some boardviews come with one) as
+   * the photo of both sides: laid onto the board outline right away when
+   * the shapes match, otherwise aligned by hand.
+   */
+  const photoFromPdf = async () => {
+    if (!model || !notes || !schematic) return;
     try {
+      const page = schematicViewRef.current?.currentPage() ?? 0;
+      const { canvas, png } = await renderPageImage(schematic, page);
+      const file = await invoke<string>("store_photo_png", png, {
+        headers: { "x-key": encodeURIComponent(notes.key), "x-side": "top" },
+      });
+      const box = boardInPicture(canvas);
+      const matrix = box && fitToBounds(box, canvas.width, model.board.bounds);
+      if (!matrix) {
+        setToast(t("photo.pdfManual"));
+        await startAlignment(file, true);
+        return;
+      }
+      const old = notes.photos ?? {};
+      const opacity = old.top?.opacity ?? old.bottom?.opacity ?? 0.8;
+      updateNotes((n) => setPhoto(setPhoto(n, "top", { file, matrix, opacity }), "bottom", { file, matrix, opacity }));
+      for (const previous of [old.top?.file, old.bottom?.file]) if (previous) dropPhotoFile(previous, [file]);
+      setShowPhoto(true);
+      setPhotoPane(true);
+      setToast(t("photo.pdfDone"));
+    } catch (e) {
+      setToast(t("photo.failed", { message: e instanceof Error ? e.message : String(e) }));
+    }
+  };
+
+  const addPhoto = async () => {
+    // Never fail silently: say why nothing can happen.
+    if (!model) return setToast(t("photo.noBoard"));
+    if (!notes) return setToast(t("photo.notesLoading"));
+    try {
+      if (schematic) {
+        const { ask } = await import("@tauri-apps/plugin-dialog");
+        const usePdf = await ask(t("photo.pdfAsk", { name: schematic.name }), {
+          title: t("photo.add"),
+          kind: "info",
+          okLabel: t("photo.pdfUse"),
+          cancelLabel: t("photo.pickFile"),
+        });
+        if (usePdf) return void (await photoFromPdf());
+      }
+      const folder = source?.path?.replace(/\/[^/]*$/, "");
+      const path = await pickImage(t("photo.add"), folder);
+      if (!path) return;
       const file = await invoke<string>("import_photo", { key: notes.key, side, path });
       await startAlignment(file, true);
     } catch (e) {
-      setToast(t("photo.failed", { message: String(e) }));
+      setToast(t("photo.failed", { message: e instanceof Error ? e.message : String(e) }));
     }
   };
 
@@ -303,7 +354,7 @@ export function App() {
     }
     const previous = notes?.photos?.[a.side];
     updateNotes((n) => setPhoto(n, a.side, { file: a.file, matrix, opacity: previous?.opacity ?? 0.8 }));
-    if (previous && previous.file !== a.file) void invoke("remove_photo", { path: previous.file }).catch(() => {});
+    if (previous && previous.file !== a.file) dropPhotoFile(previous.file, [notes?.photos?.[a.side === "top" ? "bottom" : "top"]?.file]);
     setAligning(null);
     setShowPhoto(true);
   };
@@ -311,7 +362,7 @@ export function App() {
   const removePhoto = () => {
     if (!storedPhoto) return;
     updateNotes((n) => setPhoto(n, side, undefined));
-    void invoke("remove_photo", { path: storedPhoto.file }).catch(() => {});
+    dropPhotoFile(storedPhoto.file, [notes?.photos?.[side === "top" ? "bottom" : "top"]?.file]);
   };
 
   // Measurement state by net index for the board overlay.
@@ -450,6 +501,7 @@ export function App() {
 
   // A page in the occurrence list: show the schematic there.
   const jumpInSchematic = useCallback((text: string, hit: number) => {
+    setPhotoPane(false);
     setSchematicVisible(true);
     setFocus({ text, jump: true, hit, nonce: ++focusNonce.current });
   }, []);
@@ -477,6 +529,7 @@ export function App() {
         old?.destroy();
         return doc;
       });
+      setPhotoPane(false);
       setSchematicVisible(true);
     } catch (e) {
       setError({ name, error: { code: "schematic", message: e instanceof Error ? e.message : String(e) } });
@@ -633,6 +686,7 @@ export function App() {
       const board = entry.boards[0]?.path;
       if (board) await openPath(board, file.path);
       else await openSchematicPath(file.path);
+      setPhotoPane(false);
       setSchematicVisible(true);
       setTextQuery(query);
     },
@@ -667,7 +721,10 @@ export function App() {
       return;
     }
     if (schematic) {
-      setSchematicVisible((v) => !v);
+      if (photoPane) {
+        setPhotoPane(false);
+        setSchematicVisible(true);
+      } else setSchematicVisible((v) => !v);
       return;
     }
     const path = await pickPath(t("schematic.open"), "pdf");
@@ -959,6 +1016,7 @@ export function App() {
       searchRef.current?.select();
     },
     searchSchematic: () => {
+      setPhotoPane(false);
       if (schematic && !schematicVisible) setSchematicVisible(true);
       // After the pane is shown.
       requestAnimationFrame(() => schematicViewRef.current?.focusSearch());
@@ -1025,6 +1083,7 @@ export function App() {
       { id: "photo-add", label: t("photo.add"), enabled: board && notes !== null, run: a.addPhoto },
       { id: "photo-toggle", label: t("photo.toggle"), enabled: !!storedPhoto, run: a.togglePhoto },
       { id: "photo-pane", label: t("photo.paneCommand"), enabled: !!model, run: () => setPhotoPane((v) => !v) },
+      { id: "photo-pdf", label: t("photo.pdfCommand"), enabled: !!model && notes !== null && !!schematic, run: () => void photoFromPdf() },
       { id: "photo-realign", label: `${t("photo.title")}: ${t("photo.realign")}`, enabled: !!storedPhoto, run: () => storedPhoto && void startAlignment(storedPhoto.file, false) },
       { id: "photo-remove", label: `${t("photo.title")}: ${t("photo.remove")}`, enabled: !!storedPhoto, run: removePhoto },
       { id: "new-tab", label: t("tabs.new"), shortcut: "⌘T", run: a.newTab },
@@ -1358,8 +1417,13 @@ export function App() {
                         <div className="photo-pane-empty">
                           <p>{t(side === "top" ? "photo.noneTop" : "photo.noneBottom")}</p>
                           <div className="photo-pane-actions">
+                            {notes && schematic && (
+                              <button className="small primary" onClick={() => void photoFromPdf()}>
+                                {t("photo.pdfUse")}
+                              </button>
+                            )}
                             {notes && (
-                              <button className="small primary" onClick={() => void addPhoto()}>
+                              <button className={schematic ? "small" : "small primary"} onClick={() => void addPhoto()}>
                                 {t("photo.add")}
                               </button>
                             )}

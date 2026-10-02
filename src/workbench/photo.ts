@@ -8,7 +8,7 @@
  * a photo of the bottom side, taken of the turned-over board, is not.
  */
 import { visibleFrom, type BoardModel, type ViewSide } from "../core/board";
-import type { Point } from "../core/types";
+import type { Bounds, Point } from "../core/types";
 
 /** Photo pixel (u, v) → board (A·u + C·v + E, B·u + D·v + F). */
 export type Affine = [number, number, number, number, number, number];
@@ -87,6 +87,71 @@ export function partAtPoint(model: BoardModel, p: Point, view: ViewSide, slack: 
     }
   });
   return { inside, near };
+}
+
+/** Pixel box of a picture's content, in pixels of the picture. */
+export interface PixelBox {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/**
+ * Where the board is in a picture: everything that differs from the colour
+ * of the corners (a plain background or page margin around the board).
+ * `rgba` is the picture, possibly scaled down; the box is in its pixels.
+ */
+export function contentBox(rgba: Uint8ClampedArray, width: number, height: number, tolerance = 40): PixelBox | null {
+  const at = (x: number, y: number) => (y * width + x) * 4;
+  const corners = [at(0, 0), at(width - 1, 0), at(0, height - 1), at(width - 1, height - 1)];
+  const bg = [0, 1, 2].map((c) => corners.reduce((s, i) => s + rgba[i + c], 0) / 4);
+  const differs = (x: number, y: number) => {
+    const i = at(x, y);
+    return Math.abs(rgba[i] - bg[0]) + Math.abs(rgba[i + 1] - bg[1]) + Math.abs(rgba[i + 2] - bg[2]) > tolerance;
+  };
+  // A row or column belongs to the board when a few percent of it differs (noise, thin lines do not count).
+  const rowHas = (y: number) => {
+    let n = 0;
+    for (let x = 0; x < width; x++) if (differs(x, y)) n++;
+    return n > width * 0.02;
+  };
+  const colHas = (x: number) => {
+    let n = 0;
+    for (let y = 0; y < height; y++) if (differs(x, y)) n++;
+    return n > height * 0.02;
+  };
+  let y0 = 0;
+  while (y0 < height && !rowHas(y0)) y0++;
+  let y1 = height - 1;
+  while (y1 > y0 && !rowHas(y1)) y1--;
+  let x0 = 0;
+  while (x0 < width && !colHas(x0)) x0++;
+  let x1 = width - 1;
+  while (x1 > x0 && !colHas(x1)) x1--;
+  if (x1 - x0 < width * 0.2 || y1 - y0 < height * 0.2) return null;
+  return { x0, y0, x1: x1 + 1, y1: y1 + 1 };
+}
+
+/**
+ * Lays a picture of the whole board (as seen from above, like the board
+ * pictures that come with boardviews) onto the board outline. Returns null
+ * when the shapes differ too much for that to be right: the picture then
+ * needs aligning by hand.
+ */
+export function fitToBounds(box: PixelBox, imageWidth: number, bounds: Bounds): Affine | null {
+  const w = (box.x1 - box.x0) / imageWidth;
+  const h = (box.y1 - box.y0) / imageWidth;
+  const bw = bounds.maxX - bounds.minX;
+  const bh = bounds.maxY - bounds.minY;
+  if (w <= 0 || h <= 0 || bw <= 0 || bh <= 0) return null;
+  if (Math.abs(Math.log(w / h / (bw / bh))) > Math.log(1.12)) return null;
+  const sx = bw / w;
+  const sy = bh / h;
+  const u0 = box.x0 / imageWidth;
+  const v0 = box.y0 / imageWidth;
+  // Picture Y points down, board Y up.
+  return [sx, 0, 0, -sy, bounds.minX - u0 * sx, bounds.maxY + v0 * sy];
 }
 
 /** Board positions of the photo's corners: top-left, top-right, bottom-left, bottom-right. */

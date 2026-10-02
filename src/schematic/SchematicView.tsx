@@ -35,6 +35,8 @@ export interface SchematicViewHandle {
   prevHit(): void;
   /** Puts the keyboard into the schematic's own text search. */
   focusSearch(): void;
+  /** Index of the page on screen. */
+  currentPage(): number;
 }
 
 export type WordTarget = "part" | "net" | null;
@@ -287,6 +289,7 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
         searchRef.current?.focus();
         searchRef.current?.select();
       },
+      currentPage: () => Math.max(0, pageRef.current),
     }),
     [showPage, jumpTo],
   );

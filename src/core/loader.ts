@@ -60,9 +60,10 @@ export async function pickPath(title: string, kind: "any" | "pdf"): Promise<stri
 }
 
 /** Native open panel for a photo. */
-export async function pickImage(title: string): Promise<string | undefined> {
+export async function pickImage(title: string, defaultPath?: string): Promise<string | undefined> {
   const picked = await open({
     title,
+    defaultPath,
     multiple: false,
     directory: false,
     filters: [{ name: "Foto", extensions: ["jpg", "jpeg", "png", "heic", "webp"] }],

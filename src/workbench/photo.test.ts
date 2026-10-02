@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BoardModel } from "../core/board";
 import { testBoard } from "../core/testBoard";
-import { alignPhoto, applyAffine, invertAffine, partAtPoint, parsePhoto, photoScale, type Affine } from "./photo";
+import { alignPhoto, applyAffine, contentBox, fitToBounds, invertAffine, partAtPoint, parsePhoto, photoScale, type Affine } from "./photo";
 
 // Ground truth: scale 0.5 mil/px, rotated 30°, shifted.
 function truth(side: "top" | "bottom"): Affine {
@@ -80,5 +80,38 @@ describe("partAtPoint", () => {
     expect(hit.inside).toBeUndefined();
     expect(hit.near).toBe(model.findPart("R1"));
     expect(partAtPoint(model, { x: 300, y: 400 }, "top", 20)).toEqual({ inside: undefined, near: undefined });
+  });
+});
+
+describe("contentBox and fitToBounds", () => {
+  // 200 × 100 grey picture with a green board from (20, 10) to (180, 90).
+  const width = 200;
+  const height = 100;
+  const rgba = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const board = x >= 20 && x < 180 && y >= 10 && y < 90;
+      rgba.set(board ? [30, 140, 90, 255] : [200, 205, 200, 255], i);
+    }
+
+  it("finds the board in a picture with a margin", () => {
+    expect(contentBox(rgba, width, height)).toEqual({ x0: 20, y0: 10, x1: 180, y1: 90 });
+  });
+
+  it("lays the picture onto the board outline", () => {
+    const bounds = { minX: 0, minY: 0, maxX: 16000, maxY: 8000 };
+    const m = fitToBounds({ x0: 20, y0: 10, x1: 180, y1: 90 }, width, bounds)!;
+    // Top-left of the board in the picture → top-left of the board (max Y).
+    const tl = applyAffine(m, { x: 20 / width, y: 10 / width });
+    expect(tl.x).toBeCloseTo(0, 6);
+    expect(tl.y).toBeCloseTo(8000, 6);
+    const br = applyAffine(m, { x: 180 / width, y: 90 / width });
+    expect(br.x).toBeCloseTo(16000, 6);
+    expect(br.y).toBeCloseTo(0, 6);
+  });
+
+  it("refuses pictures of another shape", () => {
+    expect(fitToBounds({ x0: 0, y0: 0, x1: 100, y1: 100 }, 100, { minX: 0, minY: 0, maxX: 16000, maxY: 8000 })).toBeNull();
   });
 });

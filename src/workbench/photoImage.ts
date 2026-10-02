@@ -1,4 +1,6 @@
 import { readFileBytes } from "../core/loader";
+import type { SchematicDocument } from "../schematic/document";
+import { contentBox, type PixelBox } from "./photo";
 
 /** Longest side of a decoded photo; enough detail, bounded memory. */
 const MAX_SIDE = 4096;
@@ -41,4 +43,33 @@ export function loadPhotoImage(file: string): Promise<HTMLCanvasElement> {
     if (cache.size > 6) cache.delete(cache.keys().next().value!);
   }
   return image;
+}
+
+/** A page of a PDF (the board picture that comes with some boardviews) as a picture. */
+export async function renderPageImage(doc: SchematicDocument, index: number): Promise<{ canvas: HTMLCanvasElement; png: Uint8Array }> {
+  const page = await doc.page(index);
+  const base = page.getViewport({ scale: 1 });
+  const viewport = page.getViewport({ scale: Math.min(MAX_SIDE / Math.max(base.width, base.height), 12) });
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(viewport.width));
+  canvas.height = Math.max(1, Math.round(viewport.height));
+  await page.render({ canvas, viewport, background: "#ffffff" }).promise;
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+  if (!blob) throw new Error("PNG");
+  return { canvas, png: new Uint8Array(await blob.arrayBuffer()) };
+}
+
+/** Where the board is in a picture, in its pixels (see `contentBox`). */
+export function boardInPicture(canvas: HTMLCanvasElement): PixelBox | null {
+  const k = Math.min(1, 800 / Math.max(canvas.width, canvas.height));
+  const w = Math.max(1, Math.round(canvas.width * k));
+  const h = Math.max(1, Math.round(canvas.height * k));
+  const small = document.createElement("canvas");
+  small.width = w;
+  small.height = h;
+  const ctx = small.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(canvas, 0, 0, w, h);
+  const box = contentBox(ctx.getImageData(0, 0, w, h).data, w, h);
+  return box && { x0: box.x0 / k, y0: box.y0 / k, x1: box.x1 / k, y1: box.y1 / k };
 }

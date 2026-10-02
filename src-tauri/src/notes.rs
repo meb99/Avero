@@ -67,6 +67,28 @@ pub fn store_photo(dir: &Path, key: &str, side: &str, source: &Path, stamp: u128
     Ok(target)
 }
 
+/// Stores a PNG the app made itself (a board picture taken from a PDF page).
+pub fn store_photo_png(
+    dir: &Path,
+    key: &str,
+    side: &str,
+    png: &[u8],
+    stamp: u128,
+) -> Result<PathBuf, String> {
+    if !matches!(side, "top" | "bottom") {
+        return Err(format!("unknown side {side}"));
+    }
+    if !png.starts_with(b"\x89PNG") {
+        return Err("not a PNG image".into());
+    }
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let name = file_name(key);
+    let stem = name.trim_end_matches(".json");
+    let target = dir.join(format!("{stem}-{side}-{stamp}.png"));
+    std::fs::write(&target, png).map_err(|e| format!("{}: {e}", target.display()))?;
+    Ok(target)
+}
+
 /// Deletes a stored photo; paths outside `dir` are refused.
 pub fn remove_photo(dir: &Path, path: &Path) -> Result<(), String> {
     let inside = path.parent().is_some_and(|p| p == dir) && path.file_name().is_some();
@@ -100,6 +122,16 @@ mod tests {
         remove_photo(&dir, &stored).unwrap();
         assert!(!stored.exists());
         std::fs::remove_file(&source).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn stores_rendered_pngs() {
+        let dir = std::env::temp_dir().join(format!("avero-png-{}", std::process::id()));
+        let stored = store_photo_png(&dir, "PS5 EDM-010", "top", b"\x89PNG\r\n", 9).unwrap();
+        assert_eq!(stored.file_name().unwrap(), "ps5_edm-010-top-9.png");
+        assert!(store_photo_png(&dir, "x", "case", b"\x89PNG", 9).is_err());
+        assert!(store_photo_png(&dir, "x", "top", b"GIF89a", 9).is_err());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
