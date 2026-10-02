@@ -37,6 +37,8 @@ export interface SchematicViewHandle {
   focusSearch(): void;
   /** Index of the page on screen. */
   currentPage(): number;
+  /** Shows a page (0-based). */
+  goToPage(page: number): void;
 }
 
 export type WordTarget = "part" | "net" | null;
@@ -290,6 +292,7 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
         searchRef.current?.select();
       },
       currentPage: () => Math.max(0, pageRef.current),
+      goToPage: (page: number) => void showPage(page),
     }),
     [showPage, jumpTo],
   );

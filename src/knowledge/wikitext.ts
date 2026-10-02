@@ -19,6 +19,10 @@ export interface GalleryItem {
   /** File name on the wiki, without "File:". */
   file: string;
   caption: string;
+  /** Where the picture is in a page saved with its pictures ("Page_files/x.jpg"). */
+  src?: string;
+  /** Avero's own copy, shown offline. */
+  local?: string;
 }
 
 /*
@@ -372,7 +376,9 @@ function pictureOf(el: Element, captionSelector: string): GalleryItem | null {
   const file = decodeURIComponent(m[1]).replace(/_/g, " ");
   if (PLACEHOLDER.test(file)) return null;
   const caption = (el.querySelector(captionSelector)?.textContent ?? "").replace(/\s+/g, " ").trim();
-  return { file, caption };
+  const src = el.querySelector("img")?.getAttribute("src") ?? "";
+  // Only pictures saved beside the page; a web address needs the internet anyway.
+  return { file, caption, ...(src && !/^(https?:|data:|\/\/)/i.test(src) && { src }) };
 }
 
 function elementBlocks(root: Element): Block[] {
@@ -395,6 +401,11 @@ function elementBlocks(root: Element): Block[] {
       } else if (tag === "p") {
         const t = text(child);
         if (t) blocks.push({ type: "paragraph", text: t });
+        else {
+          // A picture on a line of its own.
+          const item = child.querySelector("img") && pictureOf(child, "figcaption");
+          if (item) blocks.push({ type: "gallery", items: [item] });
+        }
       } else if (tag === "ul" || tag === "ol") {
         const items = Array.from(child.children)
           .filter((li) => li.tagName.toLowerCase() === "li")
@@ -469,4 +480,51 @@ export function measurementPictures(page: WikiPage): GalleryItem[] {
     }
   }
   return out;
+}
+
+/** A picture path of a saved page, as a file path next to the page file. */
+export function savedPicturePath(pageFile: string, src: string): string | null {
+  let rel: string;
+  try {
+    rel = decodeURIComponent(src.replace(/[?#].*$/, ""));
+  } catch {
+    return null;
+  }
+  if (rel.startsWith("file://")) return rel.slice(7);
+  if (rel.startsWith("/")) return rel;
+  const parts = pageFile.split("/").slice(0, -1);
+  for (const piece of rel.split("/")) {
+    if (piece === "..") parts.pop();
+    else if (piece && piece !== ".") parts.push(piece);
+  }
+  return parts.join("/");
+}
+
+/** The page with each saved picture replaced by Avero's copy (`store` maps file paths to copies). */
+export async function withLocalPictures(
+  page: WikiPage,
+  pageFile: string,
+  store: (paths: string[]) => Promise<(string | null)[]>,
+): Promise<WikiPage> {
+  const paths = [
+    ...new Set(
+      page.blocks.flatMap((b) => (b.type === "gallery" ? b.items.flatMap((i) => (i.src ? [savedPicturePath(pageFile, i.src) ?? []].flat() : [])) : [])),
+    ),
+  ];
+  const copies = paths.length ? await store(paths) : [];
+  const copyOf = new Map(paths.map((p, i) => [p, copies[i]]));
+  return {
+    ...page,
+    blocks: page.blocks.map((b) =>
+      b.type !== "gallery"
+        ? b
+        : {
+            ...b,
+            items: b.items.map(({ src, ...item }) => {
+              const local = src ? copyOf.get(savedPicturePath(pageFile, src) ?? "") : undefined;
+              return local ? { ...item, local } : item;
+            }),
+          },
+    ),
+  };
 }

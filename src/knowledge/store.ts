@@ -3,7 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { readFileBytes } from "../core/loader";
 import { guessCategory, type Category } from "../workbench/catalog";
 import { OBD_LICENSE, OBD_SITE, isObdata, parseObdata } from "./obdata";
-import { pageText, parseExport, parseSavedHtml, type Block, type WikiPage } from "./wikitext";
+import { pageText, parseExport, parseSavedHtml, withLocalPictures, type Block, type WikiPage } from "./wikitext";
 
 /** A wiki page in Avero's knowledge base, with the device it is about. */
 export interface KnowledgePage extends WikiPage {
@@ -147,7 +147,13 @@ export async function pickKnowledgeFiles(title: string): Promise<{ pages: Knowle
     const name = path.split("/").pop() ?? path;
     try {
       const text = new TextDecoder().decode(await readFileBytes(path));
-      pages.push(...parseKnowledgeFile(text, name).map((p) => toKnowledge(p)));
+      for (const page of parseKnowledgeFile(text, name)) {
+        // Pages saved "complete" bring their pictures: keep a copy for offline use.
+        const offline = await withLocalPictures(page, path, (files) =>
+          invoke<(string | null)[]>("import_knowledge_images", { paths: files }).catch(() => files.map(() => null)),
+        );
+        pages.push(toKnowledge(offline));
+      }
     } catch (e) {
       errors.push(e instanceof Error ? e.message : String(e));
     }

@@ -6,6 +6,8 @@ import {
   pageText,
   parseExport,
   parseSavedHtml,
+  savedPicturePath,
+  withLocalPictures,
   parseWikitext,
   plainText,
   textPieces,
@@ -183,10 +185,47 @@ describe("parseSavedHtml", () => {
       {
         type: "gallery",
         items: [
-          { file: "Switch OLED Mechanic Readings.jpg", caption: "USB C port readings" },
-          { file: "Board.png", caption: "Side A" },
+          { file: "Switch OLED Mechanic Readings.jpg", caption: "USB C port readings", src: "x" },
+          { file: "Board.png", caption: "Side A", src: "z" },
         ],
       },
     ]);
+  });
+});
+
+describe("pictures of pages saved complete", () => {
+  const html = `<html><head><title>PS5 No Power - Repair Wiki</title></head><body>
+    <h1 id="firstHeading">PS5 No Power</h1>
+    <div id="mw-content-text"><div class="mw-parser-output">
+      <p>Check the fuse first.</p>
+      <figure typeof="mw:File/Thumb"><a href="/w/File:PS5_fuse.jpg"><img src="PS5%20No%20Power_files/300px-PS5_fuse.jpg"></a><figcaption>Fuse F7001</figcaption></figure>
+      <p><a href="/w/File:Web.png"><img src="https://repair.wiki/images/web.png"></a></p>
+    </div></div></body></html>`;
+
+  it("keeps where the saved picture is, but not web addresses", () => {
+    const page = parseSavedHtml(html, "x.html")!;
+    const pictures = page.blocks.flatMap((b) => (b.type === "gallery" ? b.items : []));
+    expect(pictures).toEqual([
+      { file: "PS5 fuse.jpg", caption: "Fuse F7001", src: "PS5%20No%20Power_files/300px-PS5_fuse.jpg" },
+      { file: "Web.png", caption: "" },
+    ]);
+  });
+
+  it("resolves picture paths next to the page file", () => {
+    expect(savedPicturePath("/Users/a/Wiki/page.html", "page_files/x%20y.jpg")).toBe("/Users/a/Wiki/page_files/x y.jpg");
+    expect(savedPicturePath("/Users/a/Wiki/page.html", "./../img/z.png?v=2")).toBe("/Users/a/img/z.png");
+  });
+
+  it("swaps saved pictures for Avero's copies", async () => {
+    const page = parseSavedHtml(html, "x.html")!;
+    const asked: string[][] = [];
+    const out = await withLocalPictures(page, "/w/PS5 No Power.html", async (paths) => {
+      asked.push(paths);
+      return paths.map(() => "/data/knowledge-images/abc.jpg");
+    });
+    expect(asked).toEqual([["/w/PS5 No Power_files/300px-PS5_fuse.jpg"]]);
+    const pictures = out.blocks.flatMap((b) => (b.type === "gallery" ? b.items : []));
+    expect(pictures[0]).toEqual({ file: "PS5 fuse.jpg", caption: "Fuse F7001", local: "/data/knowledge-images/abc.jpg" });
+    expect(pictures[1]).toEqual({ file: "Web.png", caption: "" });
   });
 });

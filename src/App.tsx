@@ -7,6 +7,9 @@ import { PhotoPane } from "./components/PhotoPane";
 import { ImportReport } from "./components/ImportReport";
 import { BgaView } from "./components/BgaView";
 import { DiffView } from "./components/DiffView";
+import { DonorView } from "./components/DonorView";
+import { DatasheetPane } from "./components/DatasheetPane";
+import { newDatasheetId, parseDatasheets, partNumbers, type Datasheet } from "./workbench/datasheets";
 import { CommandPalette } from "./components/CommandPalette";
 import { HelpDialog, SettingsDialog } from "./components/Dialogs";
 import { LibraryDialog, type LibraryDrop } from "./components/Library";
@@ -214,6 +217,8 @@ export function App() {
   // The aligned photo beside the board (click a part on it to select it);
   // it takes the schematic's place, two panes would squeeze the board.
   const [photoPane, setPhotoPane] = useState(false);
+  // A datasheet beside the board, in the schematic's place as well.
+  const [sheetPane, setSheetPane] = useState<{ doc: SchematicDocument; sheet: Datasheet; page: number } | null>(null);
   // The schematic is shown in its own window instead of the split view.
   const [detached, setDetached] = useState(false);
   const [focus, setFocus] = useState<SchematicFocus | null>(null);
@@ -252,7 +257,7 @@ export function App() {
   const palette = theme === "dark" ? DARK : LIGHT;
   const compared = compareTab !== null && compareTab !== activeTab ? tabs.find((t) => t.id === compareTab) : undefined;
   const compareModel = compared?.model ?? null;
-  const showSchematic = schematic !== null && schematicVisible && !detached && !compareModel && !photoPane;
+  const showSchematic = schematic !== null && schematicVisible && !detached && !compareModel && !photoPane && !sheetPane;
   const compareSelection = useMemo(
     () => (model && compareModel ? mapSelection(model, compareModel, selection) : NONE),
     [model, compareModel, selection],
@@ -876,6 +881,7 @@ export function App() {
   // Several parts chosen with ⌘/Shift-click (the first one is the selected part as well).
   const [multiParts, setMultiParts] = useState<number[]>([]);
   const [bgaPart, setBgaPart] = useState<number | null>(null);
+  const [donorPart, setDonorPart] = useState<number | null>(null);
   // Board comparison: the list of differences, and parts of A marked on the board.
   const [showDiff, setShowDiff] = useState(false);
   const [diffMarks, setDiffMarks] = useState<number[] | null>(null);
@@ -883,6 +889,7 @@ export function App() {
   useEffect(() => {
     setMultiParts([]);
     setBgaPart(null);
+    setDonorPart(null);
     setDiffMarks(null);
   }, [model]);
   const addPartToSelection = (part: number) => {
@@ -1082,6 +1089,52 @@ export function App() {
   };
   const shortcutRef = useRef(runShortcut);
   shortcutRef.current = runShortcut;
+
+  // --- datasheets ---------------------------------------------------------------
+  const [datasheets, setDatasheets] = useState<Datasheet[]>([]);
+  useEffect(() => {
+    loadStore("datasheets").then((json) => setDatasheets(parseDatasheets(json)), () => {});
+  }, []);
+  const saveDatasheets = (next: Datasheet[]) => {
+    setDatasheets(next);
+    void saveStore("datasheets", next).catch((e) => setToast(String(e)));
+  };
+  const openDatasheet = async (sheet: Datasheet, page = sheet.pages[0]?.page ?? 0) => {
+    try {
+      const { SchematicDocument } = await import("./schematic/document");
+      const doc = await SchematicDocument.open(await readFileBytes(sheet.file), sheet.title, sheet.file);
+      setSheetPane((old) => {
+        old?.doc.destroy();
+        return { doc, sheet, page };
+      });
+      setPhotoPane(false);
+    } catch (e) {
+      setToast(t("sheet.failed", { message: e instanceof Error ? e.message : String(e) }));
+    }
+  };
+  const addDatasheet = async (part: number) => {
+    if (!model) return;
+    const device = model.parts[part].device;
+    const path = await pickPath(t("sheet.add"), "pdf");
+    if (!path) return;
+    const suggested = partNumbers(device)[0] ?? "";
+    const chips = window.prompt(t("sheet.chipsAsk"), suggested);
+    if (chips === null) return;
+    try {
+      const file = await invoke<string>("import_datasheet", { path });
+      const sheet: Datasheet = {
+        id: newDatasheetId(),
+        file,
+        title: fileName(path).replace(/\.pdf$/i, ""),
+        chips: chips.split(/[\s,;]+/).map((c) => c.trim().toUpperCase()).filter(Boolean),
+        pages: [],
+      };
+      saveDatasheets([...datasheets, sheet]);
+      void openDatasheet(sheet);
+    } catch (e) {
+      setToast(t("sheet.failed", { message: String(e) }));
+    }
+  };
 
   // --- workspace: what was open, back on the next start ------------------------
 
@@ -1753,7 +1806,36 @@ export function App() {
                     </div>
                   </>
                 )}
-                {model && photoPane && !aligning && (
+                {model && sheetPane && (
+                  <>
+                    <Splitter
+                      container={workAreaRef}
+                      share={share}
+                      onDrag={setShare}
+                      onDone={(s) => setSettings((old) => ({ ...old, schematicShare: s }))}
+                    />
+                    <div className="compare-pane" style={{ width: `${share * 100}%` }}>
+                      <DatasheetPane
+                        doc={sheetPane.doc}
+                        sheet={sheetPane.sheet}
+                        page={sheetPane.page}
+                        scroll={settings.scroll}
+                        onRemember={(page, label) => {
+                          const next = datasheets.map((s) => (s.id === sheetPane.sheet.id ? { ...s, pages: [...s.pages, { label, page }] } : s));
+                          saveDatasheets(next);
+                          setSheetPane((p) => (p ? { ...p, sheet: next.find((s) => s.id === p.sheet.id) ?? p.sheet } : p));
+                        }}
+                        onClose={() =>
+                          setSheetPane((old) => {
+                            old?.doc.destroy();
+                            return null;
+                          })
+                        }
+                      />
+                    </div>
+                  </>
+                )}
+                {model && photoPane && !aligning && !sheetPane && (
                   <>
                     <Splitter
                       container={workAreaRef}
@@ -1848,6 +1930,19 @@ export function App() {
                   multiParts={multiParts}
                   onMultiParts={setMultiParts}
                   onOpenBga={setBgaPart}
+                  onFindDonors={setDonorPart}
+                  datasheets={datasheets}
+                  onOpenDatasheet={(sheet, page) => void openDatasheet(sheet, page)}
+                  onAddDatasheet={(part) => void addDatasheet(part)}
+                  onRemoveDatasheet={(sheet) => {
+                    saveDatasheets(datasheets.filter((s) => s.id !== sheet.id));
+                    if (sheetPane?.sheet.id === sheet.id)
+                      setSheetPane((old) => {
+                        old?.doc.destroy();
+                        return null;
+                      });
+                    void invoke("remove_datasheet", { path: sheet.file }).catch(() => {});
+                  }}
                   tabRequest={tabRequest}
                   listFocus={listFocus}
                   width={sidebarWidth}
@@ -1994,6 +2089,20 @@ export function App() {
             onSelect={select}
             onMark={setDiffMarks}
             onClose={() => setShowDiff(false)}
+          />
+        )}
+        {donorPart !== null && model && (
+          <DonorView
+            model={model}
+            part={donorPart}
+            boardPath={source?.path}
+            keys={{ xzzKey: settings.xzzKey, fzKey: settings.fzKey }}
+            onOpen={(path, part) => {
+              setDonorPart(null);
+              pendingBoardSearch.current = part;
+              void openPath(path);
+            }}
+            onClose={() => setDonorPart(null)}
           />
         )}
         {bgaPart !== null && model && (

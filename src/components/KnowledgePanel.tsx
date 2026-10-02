@@ -1,4 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { readFileBytes } from "../core/loader";
 import type { BoardModel } from "../core/board";
 import type { Selection } from "../core/types";
 import { useI18n } from "../i18n";
@@ -110,7 +111,30 @@ function RichText({ text, model, onSelect, onLink }: TextProps) {
   );
 }
 
-/** Pictures on the wiki; shown when the wiki lets them load, else as captions. */
+/** A picture stored with Avero, shown without internet. */
+function LocalPicture({ path }: { path: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let made: string | null = null;
+    let gone = false;
+    readFileBytes(path).then(
+      (bytes) => {
+        if (gone) return;
+        const type = path.endsWith(".svg") ? "image/svg+xml" : path.endsWith(".png") ? "image/png" : path.endsWith(".gif") ? "image/gif" : path.endsWith(".webp") ? "image/webp" : "image/jpeg";
+        made = URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type }));
+        setUrl(made);
+      },
+      () => {},
+    );
+    return () => {
+      gone = true;
+      if (made) URL.revokeObjectURL(made);
+    };
+  }, [path]);
+  return url ? <img src={url} alt="" /> : null;
+}
+
+/** Pictures on the wiki: Avero's copy when the page was saved with them, else from the wiki when it lets them load, else captions. */
 function Gallery({ items, base, onLink }: { items: GalleryItem[]; base: string; onLink(target: string): void }) {
   const [failed, setFailed] = useState<Set<string>>(() => new Set());
   return (
@@ -120,8 +144,10 @@ function Gallery({ items, base, onLink }: { items: GalleryItem[]; base: string; 
         const src = `${base}Special:FilePath/${encodeURIComponent(item.file.replace(/ /g, "_"))}?width=480`;
         return (
           <button key={item.file} className="kb-picture" title={item.file} onClick={() => onLink(`wiki:File:${item.file}`)}>
-            {!failed.has(item.file) && (
-              <img src={src} alt="" loading="lazy" onError={() => setFailed((s) => new Set(s).add(item.file))} />
+            {item.local ? (
+              <LocalPicture path={item.local} />
+            ) : (
+              !failed.has(item.file) && <img src={src} alt="" loading="lazy" onError={() => setFailed((s) => new Set(s).add(item.file))} />
             )}
             <span>{caption}</span>
           </button>

@@ -4,6 +4,7 @@
 mod backup;
 mod collection;
 mod conversion;
+mod donors;
 mod duplicates;
 mod import;
 mod library;
@@ -123,6 +124,29 @@ async fn open_board(
     let xzz_key = given(&xzz_key).map(|text| parse_xzz_key(&text).unwrap_or(0));
     let fz_key = given(&fz_key).map(|text| parse_fz_key(&text).unwrap_or([0; 44]));
     load(Path::new(&path), ParseOptions { xzz_key, fz_key })
+}
+
+/// A part on other boards of the library (donor boards), best fits first.
+#[tauri::command]
+async fn find_donors(
+    paths: Vec<String>,
+    query: donors::DonorQuery,
+    xzz_key: Option<String>,
+    fz_key: Option<String>,
+) -> Result<Vec<donors::DonorHit>, String> {
+    let mut hits = Vec::new();
+    for path in paths {
+        if query.exclude.as_deref() == Some(path.as_str()) {
+            continue;
+        }
+        // Boards that do not open (no key, broken) are skipped, not fatal.
+        if let Ok(board) = open_board(path.clone(), xzz_key.clone(), fz_key.clone()).await {
+            hits.extend(donors::find_in(&board, &path, &query));
+        }
+    }
+    donors::rank(&mut hits);
+    hits.truncate(200);
+    Ok(hits)
 }
 
 /// Part and net names of a boardview, upper case, for the library's
@@ -367,6 +391,69 @@ async fn backup_restore(app: tauri::AppHandle, path: String, stamp: String) -> R
     })
 }
 
+fn datasheets_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(data_dir(app)?.join("datasheets"))
+}
+
+/// Copies the pictures of saved wiki pages into Avero's data folder, so the
+/// pages show them offline; a picture that cannot be read gives `None`.
+#[tauri::command]
+async fn import_knowledge_images(
+    app: tauri::AppHandle,
+    paths: Vec<String>,
+) -> Result<Vec<Option<String>>, String> {
+    let dir = data_dir(&app)?.join("knowledge-images");
+    tauri::async_runtime::spawn_blocking(move || {
+        paths
+            .iter()
+            .map(|p| {
+                notes::store_knowledge_image(&dir, Path::new(p))
+                    .ok()
+                    .map(|t| t.to_string_lossy().into_owned())
+            })
+            .collect()
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Copies a datasheet PDF into Avero's data folder; returns the copy's path.
+#[tauri::command]
+fn import_datasheet(app: tauri::AppHandle, path: String) -> Result<String, String> {
+    let source = Path::new(&path);
+    if !source.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf")) {
+        return Err(format!("{path}: not a PDF"));
+    }
+    let dir = datasheets_dir(&app)?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let name = source
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "datasheet.pdf".into());
+    // Same name already there (another version): keep both.
+    let mut target = dir.join(&name);
+    let mut n = 2;
+    while target.exists() {
+        target = dir.join(format!("{}-{n}.pdf", name.trim_end_matches(".pdf").trim_end_matches(".PDF")));
+        n += 1;
+    }
+    std::fs::copy(source, &target).map_err(|e| format!("{path}: {e}"))?;
+    Ok(target.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+fn remove_datasheet(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    let dir = datasheets_dir(&app)?;
+    let p = Path::new(&path);
+    if p.parent() != Some(dir.as_path()) {
+        return Err(format!("{path}: not a stored datasheet"));
+    }
+    match std::fs::remove_file(p) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{path}: {e}")),
+        _ => Ok(()),
+    }
+}
+
 /// App-wide JSON stores in the data folder, by name: saved diagnosis flows,
 /// the datasheet register, the workspace to restore, key bindings.
 const STORES: &[&str] = &["flows", "datasheets", "workspace", "shortcuts"];
@@ -553,6 +640,10 @@ pub fn run() {
             note_versions,
             load_note_version,
             backup_create,
+            find_donors,
+            import_datasheet,
+            import_knowledge_images,
+            remove_datasheet,
             backup_restore,
             save_store,
             save_knowledge,

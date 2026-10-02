@@ -15,6 +15,7 @@ import { useI18n, type MessageKey } from "../i18n";
 import type { Settings } from "../settings";
 import { activeCase, addDrawing, readingsFor, type BoardNotes } from "../workbench/notes";
 import { jumperTargets } from "../core/jumper";
+import { datasheetsFor, partNumbers, type Datasheet } from "../workbench/datasheets";
 import { formatValue } from "../workbench/measure";
 import { MeasureBlock } from "./MeasureBlock";
 
@@ -40,6 +41,13 @@ interface Props {
   schematicFacts?: SchematicFacts | null;
   /** Opens the ball map of a BGA. */
   onOpenBga?(part: number): void;
+  /** Looks for the part on the other boards of the library. */
+  onFindDonors?(part: number): void;
+  /** Stored datasheets, and opening or adding one. */
+  datasheets?: readonly Datasheet[];
+  onOpenDatasheet?(sheet: Datasheet, page?: number): void;
+  onAddDatasheet?(part: number): void;
+  onRemoveDatasheet?(sheet: Datasheet): void;
 }
 
 /** Datasheet name of a pin, its function and target value on hover. */
@@ -181,6 +189,11 @@ export function Details({
   obdata,
   schematicFacts,
   onOpenBga,
+  onFindDonors,
+  datasheets,
+  onOpenDatasheet,
+  onAddDatasheet,
+  onRemoveDatasheet,
 }: Props) {
   const { t, lang } = useI18n();
   const u = settings.units;
@@ -381,11 +394,18 @@ export function Details({
             {part.device && <p className="details-device">{part.device}</p>}
           </header>
           {part.estimated && <p className="muted estimated-note">{t("details.estimated")}</p>}
-          {onOpenBga && ballGrid(model, selection.part) && (
-            <button className="small bga-open" onClick={() => onOpenBga(selection.part)}>
-              {t("bga.open")}
-            </button>
-          )}
+          <div className="part-actions">
+            {onOpenBga && ballGrid(model, selection.part) && (
+              <button className="small" onClick={() => onOpenBga(selection.part)}>
+                {t("bga.open")}
+              </button>
+            )}
+            {onFindDonors && part.device && (
+              <button className="small" onClick={() => onFindDonors(selection.part)} title={t("donor.hint")}>
+                {t("donor.find")}
+              </button>
+            )}
+          </div>
           {(() => {
             const f = schematicFacts?.parts.get(part.name.toUpperCase());
             if (!f) return null;
@@ -419,6 +439,34 @@ export function Details({
             );
           })()}
           {chip && <ChipCard chip={chip} check={pinCheck} />}
+          {onAddDatasheet && part.device && partNumbers(part.device).length > 0 && (
+            <section className="details-section datasheets">
+              <h3>{t("sheet.section")}</h3>
+              {datasheetsFor(datasheets ?? [], part.device).map((s) => (
+                <div key={s.id} className="sheet-row">
+                  <button className="link" onClick={() => onOpenDatasheet?.(s)}>
+                    {s.title}
+                  </button>
+                  {s.pages.map((p) => (
+                    <button key={`${p.label}${p.page}`} className="small" onClick={() => onOpenDatasheet?.(s, p.page)}>
+                      {p.label}
+                    </button>
+                  ))}
+                  <button
+                    className="tool icon-only"
+                    title={t("sheet.remove")}
+                    aria-label={t("sheet.remove")}
+                    onClick={() => window.confirm(t("sheet.removeAsk", { title: s.title })) && onRemoveDatasheet?.(s)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <button className="small" onClick={() => onAddDatasheet(selection.part)}>
+                + {t("sheet.add")}
+              </button>
+            </section>
+          )}
           {obdValues.length > 0 && (
             <section className="details-section obd">
               <h3>

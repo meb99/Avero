@@ -146,9 +146,48 @@ pub fn remove_photo(dir: &Path, path: &Path) -> Result<(), String> {
     }
 }
 
+/// Copies a picture of a saved wiki page into `dir`, named by its content so
+/// the same picture on several pages is stored once; returns the copy's path.
+pub fn store_knowledge_image(dir: &Path, source: &Path) -> Result<PathBuf, String> {
+    use sha2::{Digest, Sha256};
+    let ext = source
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .filter(|e| matches!(e.as_str(), "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg"))
+        .ok_or_else(|| format!("{}: not a picture", source.display()))?;
+    let bytes = std::fs::read(source).map_err(|e| format!("{}: {e}", source.display()))?;
+    let hash = Sha256::digest(&bytes);
+    let name: String = hash[..12].iter().map(|b| format!("{b:02x}")).collect();
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let target = dir.join(format!("{name}.{ext}"));
+    if !target.exists() {
+        std::fs::write(&target, &bytes).map_err(|e| format!("{}: {e}", target.display()))?;
+    }
+    Ok(target)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stores_each_knowledge_picture_once() {
+        let base = std::env::temp_dir().join(format!("avero-kb-{}", std::process::id()));
+        let dir = base.join("images");
+        std::fs::create_dir_all(&base).unwrap();
+        let a = base.join("a.JPG");
+        let b = base.join("b.jpg");
+        let other = base.join("c.jpg");
+        std::fs::write(&a, b"same").unwrap();
+        std::fs::write(&b, b"same").unwrap();
+        std::fs::write(&other, b"other").unwrap();
+        let sa = store_knowledge_image(&dir, &a).unwrap();
+        assert_eq!(sa, store_knowledge_image(&dir, &b).unwrap());
+        assert_ne!(sa, store_knowledge_image(&dir, &other).unwrap());
+        assert_eq!(sa.extension().unwrap(), "jpg");
+        assert!(store_knowledge_image(&dir, &base.join("x.html")).is_err());
+        std::fs::remove_dir_all(&base).unwrap();
+    }
 
     #[test]
     fn stores_and_removes_photos() {

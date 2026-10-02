@@ -3542,3 +3542,54 @@ button.danger {
   gap: 12px;
   font-size: 12px;
 }
+
+.part-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.dialog.donor-dialog {
+  width: min(900px, calc(100% - 32px));
+}
+
+.donor-good {
+  color: #43a047;
+  font-weight: 600;
+}
+
+.donor-maybe {
+  color: #f59e0b;
+}
+
+.donor-bad {
+  color: #e53935;
+}
+
+.datasheet-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.datasheet-pane .compare-bar {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 40px;
+  gap: 6px;
+  padding: 4px 8px;
+}
+
+.sheet-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.details-section.datasheets {
+  margin-bottom: 12px;
+}

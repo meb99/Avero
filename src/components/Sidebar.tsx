@@ -16,6 +16,7 @@ import { LayerList } from "./LayerList";
 import type { Palette, RGBA } from "../render/palette";
 import type { SchematicDocument } from "../schematic/document";
 import type { SchematicFacts } from "../schematic/partInfo";
+import type { Datasheet } from "../workbench/datasheets";
 
 type Tab = "details" | "parts" | "nets" | "layers" | "knowledge" | "measure" | "diagnose";
 
@@ -49,6 +50,11 @@ interface Props {
   multiParts: readonly number[];
   onMultiParts(parts: number[]): void;
   onOpenBga(part: number): void;
+  onFindDonors(part: number): void;
+  datasheets: readonly Datasheet[];
+  onOpenDatasheet(sheet: Datasheet, page?: number): void;
+  onAddDatasheet(part: number): void;
+  onRemoveDatasheet(sheet: Datasheet): void;
   /** Shows a tab from outside (next measuring point by key). */
   tabRequest?: { tab: "measure" | "details"; n: number } | null;
   listFocus?: { listId: string; index: number; n: number } | null;
@@ -94,6 +100,11 @@ export function Sidebar({
   multiParts,
   onMultiParts,
   onOpenBga,
+  onFindDonors,
+  datasheets,
+  onOpenDatasheet,
+  onAddDatasheet,
+  onRemoveDatasheet,
   tabRequest,
   listFocus,
   width,
@@ -248,6 +259,11 @@ export function Sidebar({
             obdata={obdata}
             schematicFacts={schematicFacts}
             onOpenBga={onOpenBga}
+            onFindDonors={onFindDonors}
+            datasheets={datasheets}
+            onOpenDatasheet={onOpenDatasheet}
+            onAddDatasheet={onAddDatasheet}
+            onRemoveDatasheet={onRemoveDatasheet}
           />
         </div>
       )}
