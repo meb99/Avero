@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BOARD_EXTENSIONS } from "../core/loader";
 import { loadSettings } from "../settings";
-import { convertXzzFiles, pickXzz, type ConversionResult, type ConvertedFile } from "../workbench/conversion";
+import { convertXzzFiles, pickXzz, pickXzzFolder, type ConversionResult, type ConvertedFile } from "../workbench/conversion";
+import { importCollection, pickCollection, type CollectionProgress, type CollectionResult } from "../workbench/collection";
 import { useI18n } from "../i18n";
 import {
   badge,
@@ -78,7 +79,14 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
   const [importing, setImporting] = useState(false);
   const [converting, setConverting] = useState<string | null>(null);
   const [conversion, setConversion] = useState<ConversionResult | null>(null);
+  const [conversionProgress, setConversionProgress] = useState<CollectionProgress | null>(null);
+  const conversionAbort = useRef<AbortController | null>(null);
+  const [stopping, setStopping] = useState(false);
+  const [collecting, setCollecting] = useState(false);
+  const [collectionProgress, setCollectionProgress] = useState<CollectionProgress | null>(null);
+  const [collection, setCollection] = useState<CollectionResult | null>(null);
   const conversionBusy = useRef(false);
+  const busy = importing || converting !== null || collecting;
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<RenameTarget | null>(null);
@@ -150,6 +158,7 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
 
   const runImport = async (paths: string[]) => {
     if (paths.length === 0 || conversionBusy.current) return;
+    conversionBusy.current = true;
     setImporting(true);
     setError(null);
     try {
@@ -166,23 +175,31 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
     } catch (e) {
       setError(String(e));
     } finally {
+      conversionBusy.current = false;
       setImporting(false);
     }
   };
 
-  const runConversion = async () => {
+  const runConversion = async (wholeFolder = false) => {
     if (importing || conversionBusy.current) return;
     conversionBusy.current = true;
-    setConverting(t("convert.choose"));
+    setConverting(t(wholeFolder ? "convert.chooseFolder" : "convert.choose"));
+    setConversionProgress(null);
+    setStopping(false);
     setError(null);
     try {
-      const paths = await pickXzz(t("convert.choose"));
-      if (paths.length === 0) return;
+      const paths = wholeFolder ? await pickXzzFolder(t("convert.chooseFolder")) : await pickXzz(t("convert.choose"));
+      if (!paths) return;
+      if (paths.length === 0) { if (wholeFolder) setError(t("convert.emptyFolder")); return; }
       setConversion(null);
+      const controller = new AbortController();
+      conversionAbort.current = controller;
       const converted = await convertXzzFiles(paths, device, loadSettings().xzzKey,
-        (index, total, path) => setConverting(t("convert.progress", {
-          index, total, name: path.split(/[\\/]/).pop() ?? path,
-        })));
+        (completed, total, path) => {
+          const name = path.split(/[\\/]/).pop() ?? path;
+          setConversionProgress({ completed, total, name });
+          setConverting(t("convert.progress", { index: completed, total, name }));
+        }, controller.signal);
       setConversion(converted);
       const own = root ?? await libraryRoot();
       setRoot(own);
@@ -193,7 +210,35 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
       setError(String(e));
     } finally {
       conversionBusy.current = false;
+      conversionAbort.current = null;
+      setConversionProgress(null);
+      setStopping(false);
       setConverting(null);
+    }
+  };
+
+  const runCollection = async () => {
+    if (conversionBusy.current) return;
+    conversionBusy.current = true;
+    setCollecting(true);
+    setError(null);
+    setCollectionProgress(null);
+    try {
+      const path = await pickCollection(t("collection.choose"));
+      if (!path) return;
+      setCollection(null);
+      const imported = await importCollection(path, loadSettings().xzzKey, setCollectionProgress);
+      setCollection(imported);
+      const own = root ?? await libraryRoot();
+      setRoot(own);
+      await rescan(library.folders, own);
+      setBranch(""); setQuery(""); setMode("boards");
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      conversionBusy.current = false;
+      setCollecting(false);
+      setCollectionProgress(null);
     }
   };
 
@@ -331,14 +376,14 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
         </button>
         <button
           onClick={() => void rescan(library.folders)}
-          disabled={scanning}
+          disabled={scanning || busy}
         >
           {scanning ? t("library.scanning") : t("library.rescan")}
         </button>
-        <button onClick={() => setSortingAll(true)} disabled={!root || scanning} title={t("autosort.buttonHint")}>
+        <button onClick={() => setSortingAll(true)} disabled={!root || scanning || busy} title={t("autosort.buttonHint")}>
           {t("autosort.button")}
         </button>
-        <button onClick={() => setDupes(true)} disabled={!root}>
+        <button onClick={() => setDupes(true)} disabled={!root || busy}>
           {t("dupes.find")}
         </button>
       </div>
@@ -351,7 +396,7 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
         />
         <button
           className="primary"
-          disabled={importing || converting !== null}
+          disabled={busy}
           onClick={() =>
             void pickImport(t("library.import"), BOARD_EXTENSIONS).then(
               runImport,
@@ -382,16 +427,24 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
           <h3 id="convert-title">{t("convert.title")}</h3>
           <p className="muted">{t("convert.hint")}</p>
         </div>
-        <button onClick={() => void runConversion()} disabled={importing || converting !== null}>
-          {t("convert.choose")}
-        </button>
+        <div className="conversion-actions">
+          <button onClick={() => void runConversion()} disabled={busy}>{t("convert.choose")}</button>
+          <button onClick={() => void runConversion(true)} disabled={busy}>{t("convert.chooseFolder")}</button>
+        </div>
         <div className="conversion-status" role="status" aria-live="polite">
           {converting ?? (conversion && t("convert.done", {
             n: conversion.files.filter((f) => !f.duplicate).length,
             duplicates: conversion.files.filter((f) => f.duplicate).length,
             errors: conversion.errors.length,
           }))}
+          {conversion && conversion.remaining > 0 && ` · ${t("convert.remaining", { n: conversion.remaining })}`}
         </div>
+        {conversionProgress && <div className="conversion-progress">
+          <progress value={conversionProgress.completed} max={conversionProgress.total} aria-label={t("convert.title")} />
+          <button disabled={stopping} onClick={() => { conversionAbort.current?.abort(); setStopping(true); }}>
+            {t(stopping ? "convert.stopping" : "convert.stop")}
+          </button>
+        </div>}
         <div className="conversion-results">
         {conversion?.files.filter((f, i, all) => all.findIndex((other) => other.path === f.path) === i).map((file) => (
           <div className="conversion-file" key={file.path}>
@@ -401,6 +454,28 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
         ))}
         {conversion?.errors.map((message, i) => <p className="library-warn" key={`${i}-${message}`}>{message}</p>)}
         </div>
+      </section>
+
+      <section className="library-convert" aria-labelledby="collection-title" aria-busy={collecting}>
+        <div>
+          <h3 id="collection-title">{t("collection.title")}</h3>
+          <p className="muted">{t("collection.hint")}</p>
+        </div>
+        <button onClick={() => void runCollection()} disabled={busy}>{t("collection.choose")}</button>
+        <div className="conversion-status" role="status" aria-live="polite">
+          {collecting ? (collectionProgress ? t("collection.progress", {
+            index: collectionProgress.completed, total: collectionProgress.total, name: collectionProgress.name,
+          }) : t("collection.choose")) : collection && t("collection.done", {
+            n: collection.imported.length, duplicates: collection.duplicates, boards: collection.boards,
+            schematics: collection.schematics, converted: collection.converted, errors: collection.errors.length,
+          })}
+        </div>
+        {collectionProgress && <div className="conversion-progress">
+          <progress value={collectionProgress.completed} max={collectionProgress.total} aria-label={t("collection.title")} />
+        </div>}
+        {collection?.errors.length ? <details className="collection-errors"><summary>{t("library.importErrors", { n: collection.errors.length })}</summary>
+          {collection.errors.map((message, i) => <p className="library-warn" key={`${i}-${message}`}>{message}</p>)}
+        </details> : null}
       </section>
 
       <div className="library-folders">

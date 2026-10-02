@@ -392,7 +392,7 @@ pub fn import(root: &Path, paths: &[PathBuf], folder: Option<&str>) -> ImportRes
     result
 }
 
-/// Stores a generated GenCAD in the same folders as ordinary imports. Returns
+/// Stores a converted board or collection file in the library. Returns
 /// the existing path for identical content, including a previously renamed file.
 /// Exclusive creation prevents another import from being overwritten.
 pub(crate) fn import_generated(
@@ -402,12 +402,24 @@ pub(crate) fn import_generated(
     folder: Option<&str>,
 ) -> Result<(PathBuf, bool), String> {
     use std::io::Write;
+    static WRITES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    // Conversion runs in parallel; duplicate detection and file creation form
+    // one transaction so simultaneous equal outputs do not create extra copies.
+    let _write = WRITES.lock().map_err(|_| "Library import lock is unavailable.")?;
+    if name.is_empty()
+        || name.starts_with('.')
+        || name.contains(['/', '\\', ':'])
+        || name.chars().any(char::is_control)
+    {
+        return Err("Invalid library file name.".into());
+    }
+    let extension = Path::new(&name).extension().map(|e| e.to_os_string());
     let source = Source { name, context: String::new(), data: Data::Bytes(bytes) };
     let dir = root.join(folder.and_then(sanitize_folder).unwrap_or_else(|| board_folder(&source)));
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())?.filter_map(Result::ok) {
         let path = entry.path();
-        if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("cad"))
+        if path.extension().is_some_and(|e| extension.as_ref().is_some_and(|ext| e.eq_ignore_ascii_case(ext)))
             && same_content(&path, &source.data)
         {
             return Ok((path, true));
@@ -485,6 +497,33 @@ mod tests {
         assert!(!duplicate);
         assert!(different.ends_with("Board (2).cad"));
         assert_eq!(std::fs::read(old).unwrap(), b"existing board");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn parallel_identical_outputs_share_one_library_file() {
+        let root = temp("parallel");
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let workers: Vec<_> = (0..2)
+            .map(|_| {
+                let root = root.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    import_generated(
+                        &root,
+                        "Same.cad".into(),
+                        b"same board".to_vec(),
+                        Some("Nintendo/Switch"),
+                    )
+                    .unwrap()
+                })
+            })
+            .collect();
+        let results: Vec<_> = workers.into_iter().map(|w| w.join().unwrap()).collect();
+        assert_eq!(results[0].0, results[1].0);
+        assert_ne!(results[0].1, results[1].1);
+        assert_eq!(files_in(&root).len(), 1);
         std::fs::remove_dir_all(root).unwrap();
     }
 

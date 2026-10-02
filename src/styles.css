@@ -1499,6 +1499,14 @@ button.danger {
 .conversion-file span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .conversion-results { grid-column: 1 / -1; display: grid; gap: 6px; max-height: 150px; overflow-y: auto; }
 .conversion-results:empty { display: none; }
+.conversion-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.conversion-progress { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; }
+.conversion-progress progress { flex: 1; min-width: 0; accent-color: var(--accent); }
+.collection-errors { grid-column: 1 / -1; font-size: 12px; max-height: 150px; overflow: auto; }
+@media (max-width: 720px) {
+  .library-convert { grid-template-columns: 1fr; }
+  .conversion-actions { justify-content: flex-start; }
+}
 
 .folder-chip {
   display: inline-flex;

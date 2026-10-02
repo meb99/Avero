@@ -19,6 +19,7 @@ tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 serde.workspace = true
 serde_json.workspace = true
+sha2 = "0.10"
 avero-formats = { path = "../crates/avero-formats" }
 zip = { version = "8", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 tauri-plugin-opener = "2"
