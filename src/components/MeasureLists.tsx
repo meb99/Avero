@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { BoardModel } from "../core/board";
 import type { Selection } from "../core/types";
 import { useI18n } from "../i18n";
@@ -21,6 +21,8 @@ interface Props {
   update(change: (n: BoardNotes) => BoardNotes): void;
   selection: Selection;
   onSelect(selection: Selection, zoom: boolean): void;
+  /** Puts the cursor into the field of a list point (next point by key or pedal). */
+  focus?: { listId: string; index: number; n: number } | null;
 }
 
 const SHORT: Record<Quantity, string> = { diode: "D", voltage: "U", resistance: "R" };
@@ -29,10 +31,11 @@ const SHORT: Record<Quantity, string> = { diode: "D", voltage: "U", resistance: 
  * Lists of points to measure one after the other: progress for the active
  * repair case, the value right in the list, and a jump to the next open point.
  */
-export function MeasureLists({ model, notes, update, selection, onSelect }: Props) {
+export function MeasureLists({ model, notes, update, selection, onSelect, focus }: Props) {
   const { t } = useI18n();
   const lists = notes.lists ?? [];
-  const [chosen, setChosen] = useState<string | null>(null);
+  const chosen = notes.activeList ?? null;
+  const setChosen = (id: string) => update((n) => ({ ...n, activeList: id }));
   const list = lists.find((l) => l.id === chosen) ?? lists[0];
   const [quantity, setQuantity] = useState<Quantity>("diode");
   const tableRef = useRef<HTMLTableElement>(null);
@@ -58,6 +61,11 @@ export function MeasureLists({ model, notes, update, selection, onSelect }: Prop
   };
 
   const progress = list ? listProgress(notes, list) : null;
+  useEffect(() => {
+    if (!focus || !list || focus.listId !== list.id) return;
+    requestAnimationFrame(() => tableRef.current?.querySelectorAll<HTMLInputElement>("input.value-input")[focus.index]?.focus());
+    // A new request (n) only.
+  }, [focus?.n]);
   const next = () => {
     if (!list || !progress) return;
     const i = progress.done.indexOf(false);

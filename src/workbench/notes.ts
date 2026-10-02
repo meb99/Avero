@@ -82,6 +82,8 @@ export interface BoardNotes {
   referenceConditions?: Conditions;
   /** Lists of points to measure, worked through one after the other. */
   lists?: MeasureList[];
+  /** The list being worked through. */
+  activeList?: string;
   updated: string;
 }
 
@@ -466,6 +468,7 @@ export function parseNotes(json: string): BoardNotes | null {
       obdata: typeof d.obdata === "string" && d.obdata ? d.obdata : undefined,
       referenceConditions: parseConditions(d.referenceConditions),
       lists: parseLists(d.lists),
+      activeList: typeof d.activeList === "string" ? d.activeList : undefined,
       updated: typeof d.updated === "string" ? d.updated : new Date(0).toISOString(),
     };
   } catch {

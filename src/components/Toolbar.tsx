@@ -31,6 +31,8 @@ interface Props {
   onToggleSide(side: ViewSide): void;
   onFlip(): void;
   bothSides: boolean;
+  bothSidesMode: "together" | "separate" | "synced";
+  onBothSidesMode(mode: "together" | "separate" | "synced"): void;
   onRotate(): void;
   onFit(): void;
   onZoom(factor: number): void;
@@ -84,6 +86,19 @@ export function Toolbar(p: Props) {
                 );
               })}
             </div>
+            {p.bothSides && (
+              <select
+                className="tool sides-mode"
+                value={p.bothSidesMode}
+                title={t("sides.modeHint")}
+                aria-label={t("sides.mode")}
+                onChange={(e) => p.onBothSidesMode(e.target.value as "together" | "separate" | "synced")}
+              >
+                <option value="together">{t("sides.together")}</option>
+                <option value="separate">{t("sides.separate")}</option>
+                <option value="synced">{t("sides.synced")}</option>
+              </select>
+            )}
             <button className="tool icon-only" onClick={p.onFlip} title={t("toolbar.flip")} aria-label={t("toolbar.flip")}>
               <FlipIcon />
             </button>

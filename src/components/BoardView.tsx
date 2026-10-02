@@ -38,6 +38,8 @@ export interface BoardViewHandle {
   /** Screen position (relative to the view) of a board point. */
   toScreen(p: Point, side?: ViewSide): Point;
   viewState(): ViewState;
+  /** Moves the view without reporting it back through `onViewChange` (for syncing two views). */
+  setViewState(view: ViewState): void;
 }
 
 interface Props {
@@ -73,6 +75,8 @@ interface Props {
   drawings?: readonly DrawingMark[];
   /** The drawing being made; its next point follows the cursor. */
   draft?: DrawingMark | null;
+  /** Reports pans and zooms, for a second view that follows this one. */
+  onViewChange?(view: ViewState): void;
   /**
    * While set, clicks pick board points instead of selecting; the point
    * snaps to the pin or test point under the cursor.
@@ -139,6 +143,7 @@ export function BoardView({
   partValues,
   drawings = NO_DRAWINGS,
   draft = null,
+  onViewChange,
   onPointPick,
   onSelect,
   onAddPart,
@@ -339,9 +344,24 @@ export function BoardView({
     drawOverview();
   }, [sideViews, drawOverview]);
 
-  const requestDraw = useCallback(() => {
-    if (!frameRef.current) frameRef.current = requestAnimationFrame(draw);
+  // The last view reported or set from outside, so a synced pair does not echo.
+  const lastView = useRef<string>("");
+  const onViewChangeRef = useRef(onViewChange);
+  onViewChangeRef.current = onViewChange;
+  const drawAndReport = useCallback(() => {
+    draw();
+    const report = onViewChangeRef.current;
+    if (!report) return;
+    const { centerX, centerY, scale } = cameraRef.current;
+    const key = `${centerX.toFixed(3)}|${centerY.toFixed(3)}|${scale.toPrecision(6)}`;
+    if (key === lastView.current) return;
+    lastView.current = key;
+    report({ centerX, centerY, scale });
   }, [draw]);
+
+  const requestDraw = useCallback(() => {
+    if (!frameRef.current) frameRef.current = requestAnimationFrame(drawAndReport);
+  }, [drawAndReport]);
 
   const fitIfNeeded = useCallback(() => {
     const cam = cameraRef.current;
@@ -364,12 +384,12 @@ export function BoardView({
           centerY: next.centerY,
           scale: next.scale,
         });
-        draw();
+        drawAndReport();
         if (k < 1) animRef.current = requestAnimationFrame(step);
       };
       animRef.current = requestAnimationFrame(step);
     },
-    [draw],
+    [drawAndReport],
   );
 
   useImperativeHandle(
@@ -425,6 +445,12 @@ export function BoardView({
       viewState() {
         const { centerX, centerY, scale } = cameraRef.current;
         return { centerX, centerY, scale };
+      },
+      setViewState(view: ViewState) {
+        cancelAnimationFrame(animRef.current);
+        Object.assign(cameraRef.current, view);
+        lastView.current = `${view.centerX.toFixed(3)}|${view.centerY.toFixed(3)}|${view.scale.toPrecision(6)}`;
+        requestDraw();
       },
     }),
     [draw, flyTo, requestDraw, allBounds],

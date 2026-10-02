@@ -24,6 +24,7 @@ interface Props {
   error: string | null;
   selection: Selection;
   units: "mm" | "mil";
+  listFocus?: { listId: string; index: number; n: number } | null;
 }
 
 const SHORT = { diode: "D", voltage: "U", resistance: "R" } as const;
@@ -52,7 +53,7 @@ function NotesField({ value, onSave, placeholder }: { value: string; onSave(v: s
 }
 
 /** The "Measure" tab: repair cases, all measured nets, notes, import/export. */
-export function Workbench({ model, notes, update, tolerance, onTolerance, onSelect, onShowMarker, onShowDrawing, error, selection, units }: Props) {
+export function Workbench({ model, notes, update, tolerance, onTolerance, onSelect, onShowMarker, onShowDrawing, error, selection, units, listFocus }: Props) {
   const { t, lang } = useI18n();
   const [onlyDeviations, setOnlyDeviations] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -152,7 +153,7 @@ export function Workbench({ model, notes, update, tolerance, onTolerance, onSele
         </details>
       </section>
 
-      <MeasureLists model={model} notes={notes} update={update} selection={selection} onSelect={onSelect} />
+      <MeasureLists model={model} notes={notes} update={update} selection={selection} onSelect={onSelect} focus={listFocus} />
 
       <section className="wb-section">
         <div className="wb-row wb-head">

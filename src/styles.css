@@ -3475,3 +3475,27 @@ button.danger {
   min-width: 80px;
   font-size: 12px;
 }
+
+.sides-mode {
+  max-width: 150px;
+  font-size: 12px;
+}
+
+/* Two board views side by side: a thin divider */
+.work-area > .board-view + .board-view {
+  border-left: 2px solid var(--border);
+}
+
+.shortcut-table {
+  width: 100%;
+  font-size: 13px;
+  border-collapse: collapse;
+}
+
+.shortcut-table td {
+  padding: 3px 4px;
+}
+
+.shortcut-table td:last-child {
+  text-align: right;
+}

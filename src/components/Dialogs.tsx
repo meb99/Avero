@@ -1,4 +1,5 @@
 import { createBackup, formatBytes, pickAndRestoreBackup } from "../workbench/backup";
+import { bindings, isModifierOnly, keyLabel, keyName, rebind, SHORTCUT_ACTIONS, type ShortcutAction, type Shortcuts } from "../shortcuts";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "../i18n";
 import type { Settings } from "../settings";
@@ -147,6 +148,9 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
       <p className="muted setting-hint">{t("settings.fzKeyHint", { n: fzWords(settings.fzKey) })}</p>
       <h3>{t("schematic.title")}</h3>
       <div className="checks">{check("autoSchematic", t("settings.autoSchematic"))}</div>
+      <h3>{t("keys.title")}</h3>
+      <p className="muted setting-hint">{t("keys.hint")}</p>
+      <ShortcutEditor value={settings.shortcuts} onChange={(shortcuts) => set("shortcuts", shortcuts)} />
       <h3>{t("backup.title")}</h3>
       <p className="muted setting-hint">{t("backup.hint")}</p>
       <BackupButtons />
@@ -167,6 +171,50 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
         </button>
       </footer>
     </Dialog>
+  );
+}
+
+/** The bench keys: click an action, press the key (or the pedal). */
+function ShortcutEditor({ value, onChange }: { value: Shortcuts; onChange(s: Shortcuts): void }) {
+  const { t, lang } = useI18n();
+  const [recording, setRecording] = useState<ShortcutAction | null>(null);
+  const all = bindings(value);
+  useEffect(() => {
+    if (!recording) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (isModifierOnly(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key !== "Escape") onChange(rebind(value, recording, keyName(e)));
+      setRecording(null);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [recording, value, onChange]);
+  return (
+    <table className="shortcut-table">
+      <tbody>
+        {SHORTCUT_ACTIONS.map((a) => (
+          <tr key={a}>
+            <td>{t(`keys.${a}`)}</td>
+            <td>
+              <button className={recording === a ? "small primary" : "small"} onClick={() => setRecording(recording === a ? null : a)}>
+                {recording === a ? t("keys.press") : all[a].map((k) => keyLabel(k, lang)).join(" / ") || t("keys.none")}
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colSpan={2}>
+            <button className="small" onClick={() => onChange({})}>
+              {t("keys.reset")}
+            </button>
+          </td>
+        </tr>
+      </tfoot>
+    </table>
   );
 }
 

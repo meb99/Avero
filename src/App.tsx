@@ -77,7 +77,8 @@ import {
   withBuiltin,
   obdataFor,
 } from "./knowledge/store";
-import { linkObdata } from "./workbench/notes";
+import { linkObdata, listProgress } from "./workbench/notes";
+import { actionFor, bindings, isModifierOnly, keyName, worksWhileTyping, type ShortcutAction } from "./shortcuts";
 import { loadStore, saveStore } from "./workbench/appStore";
 import { parseWorkspace, type Workspace, type WorkspaceTab } from "./workbench/workspace";
 import { BUILTIN_PAGES } from "./knowledge/builtin";
@@ -165,6 +166,9 @@ export function App() {
   const [source, setSource] = useState<BoardSource | null>(null);
   const [side, setSide] = useState<ViewSide>("top");
   const bothSides = settings.bothSides;
+  const splitViews = bothSides && settings.bothSidesMode !== "together";
+  const splitViewsRef = useRef(splitViews);
+  splitViewsRef.current = splitViews;
   const setBothSides = (on: boolean) => setSettings((old) => (old.bothSides === on ? old : { ...old, bothSides: on }));
   /** Oben / Unten are switched on and off on their own; at least one stays on. */
   const toggleSide = (clicked: ViewSide) => {
@@ -230,6 +234,8 @@ export function App() {
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
   const viewRef = useRef<BoardViewHandle>(null);
+  // The bottom side's own view when both sides are shown in two views.
+  const viewRef2 = useRef<BoardViewHandle>(null);
   const schematicViewRef = useRef<SchematicViewHandle>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
@@ -894,7 +900,9 @@ export function App() {
       if (where && where !== "both") setSide(where);
       if (zoom) {
         const bounds = model.selectionBounds(sel);
-        if (bounds) viewRef.current?.zoomTo(bounds, where && where !== "both" ? where : sel.kind === "net" ? netSides(model, sel.net) : undefined);
+        const onBottom = where === "bottom" || (sel.kind === "net" && netSides(model, sel.net) === "bottom");
+        const view = splitViewsRef.current && onBottom ? viewRef2.current : viewRef.current;
+        if (bounds) view?.zoomTo(bounds, where && where !== "both" ? where : sel.kind === "net" ? netSides(model, sel.net) : undefined);
       }
     },
     [model],
@@ -1016,6 +1024,59 @@ export function App() {
       for (const s of subscriptions) void s.then((unlisten) => unlisten());
     };
   }, [openPath]);
+
+  // --- bench keys: next measuring point, flip … (changeable, also for a foot pedal) ---
+  const [tabRequest, setTabRequest] = useState<{ tab: "measure" | "details"; n: number } | null>(null);
+  const [listFocus, setListFocus] = useState<{ listId: string; index: number; n: number } | null>(null);
+  const nextListPoint = () => {
+    if (!model || !notesForModel) return;
+    const lists = notesForModel.lists ?? [];
+    const list = lists.find((l) => l.id === notesForModel.activeList) ?? lists[0];
+    if (!list) return setToast(t("lists.noList"));
+    const i = listProgress(notesForModel, list).done.indexOf(false);
+    if (i < 0) return setToast(t("lists.allDone", { title: list.title }));
+    const net = model.findNet(list.items[i].net);
+    if (net !== undefined) select({ kind: "net", net }, true);
+    const n = Date.now();
+    setTabRequest({ tab: "measure", n });
+    setSettings((s) => (s.showSidebar && !s.sidebarCollapsed ? s : { ...s, showSidebar: true, sidebarCollapsed: false }));
+    setListFocus({ listId: list.id, index: i, n });
+  };
+  const runShortcut = (action: ShortcutAction) => {
+    const view = viewRef.current;
+    switch (action) {
+      case "nextPoint":
+        return nextListPoint();
+      case "commitNext":
+        // Leaving the field saves its value; then on to the next point.
+        (document.activeElement as HTMLElement | null)?.blur();
+        // The current handler, which sees the value just saved.
+        window.setTimeout(() => shortcutRef.current("nextPoint"), 50);
+        return;
+      case "flip":
+        return flipSide();
+      case "bothSides":
+        return setBothSides(!bothSides);
+      case "fit":
+        return view?.fit();
+      case "zoomIn":
+        return view?.zoomBy(1.5);
+      case "zoomOut":
+        return view?.zoomBy(1 / 1.5);
+      case "pinNet": {
+        const net = model?.selectedNet(selection);
+        if (net !== undefined) togglePinned(net);
+        return;
+      }
+      case "marker":
+        if (model) setPlacingMarker((v) => !v);
+        return;
+      case "rotate":
+        return setRotation((r) => (r + 1) & 3);
+    }
+  };
+  const shortcutRef = useRef(runShortcut);
+  shortcutRef.current = runShortcut;
 
   // --- workspace: what was open, back on the next start ------------------------
 
@@ -1411,6 +1472,16 @@ export function App() {
         setSettings((s) => ({ ...s, showSidebar: !s.showSidebar }));
         return;
       }
+      // Bench keys from the settings; pedal keys (F13 …, Page Down) also while typing a value.
+      if (!dialog && !isModifierOnly(e)) {
+        const name = keyName(e);
+        const action = actionFor(bindings(loadSettings().shortcuts), name);
+        if (action && (!isTyping(e.target) || worksWhileTyping(name))) {
+          e.preventDefault();
+          shortcutRef.current(action);
+          return;
+        }
+      }
       if (isTyping(e.target) || dialog || mod || e.altKey) return;
       const view = viewRef.current;
       const sheet = schematicViewRef.current;
@@ -1428,38 +1499,8 @@ export function App() {
           else if (placingMarkerRef.current) setPlacingMarker(false);
           else setSelection(NONE);
           break;
-        case "m":
-        case "M":
-          if (model) setPlacingMarker((v) => !v);
-          break;
-        case "p":
-        case "P": {
-          const net = model?.selectedNet(selection);
-          if (net !== undefined) togglePinnedRef.current(net);
-          break;
-        }
-        case " ":
-          e.preventDefault();
-          flipSide();
-          break;
-        case "r":
-          setRotation((r) => (r + 1) & 3);
-          break;
         case "R":
           setRotation((r) => (r + 3) & 3);
-          break;
-        case "f":
-        case "F":
-        case "Home":
-          view?.fit();
-          break;
-        case "+":
-        case "=":
-          view?.zoomBy(1.5);
-          break;
-        case "-":
-        case "_":
-          view?.zoomBy(1 / 1.5);
           break;
         case "Enter": {
           if (drawingRef.current?.kind === "area") {
@@ -1531,6 +1572,8 @@ export function App() {
           onToggleSide={toggleSide}
           onFlip={flipSide}
           bothSides={bothSides}
+          bothSidesMode={settings.bothSidesMode}
+          onBothSidesMode={(mode) => setSettings((old) => ({ ...old, bothSidesMode: mode }))}
           onRotate={() => setRotation((r) => (r + 1) & 3)}
           onFit={() => viewRef.current?.fit()}
           onZoom={(f) => viewRef.current?.zoomBy(f)}
@@ -1566,11 +1609,13 @@ export function App() {
             <>
               <div className="work-area" ref={workAreaRef}>
                 {model ? (
+                  <>
                   <BoardView
                     ref={viewRef}
                     model={model}
-                    side={side}
-                    dual={bothSides}
+                    side={splitViews ? "top" : side}
+                    dual={bothSides && !splitViews}
+                    onViewChange={splitViews && settings.bothSidesMode === "synced" ? (v) => viewRef2.current?.setViewState(v) : undefined}
                     rotation={rotation}
                     selection={selection}
                     settings={settings}
@@ -1633,6 +1678,35 @@ export function App() {
                       />
                     )}
                   </BoardView>
+                  {splitViews && (
+                    <BoardView
+                      ref={viewRef2}
+                      model={model}
+                      side="bottom"
+                      rotation={rotation}
+                      selection={selection}
+                      settings={settings}
+                      palette={palette}
+                      hiddenLayers={hiddenLayers}
+                      namesRevision={namesRevision}
+                      pinnedNets={pinnedNets}
+                      markers={markerMarks}
+                      activeMarker={editingMarker?.id ?? null}
+                      onMarkerClick={openMarker}
+                      measured={measured}
+                      partValues={partValues}
+                      drawings={drawingMarks}
+                      onPointPick={drawing ? pickDrawPoint : placingMarker ? placeMarker : undefined}
+                      onSelect={(sel, zoom) => {
+                        setMultiParts([]);
+                        select(sel, zoom);
+                      }}
+                      onAddPart={addPartToSelection}
+                      extraParts={multiSet}
+                      onViewChange={settings.bothSidesMode === "synced" ? (v) => viewRef.current?.setViewState(v) : undefined}
+                    />
+                  )}
+                  </>
                 ) : (
                   !showSchematic && <div className="board-placeholder">{t("welcome.open")}</div>
                 )}
@@ -1766,6 +1840,8 @@ export function App() {
                   multiParts={multiParts}
                   onMultiParts={setMultiParts}
                   onOpenBga={setBgaPart}
+                  tabRequest={tabRequest}
+                  listFocus={listFocus}
                   width={sidebarWidth}
                   onWidth={(w, done) => {
                     setSidebarWidth(w);

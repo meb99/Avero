@@ -1,4 +1,5 @@
 import type { Language } from "./i18n";
+import type { Shortcuts } from "./shortcuts";
 
 export interface Settings {
   /** Bumped when a default changes for everyone, see loadSettings. */
@@ -11,6 +12,8 @@ export interface Settings {
   ghostOtherSide: boolean;
   /** Top and bottom side at once, the bottom mirrored beside the top. */
   bothSides: boolean;
+  /** Both sides in one view, or in two views side by side (zoomed on their own or in step). */
+  bothSidesMode: "together" | "separate" | "synced";
   dimUnselected: boolean;
   showVias: boolean;
   /** Copper tracks, for formats that have them. */
@@ -27,6 +30,8 @@ export interface Settings {
   autoSchematic: boolean;
   /** Reopen the boards, schematics and window of the last session on start. */
   restoreWorkspace: boolean;
+  /** Own key bindings over the defaults (see shortcuts.ts). */
+  shortcuts: Shortcuts;
   showSidebar: boolean;
   /** Sidebar width in CSS pixels, dragged at its left edge. */
   sidebarWidth: number;
@@ -53,6 +58,7 @@ export const DEFAULT_SETTINGS: Settings = {
   scroll: "pan",
   ghostOtherSide: false,
   bothSides: false,
+  bothSidesMode: "together",
   dimUnselected: true,
   showVias: false,
   showTraces: true,
@@ -64,6 +70,7 @@ export const DEFAULT_SETTINGS: Settings = {
   updateCheck: true,
   autoSchematic: true,
   restoreWorkspace: true,
+  shortcuts: {},
   showSidebar: true,
   sidebarWidth: 340,
   sidebarCollapsed: false,

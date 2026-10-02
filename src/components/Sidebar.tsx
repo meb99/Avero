@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "./Icons";
 import { Diagnosis } from "./Diagnosis";
 import { MultiSelection } from "./MultiSelection";
@@ -49,6 +49,9 @@ interface Props {
   multiParts: readonly number[];
   onMultiParts(parts: number[]): void;
   onOpenBga(part: number): void;
+  /** Shows a tab from outside (next measuring point by key). */
+  tabRequest?: { tab: "measure" | "details"; n: number } | null;
+  listFocus?: { listId: string; index: number; n: number } | null;
   /** Contents of the "Knowledge" tab. */
   knowledge: ReactNode;
   knowledgeCount: number;
@@ -91,6 +94,8 @@ export function Sidebar({
   multiParts,
   onMultiParts,
   onOpenBga,
+  tabRequest,
+  listFocus,
   width,
   onWidth,
   collapsed,
@@ -99,6 +104,9 @@ export function Sidebar({
   const asideRef = useRef<HTMLElement>(null);
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("details");
+  useEffect(() => {
+    if (tabRequest) setTab(tabRequest.tab);
+  }, [tabRequest?.n]);
   const [partFilter, setPartFilter] = useState("");
   const [netFilter, setNetFilter] = useState("");
 
@@ -264,6 +272,7 @@ export function Sidebar({
             error={notesError}
             selection={selection}
             units={settings.units}
+            listFocus={listFocus}
           />
         </div>
       )}
