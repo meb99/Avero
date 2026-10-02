@@ -461,6 +461,7 @@ kbd {
 /* Sidebar */
 
 .sidebar {
+  position: relative;
   width: var(--sidebar-w);
   flex-shrink: 0;
   display: flex;
@@ -468,6 +469,67 @@ kbd {
   background: var(--surface);
   border-left: 1px solid var(--border);
   min-height: 0;
+}
+
+/* Drag the left edge to make the sidebar wider or narrower. */
+.sidebar-resizer {
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 5;
+}
+
+.sidebar-resizer:hover,
+.sidebar-resizer:active {
+  background: linear-gradient(to right, transparent 3px, var(--accent) 3px, var(--accent) 5px, transparent 5px);
+}
+
+.tabs-row {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.tabs-row .tabs {
+  border-bottom: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-fold {
+  flex-shrink: 0;
+  align-self: center;
+  margin: 0 2px;
+}
+
+.sidebar.collapsed {
+  width: 38px;
+  align-items: center;
+  padding-top: 6px;
+}
+
+.tabs.vertical {
+  flex-direction: column;
+  border-bottom: 0;
+  overflow: visible;
+  margin-top: 6px;
+}
+
+.tabs.vertical button {
+  writing-mode: vertical-rl;
+  padding: 12px 8px;
+  flex: 0 0 auto;
+  border-bottom: 0;
+  border-right: 2px solid transparent;
+}
+
+.tabs.vertical button.on {
+  border-right-color: var(--accent);
 }
 
 .tabs {

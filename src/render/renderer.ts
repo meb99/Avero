@@ -145,18 +145,26 @@ interface Program {
   uniforms: Record<string, WebGLUniformLocation | null>;
 }
 
-interface InstanceSet {
+/** Colors (and line widths) of one look at the board: top and bottom side can be drawn together. */
+interface Slot {
   vao: WebGLVertexArrayObject;
   colors: WebGLBuffer;
   widths?: WebGLBuffer;
+}
+
+interface InstanceSet {
+  slots: Slot[];
   count: number;
 }
 
-interface FillSet {
-  vao: WebGLVertexArrayObject;
-  colors: WebGLBuffer;
-  count: number;
+/** One side drawn with its own camera and colors (`slot` of `setStyle`). */
+export interface RenderView {
+  camera: Camera;
+  slot: number;
 }
+
+/** Style slots: 0 for the side in view (or the top side when both are shown), 1 for the bottom side beside it. */
+export const SLOTS = 2;
 
 export class BoardRenderer {
   private readonly gl: WebGL2RenderingContext;
@@ -182,7 +190,7 @@ export class BoardRenderer {
   /** Part index per part outline segment, to expand per-part colors. */
   private partLineOwner = new Uint32Array(0);
   private boardLines?: InstanceSet;
-  private partFill?: FillSet;
+  private partFill?: InstanceSet;
   private partFillOwner = new Uint32Array(0);
   private boardFill?: { vao: WebGLVertexArrayObject; fans: [number, number][]; quadStart: number };
   /** Photo of the real board, drawn between the board area and the parts. */
@@ -257,28 +265,38 @@ export class BoardRenderer {
 
   private padSet(instances: Float32Array, count: number): InstanceSet {
     const gl = this.gl;
-    const vao = this.vao();
-    this.attrib(0, this.quad, 2, gl.FLOAT, false, 0);
-    this.attrib(1, this.boardBuffer(instances, gl.STATIC_DRAW), 4, gl.FLOAT, false, 1);
-    const colors = this.boardBuffer(new Uint8Array(count * 4), gl.DYNAMIC_DRAW);
-    this.attrib(2, colors, 4, gl.UNSIGNED_BYTE, true, 1);
+    const geometry = this.boardBuffer(instances, gl.STATIC_DRAW);
+    const slots: Slot[] = [];
+    for (let k = 0; k < SLOTS; k++) {
+      const vao = this.vao();
+      this.attrib(0, this.quad, 2, gl.FLOAT, false, 0);
+      this.attrib(1, geometry, 4, gl.FLOAT, false, 1);
+      const colors = this.boardBuffer(new Uint8Array(count * 4), gl.DYNAMIC_DRAW);
+      this.attrib(2, colors, 4, gl.UNSIGNED_BYTE, true, 1);
+      slots.push({ vao, colors });
+    }
     gl.bindVertexArray(null);
-    return { vao, colors, count };
+    return { slots, count };
   }
 
-  private lineSet(segments: Float32Array, count: number, color?: readonly number[], width = 1): InstanceSet {
+  private lineSet(segments: Float32Array, count: number, color?: readonly number[], width = 1, slotCount = SLOTS): InstanceSet {
     const gl = this.gl;
-    const vao = this.vao();
-    this.attrib(0, this.lineCorners, 2, gl.FLOAT, false, 0);
-    this.attrib(1, this.boardBuffer(segments, gl.STATIC_DRAW), 4, gl.FLOAT, false, 1);
+    const geometry = this.boardBuffer(segments, gl.STATIC_DRAW);
     const colorData = new Uint8Array(count * 4);
     if (color) for (let i = 0; i < count; i++) colorData.set(color, i * 4);
-    const colors = this.boardBuffer(colorData, gl.DYNAMIC_DRAW);
-    this.attrib(2, colors, 4, gl.UNSIGNED_BYTE, true, 1);
-    const widths = this.boardBuffer(new Float32Array(count).fill(width), gl.DYNAMIC_DRAW);
-    this.attrib(3, widths, 1, gl.FLOAT, false, 1);
+    const slots: Slot[] = [];
+    for (let k = 0; k < slotCount; k++) {
+      const vao = this.vao();
+      this.attrib(0, this.lineCorners, 2, gl.FLOAT, false, 0);
+      this.attrib(1, geometry, 4, gl.FLOAT, false, 1);
+      const colors = this.boardBuffer(colorData, gl.DYNAMIC_DRAW);
+      this.attrib(2, colors, 4, gl.UNSIGNED_BYTE, true, 1);
+      const widths = this.boardBuffer(new Float32Array(count).fill(width), gl.DYNAMIC_DRAW);
+      this.attrib(3, widths, 1, gl.FLOAT, false, 1);
+      slots.push({ vao, colors, widths });
+    }
     gl.bindVertexArray(null);
-    return { vao, colors, widths, count };
+    return { slots, count };
   }
 
   /** Uploads the geometry of a new board. */
@@ -309,7 +327,7 @@ export class BoardRenderer {
       traceWidths[i] = -Math.max(t.width, 0.01);
     });
     this.traces = this.lineSet(traceData, traces.length);
-    upload(gl, this.traces.widths!, traceWidths);
+    for (const slot of this.traces.slots) upload(gl, slot.widths!, traceWidths);
 
     const markerData: number[] = [];
     const markerOwner: number[] = [];
@@ -352,7 +370,7 @@ export class BoardRenderer {
     for (const path of board.outline) {
       for (let k = 0; k + 1 < path.length; k++) edge.push(path[k].x, path[k].y, path[k + 1].x, path[k + 1].y);
     }
-    this.boardLines = this.lineSet(new Float32Array(edge), edge.length / 4, palette.boardEdge, 1.6);
+    this.boardLines = this.lineSet(new Float32Array(edge), edge.length / 4, palette.boardEdge, 1.6, 1);
 
     // Part bodies as triangle fans flattened into triangles.
     const tri: number[] = [];
@@ -367,12 +385,17 @@ export class BoardRenderer {
     });
     this.partFillOwner = Uint32Array.from(triOwner);
     {
-      const vao = this.vao();
-      this.attrib(0, this.boardBuffer(new Float32Array(tri), gl.STATIC_DRAW), 2, gl.FLOAT, false, 0);
-      const colors = this.boardBuffer(new Uint8Array(triOwner.length * 4), gl.DYNAMIC_DRAW);
-      this.attrib(1, colors, 4, gl.UNSIGNED_BYTE, true, 0);
+      const geometry = this.boardBuffer(new Float32Array(tri), gl.STATIC_DRAW);
+      const slots: Slot[] = [];
+      for (let k = 0; k < SLOTS; k++) {
+        const vao = this.vao();
+        this.attrib(0, geometry, 2, gl.FLOAT, false, 0);
+        const colors = this.boardBuffer(new Uint8Array(triOwner.length * 4), gl.DYNAMIC_DRAW);
+        this.attrib(1, colors, 4, gl.UNSIGNED_BYTE, true, 0);
+        slots.push({ vao, colors });
+      }
       gl.bindVertexArray(null);
-      this.partFill = { vao, colors, count: triOwner.length };
+      this.partFill = { slots, count: triOwner.length };
     }
 
     // Board area: closed outline paths filled with the stencil invert trick,
@@ -395,26 +418,26 @@ export class BoardRenderer {
     }
   }
 
-  /** Uploads new element colors after a selection, side or theme change. */
-  setStyle(style: BoardStyle, palette: Palette): void {
+  /** Uploads new element colors after a selection, side or theme change, into one style slot. */
+  setStyle(style: BoardStyle, palette: Palette, slot = 0): void {
     const gl = this.gl;
     if (!this.pins || !this.testPoints || !this.partLines || !this.partFill || !this.boardLines) return;
-    upload(gl, this.pins.colors, style.pinColors);
-    upload(gl, this.testPoints.colors, style.testPointColors);
+    upload(gl, this.pins.slots[slot].colors, style.pinColors);
+    upload(gl, this.testPoints.slots[slot].colors, style.testPointColors);
     if (this.padMarks && this.padMarks.count > 0) {
       const colors = new Uint8Array(this.padMarkOwner.length * 4);
       this.padMarkOwner.forEach((part, i) => colors.set(style.padMarkColors.subarray(part * 4, part * 4 + 4), i * 4));
-      upload(gl, this.padMarks.colors, colors);
+      upload(gl, this.padMarks.slots[slot].colors, colors);
     }
     if (this.markers && this.markers.count > 0) {
       const colors = new Uint8Array(this.markerOwner.length * 4);
       this.markerOwner.forEach((part, i) => colors.set(style.markerColors.subarray(part * 4, part * 4 + 4), i * 4));
-      upload(gl, this.markers.colors, colors);
+      upload(gl, this.markers.slots[slot].colors, colors);
     }
     if (this.traces && this.traces.count > 0) {
       const colors = new Uint8Array(this.traceOrder.length * 4);
       this.traceOrder.forEach((ti, i) => colors.set(style.traceColors.subarray(ti * 4, ti * 4 + 4), i * 4));
-      upload(gl, this.traces.colors, colors);
+      upload(gl, this.traces.slots[slot].colors, colors);
     }
 
     const lineColors = new Uint8Array(this.partLineOwner.length * 4);
@@ -423,16 +446,16 @@ export class BoardRenderer {
       lineColors.set(style.partOutlineColors.subarray(part * 4, part * 4 + 4), i * 4);
       lineWidths[i] = style.partOutlineWidths[part];
     });
-    upload(gl, this.partLines.colors, lineColors);
-    upload(gl, this.partLines.widths!, lineWidths);
+    upload(gl, this.partLines.slots[slot].colors, lineColors);
+    upload(gl, this.partLines.slots[slot].widths!, lineWidths);
 
     const fillColors = new Uint8Array(this.partFillOwner.length * 4);
     this.partFillOwner.forEach((part, i) => fillColors.set(style.partFillColors.subarray(part * 4, part * 4 + 4), i * 4));
-    upload(gl, this.partFill.colors, fillColors);
+    upload(gl, this.partFill.slots[slot].colors, fillColors);
 
     const edge = new Uint8Array(this.boardLines.count * 4);
     for (let i = 0; i < this.boardLines.count; i++) edge.set(palette.boardEdge, i * 4);
-    upload(gl, this.boardLines.colors, edge);
+    upload(gl, this.boardLines.slots[0].colors, edge);
   }
 
   /**
@@ -485,7 +508,7 @@ export class BoardRenderer {
     if (count === 0) return;
     const buffers = this.buffers.length;
     const vaos = this.vaos.length;
-    const set = this.lineSet(segments, count, color, width);
+    const set = this.lineSet(segments, count, color, width, 1);
     // Kept apart from the board buffers so they can be swapped on their own.
     this.overlay = { set, buffers: this.buffers.splice(buffers), vaos: this.vaos.splice(vaos) };
   }
@@ -506,7 +529,12 @@ export class BoardRenderer {
     }
   }
 
-  draw(camera: Camera, palette: Palette, dpr: number): void {
+  /**
+   * Draws the board: each view with its own camera and style slot (one view
+   * normally; top and bottom side together in two). The overlay lines
+   * (ratsnest) are drawn last with `overlayCamera`.
+   */
+  draw(views: RenderView[], overlayCamera: Camera, palette: Palette, dpr: number): void {
     const gl = this.gl;
     const w = this.canvas.width;
     const h = this.canvas.height;
@@ -516,17 +544,41 @@ export class BoardRenderer {
     gl.clearStencil(0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
     if (!this.pins) return;
+    for (const view of views) this.drawView(view.camera, view.slot, palette, dpr);
+    if (this.overlay) {
+      const line = this.lineProgram;
+      gl.useProgram(line.program);
+      this.cameraUniforms(line, overlayCamera, dpr);
+      gl.bindVertexArray(this.overlay.set.slots[0].vao);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.overlay.set.count);
+    }
+    gl.bindVertexArray(null);
+  }
 
+  private cameraUniforms(p: Program, camera: Camera, dpr: number): void {
+    const gl = this.gl;
     const [a, b, c, d, e, f] = camera.matrix();
     // Column-major mat3: world -> device pixels.
-    const world = new Float32Array([a * dpr, b * dpr, 0, c * dpr, d * dpr, 0, e * dpr, f * dpr, 1]);
+    gl.uniformMatrix3fv(p.uniforms.u_world, false, new Float32Array([a * dpr, b * dpr, 0, c * dpr, d * dpr, 0, e * dpr, f * dpr, 1]));
+    gl.uniform2f(p.uniforms.u_viewport, this.canvas.width, this.canvas.height);
+    if (p.uniforms.u_dpr !== undefined) gl.uniform1f(p.uniforms.u_dpr, dpr);
+    if (p.uniforms.u_scale !== undefined) gl.uniform1f(p.uniforms.u_scale, camera.scale * dpr);
+  }
+
+  private drawView(camera: Camera, slot: number, palette: Palette, dpr: number): void {
+    const gl = this.gl;
+    const draw = (set: InstanceSet | undefined, k = slot) => {
+      if (!set || set.count === 0) return;
+      gl.bindVertexArray(set.slots[Math.min(k, set.slots.length - 1)].vao);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, set.count);
+    };
 
     // Board area.
     const fill = this.fillProgram;
     gl.useProgram(fill.program);
-    gl.uniformMatrix3fv(fill.uniforms.u_world, false, world);
-    gl.uniform2f(fill.uniforms.u_viewport, w, h);
+    this.cameraUniforms(fill, camera, dpr);
     if (this.boardFill && this.boardFill.fans.length > 0) {
+      gl.clear(gl.STENCIL_BUFFER_BIT);
       gl.bindVertexArray(this.boardFill.vao);
       gl.disableVertexAttribArray(1);
       gl.enable(gl.STENCIL_TEST);
@@ -546,62 +598,35 @@ export class BoardRenderer {
     if (this.photo) {
       const img = this.imageProgram;
       gl.useProgram(img.program);
-      gl.uniformMatrix3fv(img.uniforms.u_world, false, world);
-      gl.uniform2f(img.uniforms.u_viewport, w, h);
+      this.cameraUniforms(img, camera, dpr);
       gl.uniform1f(img.uniforms.u_opacity, this.photo.opacity);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.photo.texture);
       gl.uniform1i(img.uniforms.u_tex, 0);
       gl.bindVertexArray(this.photo.vao);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      gl.useProgram(fill.program);
     }
 
     const line = this.lineProgram;
     gl.useProgram(line.program);
-    gl.uniformMatrix3fv(line.uniforms.u_world, false, world);
-    gl.uniform2f(line.uniforms.u_viewport, w, h);
-    gl.uniform1f(line.uniforms.u_dpr, dpr);
-    gl.uniform1f(line.uniforms.u_scale, camera.scale * dpr);
-    if (this.traces && this.traces.count > 0) {
-      gl.bindVertexArray(this.traces.vao);
-      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.traces.count);
-    }
+    this.cameraUniforms(line, camera, dpr);
+    draw(this.traces);
 
     if (this.partFill) {
       gl.useProgram(fill.program);
-      gl.bindVertexArray(this.partFill.vao);
+      gl.bindVertexArray(this.partFill.slots[slot].vao);
       gl.drawArrays(gl.TRIANGLES, 0, this.partFill.count);
       gl.useProgram(line.program);
     }
 
-    for (const set of [this.boardLines, this.partLines]) {
-      if (set && set.count > 0) {
-        gl.bindVertexArray(set.vao);
-        gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, set.count);
-      }
-    }
+    draw(this.boardLines, 0);
+    draw(this.partLines);
 
     const pad = this.padProgram;
     gl.useProgram(pad.program);
-    gl.uniformMatrix3fv(pad.uniforms.u_world, false, world);
-    gl.uniform2f(pad.uniforms.u_viewport, w, h);
-    gl.uniform1f(pad.uniforms.u_scale, camera.scale * dpr);
+    this.cameraUniforms(pad, camera, dpr);
     gl.uniform1f(pad.uniforms.u_minRadius, 1.2 * dpr);
-    gl.uniform1f(pad.uniforms.u_dpr, dpr);
-    for (const set of [this.padMarks, this.pins, this.testPoints, this.markers]) {
-      if (set && set.count > 0) {
-        gl.bindVertexArray(set.vao);
-        gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, set.count);
-      }
-    }
-
-    if (this.overlay) {
-      gl.useProgram(line.program);
-      gl.bindVertexArray(this.overlay.set.vao);
-      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.overlay.set.count);
-    }
-    gl.bindVertexArray(null);
+    for (const set of [this.padMarks, this.pins, this.testPoints, this.markers]) draw(set);
   }
 
   private release(): void {

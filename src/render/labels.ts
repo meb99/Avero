@@ -59,10 +59,12 @@ export function drawLabels(
   palette: Palette,
   dpr: number,
   measured?: ReadonlyMap<number, NetStatus>,
+  /** False when a second side is drawn onto the same canvas. */
+  clear = true,
 ): void {
   const { width, height } = ctx.canvas;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, width, height);
+  if (clear) ctx.clearRect(0, 0, width, height);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -124,6 +126,9 @@ export function drawLabels(
     });
     // Bigger parts first; they get the prime spots.
     candidates.sort((a, b) => b.w * b.h - a.w * a.h);
+    // Parts on the highlighted net get a name tag in the highlight color.
+    const onNet = new Set<number>();
+    if (highlightedNet !== undefined) for (const pin of model.nets[highlightedNet].pins) onNet.add(model.pins[pin].part);
     const seen = new Set<number>();
     let placed = 0;
     ctx.lineWidth = 3;
@@ -134,7 +139,8 @@ export function drawLabels(
       const part = model.parts[i];
       const b = part.bounds;
       const c = camera.toScreen({ x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 });
-      let size = Math.min(Math.max(Math.min(w, h) * 0.35, 9), 18);
+      // Big chips get big names, as in FlexBV.
+      let size = Math.min(Math.max(Math.min(w, h) * 0.32, 9), 34);
       ctx.font = `600 ${size}px ${FONT}`;
       let tw = ctx.measureText(part.name).width;
       if (tw > w * 1.15 && size > 9) {
@@ -159,8 +165,15 @@ export function drawLabels(
         y = spots[0];
       }
       placed++;
+      if (onNet.has(i)) {
+        ctx.fillStyle = palette.labelNetBg;
+        ctx.fillRect(c.x - tw / 2 - 3, y - size / 2 - 2, tw + 6, size + 4);
+        ctx.fillStyle = palette.labelNetText;
+        ctx.fillText(part.name, c.x, y);
+        continue;
+      }
       ctx.strokeText(part.name, c.x, y);
-      ctx.fillStyle = palette.label;
+      ctx.fillStyle = size >= 16 ? palette.labelChip : palette.label;
       ctx.fillText(part.name, c.x, y);
     }
   }

@@ -9,6 +9,8 @@ export interface Settings {
   /** What two-finger scrolling / the mouse wheel does. Pinching always zooms. */
   scroll: "zoom" | "pan";
   ghostOtherSide: boolean;
+  /** Top and bottom side at once, the bottom mirrored beside the top. */
+  bothSides: boolean;
   dimUnselected: boolean;
   showVias: boolean;
   /** Copper tracks, for formats that have them. */
@@ -22,6 +24,10 @@ export interface Settings {
   updateCheck: boolean;
   autoSchematic: boolean;
   showSidebar: boolean;
+  /** Sidebar width in CSS pixels, dragged at its left edge. */
+  sidebarWidth: number;
+  /** Sidebar folded to a narrow strip of tabs. */
+  sidebarCollapsed: boolean;
   /** Width of the schematic panel as a share of the space next to the sidebar. */
   schematicShare: number;
   /** Allowed relative deviation from reference readings (0.1 = 10 %). */
@@ -42,6 +48,7 @@ export const DEFAULT_SETTINGS: Settings = {
   units: "mm",
   scroll: "pan",
   ghostOtherSide: false,
+  bothSides: false,
   dimUnselected: true,
   showVias: false,
   showTraces: true,
@@ -52,6 +59,8 @@ export const DEFAULT_SETTINGS: Settings = {
   updateCheck: true,
   autoSchematic: true,
   showSidebar: true,
+  sidebarWidth: 340,
+  sidebarCollapsed: false,
   schematicShare: 0.5,
   tolerance: 0.1,
   xzzKey: "",

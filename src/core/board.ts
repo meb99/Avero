@@ -7,6 +7,19 @@ export function visibleFrom(side: Side, view: ViewSide): boolean {
   return side === "both" || side === view;
 }
 
+/** The sides a net has pins or test points on. */
+export function netSides(model: BoardModel, net: number): ViewSide | "both" | undefined {
+  let top = false;
+  let bottom = false;
+  const n = model.nets[net];
+  for (const s of [...n.pins.map((i) => model.pins[i].side), ...n.testPoints.map((i) => model.testPoints[i].side)]) {
+    if (s !== "bottom") top = true;
+    if (s !== "top") bottom = true;
+    if (top && bottom) return "both";
+  }
+  return top ? "top" : bottom ? "bottom" : undefined;
+}
+
 /** A net reached through a series part (coil, fuse, 0 Ω resistor …). */
 export interface SeriesLink {
   net: number;

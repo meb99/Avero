@@ -10,6 +10,8 @@ export const en = {
 
   "toolbar.open": "Open",
   "toolbar.top": "Top",
+  "toolbar.sides": "Sides shown",
+  "toolbar.sidesHint": "Switch top and bottom on and off – both on shows both sides beside each other (bottom mirrored).",
   "toolbar.bottom": "Bottom",
   "toolbar.flip": "Flip board (Space)",
   "toolbar.rotate": "Rotate 90° (R)",
@@ -28,6 +30,10 @@ export const en = {
   "search.pins": "{n} pins",
 
   "tab.details": "Details",
+  "sidebar.label": "Sidebar",
+  "sidebar.collapse": "Fold the sidebar",
+  "sidebar.expand": "Unfold the sidebar",
+  "sidebar.resize": "Drag to change the width, double-click to reset it",
   "tab.parts": "Parts",
   "tab.nets": "Nets",
   "list.filter": "Filter…",

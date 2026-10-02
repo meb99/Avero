@@ -27,7 +27,10 @@ interface Props {
   sidebarVisible: boolean;
   onOpen(): void;
   onClose(): void;
-  onSide(side: ViewSide): void;
+  /** Oben / Unten switch on and off on their own; at least one stays on. */
+  onToggleSide(side: ViewSide): void;
+  onFlip(): void;
+  bothSides: boolean;
   onRotate(): void;
   onFit(): void;
   onZoom(factor: number): void;
@@ -68,20 +71,17 @@ export function Toolbar(p: Props) {
       {board && (
         <>
           <div className="toolbar-group">
-            <div className="segmented" role="radiogroup" aria-label={t("toolbar.flip")}>
-              <button role="radio" aria-checked={p.side === "top"} className={p.side === "top" ? "on" : ""} onClick={() => p.onSide("top")}>
-                {t("toolbar.top")}
-              </button>
-              <button
-                role="radio"
-                aria-checked={p.side === "bottom"}
-                className={p.side === "bottom" ? "on" : ""}
-                onClick={() => p.onSide("bottom")}
-              >
-                {t("toolbar.bottom")}
-              </button>
+            <div className="segmented" role="group" aria-label={t("toolbar.sides")} title={t("toolbar.sidesHint")}>
+              {(["top", "bottom"] as const).map((s) => {
+                const on = p.bothSides || p.side === s;
+                return (
+                  <button key={s} aria-pressed={on} className={on ? "on" : ""} onClick={() => p.onToggleSide(s)}>
+                    {t(s === "top" ? "toolbar.top" : "toolbar.bottom")}
+                  </button>
+                );
+              })}
             </div>
-            <button className="tool icon-only" onClick={() => p.onSide(p.side === "top" ? "bottom" : "top")} title={t("toolbar.flip")} aria-label={t("toolbar.flip")}>
+            <button className="tool icon-only" onClick={p.onFlip} title={t("toolbar.flip")} aria-label={t("toolbar.flip")}>
               <FlipIcon />
             </button>
             <button className="tool icon-only" onClick={p.onRotate} title={t("toolbar.rotate")} aria-label={t("toolbar.rotate")}>

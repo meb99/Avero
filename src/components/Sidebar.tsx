@@ -1,4 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
+import { ChevronLeftIcon, ChevronRightIcon } from "./Icons";
 import { Diagnosis } from "./Diagnosis";
 import type { ObdData } from "../knowledge/obdata";
 import type { BoardModel, ViewSide } from "../core/board";
@@ -41,7 +42,16 @@ interface Props {
   /** Contents of the "Knowledge" tab. */
   knowledge: ReactNode;
   knowledgeCount: number;
+  /** Width in CSS pixels; `done` once dragging ends (to store it). */
+  width: number;
+  onWidth(width: number, done: boolean): void;
+  collapsed: boolean;
+  onCollapsed(collapsed: boolean): void;
 }
+
+export const SIDEBAR_MIN = 260;
+export const SIDEBAR_MAX = 760;
+export const SIDEBAR_DEFAULT = 340;
 
 export function Sidebar({
   obdata,
@@ -66,7 +76,12 @@ export function Sidebar({
   onShowMarker,
   knowledge,
   knowledgeCount,
+  width,
+  onWidth,
+  collapsed,
+  onCollapsed,
 }: Props) {
+  const asideRef = useRef<HTMLElement>(null);
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("details");
   const [partFilter, setPartFilter] = useState("");
@@ -93,21 +108,79 @@ export function Sidebar({
   const selectedPart = model.selectedPart(selection);
   const selectedNet = model.selectedNet(selection);
 
-  return (
-    <aside className="sidebar">
-      <nav className="tabs" role="tablist">
-        {(["details", "parts", "nets", "layers", "knowledge", "measure", "diagnose"] as const)
-          .filter((id) => id !== "layers" || model.layers.length > 0)
-          .map((id) => (
-          <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? "on" : ""} onClick={() => setTab(id)}>
-            {t(`tab.${id}`)}
-            {id === "parts" && <span className="count">{model.parts.length}</span>}
-            {id === "nets" && <span className="count">{model.nets.length}</span>}
-            {id === "layers" && <span className="count">{model.layers.length}</span>}
-            {id === "knowledge" && knowledgeCount > 0 && <span className="count">{knowledgeCount}</span>}
-          </button>
+  const tabs = (["details", "parts", "nets", "layers", "knowledge", "measure", "diagnose"] as const).filter(
+    (id) => id !== "layers" || model.layers.length > 0,
+  );
+
+  // Folded: a narrow strip of upright tab names; a click opens that tab.
+  if (collapsed)
+    return (
+      <aside className="sidebar collapsed" aria-label={t("sidebar.label")}>
+        <button className="tool icon-only sidebar-fold" onClick={() => onCollapsed(false)} title={t("sidebar.expand")} aria-label={t("sidebar.expand")}>
+          <ChevronLeftIcon />
+        </button>
+        <nav className="tabs vertical" role="tablist" aria-orientation="vertical">
+          {tabs.map((id) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={tab === id}
+              className={tab === id ? "on" : ""}
+              onClick={() => {
+                setTab(id);
+                onCollapsed(false);
+              }}
+            >
+              {t(`tab.${id}`)}
+            </button>
           ))}
-      </nav>
+        </nav>
+      </aside>
+    );
+
+  const widthAt = (clientX: number) => {
+    const right = asideRef.current?.getBoundingClientRect().right ?? window.innerWidth;
+    return Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, right - clientX)));
+  };
+
+  return (
+    <aside className="sidebar" ref={asideRef} style={{ width }}>
+      <div
+        className="sidebar-resizer"
+        role="separator"
+        aria-orientation="vertical"
+        aria-valuenow={width}
+        title={t("sidebar.resize")}
+        onPointerDown={(e) => {
+          e.currentTarget.setPointerCapture(e.pointerId);
+          document.body.classList.add("resizing");
+        }}
+        onPointerMove={(e) => {
+          if (e.currentTarget.hasPointerCapture(e.pointerId)) onWidth(widthAt(e.clientX), false);
+        }}
+        onPointerUp={(e) => {
+          document.body.classList.remove("resizing");
+          e.currentTarget.releasePointerCapture(e.pointerId);
+          onWidth(widthAt(e.clientX), true);
+        }}
+        onDoubleClick={() => onWidth(SIDEBAR_DEFAULT, true)}
+      />
+      <div className="tabs-row">
+        <button className="tool icon-only sidebar-fold" onClick={() => onCollapsed(true)} title={t("sidebar.collapse")} aria-label={t("sidebar.collapse")}>
+          <ChevronRightIcon />
+        </button>
+        <nav className="tabs" role="tablist">
+          {tabs.map((id) => (
+            <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? "on" : ""} onClick={() => setTab(id)}>
+              {t(`tab.${id}`)}
+              {id === "parts" && <span className="count">{model.parts.length}</span>}
+              {id === "nets" && <span className="count">{model.nets.length}</span>}
+              {id === "layers" && <span className="count">{model.layers.length}</span>}
+              {id === "knowledge" && knowledgeCount > 0 && <span className="count">{knowledgeCount}</span>}
+            </button>
+          ))}
+        </nav>
+      </div>
 
       {tab === "knowledge" && <div className="panel scroll">{knowledge}</div>}
 

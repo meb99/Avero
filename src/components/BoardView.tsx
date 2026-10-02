@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from "react";
 import type { BoardModel, Hit, ViewSide } from "../core/board";
 import { Camera, lerpCamera } from "../core/camera";
+import { bottomCamera, boundsToLayout, dualLayout, fromLayout, sideAt, toLayout, type DualLayout } from "../core/dualView";
 import type { Bounds, Point, Selection } from "../core/types";
 import { useI18n } from "../i18n";
 import { drawLabels, drawMarkers, markerAt, type MarkerMark } from "../render/labels";
 import type { Palette, RGBA } from "../render/palette";
-import { BoardRenderer } from "../render/renderer";
+import { BoardRenderer, type RenderView } from "../render/renderer";
 import { computeStyle } from "../render/style";
 import type { Settings } from "../settings";
 import { formatLength } from "../format";
@@ -30,17 +31,20 @@ export interface BoardViewHandle {
   fit(): void;
   zoomBy(factor: number): void;
   panBy(dx: number, dy: number): void;
-  zoomTo(bounds: Bounds): void;
+  /** `side`: the side the bounds are on, when both sides are shown ("both": a net with pins on both). */
+  zoomTo(bounds: Bounds, side?: ViewSide | "both"): void;
   /** The current view with labels as a PNG. */
   snapshot(): Promise<Blob>;
   /** Screen position (relative to the view) of a board point. */
-  toScreen(p: Point): Point;
+  toScreen(p: Point, side?: ViewSide): Point;
   viewState(): ViewState;
 }
 
 interface Props {
   model: BoardModel;
   side: ViewSide;
+  /** Both sides at once: top as it is, bottom mirrored beside it. */
+  dual?: boolean;
   rotation: number;
   selection: Selection;
   settings: Settings;
@@ -72,6 +76,11 @@ interface Props {
   ref?: Ref<BoardViewHandle>;
 }
 
+/** One side as drawn: its camera, style slot and side. */
+interface SideView extends RenderView {
+  side: ViewSide;
+}
+
 interface Hover {
   x: number;
   y: number;
@@ -101,6 +110,7 @@ function hitToSelection(hit: Hit | undefined): Selection {
 export function BoardView({
   model,
   side,
+  dual = false,
   rotation,
   selection,
   settings,
@@ -133,6 +143,8 @@ export function BoardView({
   const stateRef = useRef({
     model,
     side,
+    dual,
+    layout: dualLayout(model.board.bounds) as DualLayout,
     selection,
     settings,
     palette,
@@ -149,27 +161,49 @@ export function BoardView({
   const initialViewRef = useRef(initialView);
   initialViewRef.current = initialView;
 
+  /** The sides on screen, each with its own camera. */
+  const sideViews = useCallback((): SideView[] => {
+    const s = stateRef.current;
+    const cam = cameraRef.current;
+    if (!s.dual) return [{ camera: cam, slot: 0, side: s.side }];
+    return [
+      { camera: cam, slot: 0, side: "top" },
+      { camera: bottomCamera(cam, s.layout), slot: 1, side: "bottom" },
+    ];
+  }, []);
+
+  /** Bounds of everything on screen: one side, or both together. */
+  const allBounds = useCallback((): Bounds => {
+    const s = stateRef.current;
+    return s.dual ? s.layout.bounds : s.model.board.bounds;
+  }, []);
+
   const draw = useCallback(() => {
     frameRef.current = 0;
     const renderer = rendererRef.current;
     const labels = labelRef.current?.getContext("2d");
     if (!renderer || !labels) return;
     const s = stateRef.current;
-    renderer.draw(cameraRef.current, s.palette, dprRef.current);
-    drawLabels(
-      labels,
-      s.model,
-      cameraRef.current,
-      s.side,
-      s.selection,
-      s.highlightedNet,
-      { partNames: s.settings.partNames, pinNumbers: s.settings.pinNumbers, netNames: s.settings.netNames },
-      s.palette,
-      dprRef.current,
-      s.measured,
+    const views = sideViews();
+    renderer.draw(views, cameraRef.current, s.palette, dprRef.current);
+    views.forEach((v, i) =>
+      drawLabels(
+        labels,
+        s.model,
+        v.camera,
+        v.side,
+        s.selection,
+        s.highlightedNet,
+        { partNames: s.settings.partNames, pinNumbers: s.settings.pinNumbers, netNames: s.settings.netNames },
+        s.palette,
+        dprRef.current,
+        s.measured,
+        i === 0,
+      ),
     );
-    drawMarkers(labels, cameraRef.current, s.markers, s.side, s.palette, dprRef.current, s.activeMarker, s.settings.ghostOtherSide);
-  }, []);
+    for (const v of views)
+      drawMarkers(labels, v.camera, s.markers, v.side, s.palette, dprRef.current, s.activeMarker, !s.dual && s.settings.ghostOtherSide);
+  }, [sideViews]);
 
   const requestDraw = useCallback(() => {
     if (!frameRef.current) frameRef.current = requestAnimationFrame(draw);
@@ -178,10 +212,10 @@ export function BoardView({
   const fitIfNeeded = useCallback(() => {
     const cam = cameraRef.current;
     if (needsFitRef.current && cam.width > 10 && cam.height > 10) {
-      cam.fit(stateRef.current.model.board.bounds);
+      cam.fit(allBounds());
       needsFitRef.current = false;
     }
-  }, []);
+  }, [allBounds]);
 
   const flyTo = useCallback(
     (target: Camera) => {
@@ -209,7 +243,7 @@ export function BoardView({
     () => ({
       fit() {
         const target = cameraRef.current.clone();
-        target.fit(stateRef.current.model.board.bounds);
+        target.fit(allBounds());
         flyTo(target);
       },
       zoomBy(factor: number) {
@@ -221,9 +255,18 @@ export function BoardView({
         cameraRef.current.pan(dx, dy);
         requestDraw();
       },
-      zoomTo(bounds: Bounds) {
+      zoomTo(bounds: Bounds, side?: ViewSide | "both") {
+        const s = stateRef.current;
         const target = cameraRef.current.clone();
-        target.fit(bounds, 80, 6);
+        const onLayout = (v: ViewSide) => boundsToLayout(bounds, v, s.layout);
+        const both = (a: Bounds, b: Bounds): Bounds => ({
+          minX: Math.min(a.minX, b.minX),
+          minY: Math.min(a.minY, b.minY),
+          maxX: Math.max(a.maxX, b.maxX),
+          maxY: Math.max(a.maxY, b.maxY),
+        });
+        const shown = !s.dual ? bounds : side === "both" ? both(onLayout("top"), onLayout("bottom")) : onLayout(side ?? s.side);
+        target.fit(shown, 80, 6);
         // Never zoom out to show a selection that is already comfortably visible.
         if (target.scale < cameraRef.current.scale) target.scale = Math.max(target.scale, cameraRef.current.scale * 0.5);
         flyTo(target);
@@ -241,15 +284,16 @@ export function BoardView({
           out.toBlob((b) => (b ? resolve(b) : reject(new Error("PNG encoding failed"))), "image/png"),
         );
       },
-      toScreen(p: Point) {
-        return cameraRef.current.toScreen(p);
+      toScreen(p: Point, side?: ViewSide) {
+        const s = stateRef.current;
+        return cameraRef.current.toScreen(s.dual ? toLayout(p, side ?? s.side, s.layout) : p);
       },
       viewState() {
         const { centerX, centerY, scale } = cameraRef.current;
         return { centerX, centerY, scale };
       },
     }),
-    [draw, flyTo, requestDraw],
+    [draw, flyTo, requestDraw, allBounds],
   );
 
   // Renderer lifetime.
@@ -298,6 +342,7 @@ export function BoardView({
   // New board: upload geometry and fit.
   useEffect(() => {
     stateRef.current.model = model;
+    stateRef.current.layout = dualLayout(model.board.bounds);
     const renderer = rendererRef.current;
     if (!renderer) return;
     renderer.setBoard(model, stateRef.current.palette);
@@ -308,36 +353,56 @@ export function BoardView({
     requestDraw();
   }, [model, requestDraw, fitIfNeeded, rendererVersion]);
 
-  // Orientation.
+  // Orientation. Both sides: the layout camera is never mirrored, the bottom side's own camera is.
   useEffect(() => {
     const cam = cameraRef.current;
-    cam.mirrored = side === "bottom";
+    cam.mirrored = !dual && side === "bottom";
     cam.rotation = rotation & 3;
     requestDraw();
-  }, [side, rotation, requestDraw]);
+  }, [side, dual, rotation, requestDraw]);
 
-  // Colors follow selection, side, options and theme.
+  // Switching between one and both sides shows everything.
+  const firstDual = useRef(true);
   useEffect(() => {
-    const style = computeStyle(
-      model,
-      side,
-      selection,
-      {
-        ghostOtherSide: settings.ghostOtherSide,
-        showVias: settings.showVias,
-        showTraces: settings.showTraces,
-        hiddenLayers,
-        pinnedNets,
-        dimUnselected: settings.dimUnselected,
-      },
-      palette,
-    );
-    Object.assign(stateRef.current, { model, side, selection, settings, palette, hiddenLayers, highlightedNet: style.highlightedNet });
+    stateRef.current.dual = dual;
+    if (firstDual.current) {
+      firstDual.current = false;
+      return;
+    }
+    const target = cameraRef.current.clone();
+    target.fit(allBounds());
+    cameraRef.current.centerX = target.centerX;
+    cameraRef.current.centerY = target.centerY;
+    cameraRef.current.scale = target.scale;
+    requestDraw();
+  }, [dual, allBounds, requestDraw]);
+
+  // Colors follow selection, side, options and theme; with both sides, one style slot each.
+  useEffect(() => {
+    const styleFor = (view: ViewSide) =>
+      computeStyle(
+        model,
+        view,
+        selection,
+        {
+          // The other side has its own place on screen.
+          ghostOtherSide: !dual && settings.ghostOtherSide,
+          showVias: settings.showVias,
+          showTraces: settings.showTraces,
+          hiddenLayers,
+          pinnedNets,
+          dimUnselected: settings.dimUnselected,
+        },
+        palette,
+      );
+    const style = styleFor(dual ? "top" : side);
+    Object.assign(stateRef.current, { model, side, dual, selection, settings, palette, hiddenLayers, highlightedNet: style.highlightedNet });
     // pinnedNets: colors of pins and tracks.
-    rendererRef.current?.setStyle(style, palette);
+    rendererRef.current?.setStyle(style, palette, 0);
+    if (dual) rendererRef.current?.setStyle(styleFor("bottom"), palette, 1);
     requestDraw();
     // namesRevision: net names live in the model and are drawn as labels.
-  }, [model, side, selection, settings, palette, hiddenLayers, pinnedNets, namesRevision, requestDraw, rendererVersion]);
+  }, [model, side, dual, selection, settings, palette, hiddenLayers, pinnedNets, namesRevision, requestDraw, rendererVersion]);
 
   useEffect(() => {
     Object.assign(stateRef.current, { markers, activeMarker });
@@ -371,18 +436,24 @@ export function BoardView({
     const renderer = rendererRef.current;
     if (!renderer) return;
     // Sides kept apart: only the lines between pins of the side in view.
-    const view = settings.ghostOtherSide ? undefined : side;
+    // Both sides shown: lines run between them, each pin where its side is drawn.
+    const view = dual || settings.ghostOtherSide ? undefined : side;
     const edges =
       ratsnestNet === undefined || model.nets[ratsnestNet].kind === "ground" ? [] : model.ratsnest(ratsnestNet, 2500, view);
+    const layout = dualLayout(model.board.bounds);
+    const at = (pin: number) => {
+      const p = model.pins[pin];
+      return dual ? toLayout(p, p.side === "bottom" ? "bottom" : "top", layout) : p;
+    };
     const segs = new Float32Array(edges.length * 4);
     edges.forEach(([a, b], i) => {
-      const p = model.pins[a];
-      const q = model.pins[b];
+      const p = at(a);
+      const q = at(b);
       segs.set([p.x, p.y, q.x, q.y], i * 4);
     });
     renderer.setOverlay(segs, palette.ratsnest, 1.4);
     requestDraw();
-  }, [model, ratsnestNet, palette, requestDraw, rendererVersion, side, settings.ghostOtherSide]);
+  }, [model, ratsnestNet, palette, requestDraw, rendererVersion, side, dual, settings.ghostOtherSide]);
 
   useEffect(() => {
     stateRef.current.measured = measured;
@@ -401,10 +472,21 @@ export function BoardView({
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
 
+  /** The side, its camera and the board point under a screen point. */
+  const placeAt = (p: Point): { side: ViewSide; camera: Camera; world: Point } => {
+    const cam = cameraRef.current;
+    const s = stateRef.current;
+    if (!s.dual) return { side: s.side, camera: cam, world: cam.toWorld(p) };
+    const q = cam.toWorld(p);
+    const side = sideAt(q, s.layout);
+    return { side, camera: side === "top" ? cam : bottomCamera(cam, s.layout), world: fromLayout(q, side, s.layout) };
+  };
+
   const hitAt = (p: Point): Hit | undefined => {
     const cam = cameraRef.current;
     const s = stateRef.current;
-    return s.model.hitTest(cam.toWorld(p), s.side, 4 / cam.scale, s.settings.showVias, s.settings.showTraces, s.hiddenLayers);
+    const at = placeAt(p);
+    return s.model.hitTest(at.world, at.side, 4 / cam.scale, s.settings.showVias, s.settings.showTraces, s.hiddenLayers);
   };
 
   const describe = (hit: Hit | undefined): string | null => {
@@ -471,7 +553,7 @@ export function BoardView({
       }
     }
 
-    setCursor(cam.toWorld(p));
+    setCursor(placeAt(p).world);
     if (e.pointerType === "mouse") {
       const text = describe(hitAt(p));
       setHover(text ? { x: p.x, y: p.y, text } : null);
@@ -490,12 +572,13 @@ export function BoardView({
         const hit = hitAt(p);
         const snapped =
           hit?.kind === "pin" ? m.pins[hit.pin] : hit?.kind === "testPoint" ? m.testPoints[hit.testPoint] : undefined;
-        onPointPick(snapped ? { x: snapped.x, y: snapped.y } : cameraRef.current.toWorld(p));
+        onPointPick(snapped ? { x: snapped.x, y: snapped.y } : placeAt(p).world);
         return;
       }
       const s = stateRef.current;
-      const shown = s.settings.ghostOtherSide ? s.markers : s.markers.filter((m) => m.side === s.side);
-      const marker = onMarkerClick && markerAt(cameraRef.current, shown, p.x, p.y);
+      const at = placeAt(p);
+      const shown = !s.dual && s.settings.ghostOtherSide ? s.markers : s.markers.filter((m) => m.side === at.side);
+      const marker = onMarkerClick && markerAt(at.camera, shown, p.x, p.y);
       if (marker) {
         onMarkerClick!(marker.id);
         return;

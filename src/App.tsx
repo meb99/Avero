@@ -14,7 +14,7 @@ import { StatusBar } from "./components/StatusBar";
 import { TabBar, type TabInfo } from "./components/TabBar";
 import { Toolbar } from "./components/Toolbar";
 import { Welcome } from "./components/Welcome";
-import { BoardModel, type ViewSide } from "./core/board";
+import { BoardModel, netSides, type ViewSide } from "./core/board";
 import type { Command } from "./core/commands";
 import { mapSelection } from "./core/compare";
 import { search } from "./core/search";
@@ -151,6 +151,20 @@ export function App() {
   const [model, setModel] = useState<BoardModel | null>(null);
   const [source, setSource] = useState<BoardSource | null>(null);
   const [side, setSide] = useState<ViewSide>("top");
+  const bothSides = settings.bothSides;
+  const setBothSides = (on: boolean) => setSettings((old) => (old.bothSides === on ? old : { ...old, bothSides: on }));
+  /** Oben / Unten are switched on and off on their own; at least one stays on. */
+  const toggleSide = (clicked: ViewSide) => {
+    if (bothSides) {
+      setBothSides(false);
+      setSide(clicked === "top" ? "bottom" : "top");
+    } else if (side !== clicked) setBothSides(true);
+  };
+  /** The other side alone. */
+  const flipSide = () => {
+    setBothSides(false);
+    setSide((s) => (s === "top" ? "bottom" : "top"));
+  };
   const [rotation, setRotation] = useState(0);
   const [selection, setSelection] = useState<Selection>(NONE);
   // Trace layers switched off, for the board they were chosen on.
@@ -436,10 +450,10 @@ export function App() {
       const m = boardMarkers?.find((x) => x.id === id);
       if (!m) return;
       setSide(m.side);
-      viewRef.current?.zoomTo({ minX: m.x - 150, minY: m.y - 150, maxX: m.x + 150, maxY: m.y + 150 });
+      viewRef.current?.zoomTo({ minX: m.x - 150, minY: m.y - 150, maxX: m.x + 150, maxY: m.y + 150 }, m.side);
       // Open the note once the view has flown there.
       window.setTimeout(() => {
-        const at = viewRef.current?.toScreen(m);
+        const at = viewRef.current?.toScreen(m, m.side);
         if (at) setEditingMarker({ id, at });
       }, 360);
     },
@@ -746,7 +760,7 @@ export function App() {
       if (where && where !== "both") setSide(where);
       if (zoom) {
         const bounds = model.selectionBounds(sel);
-        if (bounds) viewRef.current?.zoomTo(bounds);
+        if (bounds) viewRef.current?.zoomTo(bounds, where && where !== "both" ? where : sel.kind === "net" ? netSides(model, sel.net) : undefined);
       }
     },
     [model],
@@ -1022,7 +1036,7 @@ export function App() {
       requestAnimationFrame(() => schematicViewRef.current?.focusSearch());
     },
     palette: () => setDialog((d) => (d === "palette" ? null : d ?? "palette")),
-    flip: () => setSide((s) => (s === "top" ? "bottom" : "top")),
+    flip: flipSide,
     rotate: () => setRotation((r) => (r + 1) & 3),
     rotateBack: () => setRotation((r) => (r + 3) & 3),
     fit: () => viewRef.current?.fit(),
@@ -1195,7 +1209,7 @@ export function App() {
         }
         case " ":
           e.preventDefault();
-          setSide((s) => (s === "top" ? "bottom" : "top"));
+          flipSide();
           break;
         case "r":
           setRotation((r) => (r + 1) & 3);
@@ -1258,6 +1272,8 @@ export function App() {
   // --- layout --------------------------------------------------------------
 
   const [share, setShare] = useState(settings.schematicShare);
+  // Live while dragging; stored in the settings when the drag ends.
+  const [sidebarWidth, setSidebarWidth] = useState(settings.sidebarWidth);
   useEffect(() => setShare(settings.schematicShare), [settings.schematicShare]);
 
   const errorText = error
@@ -1277,7 +1293,9 @@ export function App() {
           sidebarVisible={settings.showSidebar}
           onOpen={() => void openDialog()}
           onClose={closeBoard}
-          onSide={setSide}
+          onToggleSide={toggleSide}
+          onFlip={flipSide}
+          bothSides={bothSides}
           onRotate={() => setRotation((r) => (r + 1) & 3)}
           onFit={() => viewRef.current?.fit()}
           onZoom={(f) => viewRef.current?.zoomBy(f)}
@@ -1315,6 +1333,7 @@ export function App() {
                     ref={viewRef}
                     model={model}
                     side={side}
+                    dual={bothSides}
                     rotation={rotation}
                     selection={selection}
                     settings={settings}
@@ -1327,7 +1346,7 @@ export function App() {
                     onMarkerClick={openMarker}
                     measured={measured}
                     initialView={initialView}
-                    photo={photoLayer}
+                    photo={bothSides ? undefined : photoLayer}
                     onPointPick={
                       placingMarker ? placeMarker : aligning && aligning.photoPoints.length >= 2 ? pickBoardPoint : undefined
                     }
@@ -1484,6 +1503,13 @@ export function App() {
                   onShowMarker={showMarker}
                   obdata={boardObdata?.obdata ?? null}
                   knowledgeCount={knowledgeForBoard}
+                  width={sidebarWidth}
+                  onWidth={(w, done) => {
+                    setSidebarWidth(w);
+                    if (done) setSettings((old) => ({ ...old, sidebarWidth: w }));
+                  }}
+                  collapsed={settings.sidebarCollapsed}
+                  onCollapsed={(c) => setSettings((old) => ({ ...old, sidebarCollapsed: c }))}
                   knowledge={
                     <KnowledgePanel
                       model={model}

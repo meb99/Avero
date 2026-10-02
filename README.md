@@ -22,9 +22,9 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - Liest Test_Link `.brd` (auch verschleierte Dateien), BRD2, Honhan `.bdv`, ASUS `.asc` und `.fz`, BoardViewer `.bvr` / BVR3, GenCAD, Panel-CAD, IBM `.cst`, XinZhiZao `.pcb`, KiCad `.kicad_pcb` und EAGLE / Fusion 360 `.brd` (XML).
 - XinZhiZao- und die meisten ASUS-`.fz`-Dateien sind verschlüsselt: Die Schlüssel trägst du einmal in den Einstellungen ein (Avero liefert sie nicht mit, genau wie OpenBoardView). XZZ-Dateien öffnen sich auch ohne Schlüssel mit allem, was nicht verschlüsselt ist (Umriss, Netze, Testpunkte); nur die Bauteile brauchen ihn. Unverschlüsselte `.fz`-Dateien öffnen sich direkt.
 - Flüssige Darstellung per GPU (WebGL 2), auch bei zehntausenden Pins.
-- Oberseite / Unterseite (gespiegelt wie ein umgedrehtes Board), Drehen in 90°-Schritten.
+- Oberseite / Unterseite (gespiegelt wie ein umgedrehtes Board), Drehen in 90°-Schritten. „Oben“ und „Unten“ schalten sich einzeln: beide an zeigt **beide Seiten zugleich** wie in FlexBV – die Unterseite gespiegelt neben (bei breiten Boards unter) der Oberseite, Verbindungslinien eines Netzes laufen über beide Seiten, Klicks wählen auf der Seite, auf die man klickt.
 - Klick auf einen Pin hebt das ganze Netz hervor. Pins desselben Netzes auf der anderen Seite bleiben schwach sichtbar, damit man sieht, wohin das Signal geht.
-- Pin 1 ist eckig gezeichnet, Versorgungsnetze rot, Masse dunkel, Testpunkte als Raute.
+- Pin 1 ist eckig gezeichnet, Versorgungsnetze rot, Masse dunkel, Testpunkte als Raute. Farben nach dem Vorbild von FlexBV: dunkel mit fast schwarzem Board, grauen Bauteilen, großen lila Chip-Namen, das gewählte Netz knallgelb mit weißen Verbindungslinien und gelben Namensschildern an allen Bauteilen des Netzes; hell mit weißem Board, dunklen Umrissen und Magenta statt blassem Gelb.
 - Suche nach Bauteil, Netz oder Pin: `U3000`, `PP3V3`, `U3000.21`, `U1000 A12`.
 - **Befehlspalette** (`⌘K`): jeder Befehl, jedes Bauteil, Netz und jeder Pin in einer Liste.
 - **Verbindungslinien** (Ratsnest) zwischen den Pins des gewählten Netzes, jeweils zum nächsten Nachbarn.
@@ -60,7 +60,7 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - **Referenz und Reparaturfälle**: Werte vom guten Board als Referenz, jedes Gerät auf dem Tisch als eigener Fall. Abweichungen über der Toleranz (Standard ± 10 %) werden rot markiert, auch als Punkt direkt an den Pins auf dem Board. Referenzwerte gelten für jedes Board mit derselben Nummer – das nächste gleiche Board wird automatisch verglichen. „Als Referenz übernehmen“ macht die Messwerte eines reparierten, funktionierenden Boards zur Referenz.
 - **Reparaturverlauf pro Gerät**: Jeder Fall hat Status (in Arbeit, wartet auf Teile, repariert, nicht reparierbar), Gerät, Seriennummer, Kunde, Befund und Fotos; alle Fälle eines Boards stehen mit Datum und Status in einer Liste. **Bericht als PDF** für den Kunden: Gerätedaten, Befund, Messwerte gegen Referenz mit Bewertung, Fotos.
 - **Notizen** pro Board und pro Fall, Export/Import als JSON (z. B. Referenzwerte weitergeben).
-- **Foto des echten Boards** unter der Boardview (Darstellung → „Foto dieser Seite hinzufügen…"): zwei markante Punkte im Foto anklicken, dann dieselben Punkte auf dem Board (Pins rasten ein) – das Foto liegt danach deckungsgleich darunter, mit einstellbarer Deckkraft, getrennt für Ober- und Unterseite. Mit „Daneben“ steht das Foto unverändert neben dem Board: ein Klick auf ein Bauteil im Foto wählt es auf dem Board aus und springt hin, das Bauteil unter dem Mauszeiger wird mit Namen angezeigt, und was auf dem Board ausgewählt ist (Bauteil, Pin, alle Pins eines Netzes), wird im Foto markiert.
+- **Foto des echten Boards** unter der Boardview (Darstellung → „Foto dieser Seite hinzufügen…"): zwei markante Punkte im Foto anklicken, dann dieselben Punkte auf dem Board (Pins rasten ein) – das Foto liegt danach deckungsgleich darunter, mit einstellbarer Deckkraft, getrennt für Ober- und Unterseite. Liegt neben dem Board ein PDF mit einem Bild der Platine (wie bei manchen Boardview-Paketen), übernimmt Avero die angezeigte Seite mit einem Klick als Foto und legt es selbst auf den Board-Umriss – ohne Datei auswählen, ohne Punkte klicken. Mit „Daneben“ steht das Foto unverändert neben dem Board: ein Klick auf ein Bauteil im Foto wählt es auf dem Board aus und springt hin, das Bauteil unter dem Mauszeiger wird mit Namen angezeigt, und was auf dem Board ausgewählt ist (Bauteil, Pin, alle Pins eines Netzes), wird im Foto markiert.
 - **Inhaltssuche über die ganze Bibliothek** (Bibliothek → „Inhalt“): Schaltpläne werden nach Text durchsucht, Boardviews nach Bauteilen und Netzen. Alles wird einmal indiziert; ein Klick auf einen Treffer öffnet Board und Schaltplan und springt zur Fundstelle.
 - Gespeichert wird lokal unter `~/Library/Application Support/dev.meb99.avero/boards/`, eine Datei pro Board. Alle Dateien desselben Boards (etwa `.brd` und `.bdv`) teilen sich die Messwerte über die Boardnummer.
 
@@ -97,7 +97,7 @@ Ein Demo-Board mit passendem Demo-Schaltplan ist eingebaut, damit man alles ohne
 | Tab wechseln | `⌘1` … `⌘9`, `⌃⇥` / `⌃⇧⇥` |
 | Öffnen (Boardview oder PDF) | `⌘O` |
 | Schaltplan ein/aus | `⌘E` |
-| Seitenleiste ein/aus | `⌘I` |
+| Seitenleiste ein/aus | `⌘I` (Breite am linken Rand ziehen, Pfeil klappt sie zur schmalen Reiterleiste ein) |
 | Bibliothek | `⌘L` |
 | Schaltplan: Seite zurück/vor | `Bild ↑` / `Bild ↓` |
 | Schaltplan: Fundstelle zurück/vor | `[` / `]` |

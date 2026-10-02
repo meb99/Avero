@@ -12,6 +12,8 @@ export const de: Record<MessageKey, string> = {
 
   "toolbar.open": "Öffnen",
   "toolbar.top": "Oben",
+  "toolbar.sides": "Angezeigte Seiten",
+  "toolbar.sidesHint": "Oben und Unten einzeln ein- und ausschalten – beide an zeigt beide Seiten nebeneinander (Unterseite gespiegelt).",
   "toolbar.bottom": "Unten",
   "toolbar.flip": "Board umdrehen (Leertaste)",
   "toolbar.rotate": "Um 90° drehen (R)",
@@ -30,6 +32,10 @@ export const de: Record<MessageKey, string> = {
   "search.pins": "{n} Pins",
 
   "tab.details": "Details",
+  "sidebar.label": "Seitenleiste",
+  "sidebar.collapse": "Seitenleiste einklappen",
+  "sidebar.expand": "Seitenleiste ausklappen",
+  "sidebar.resize": "Ziehen ändert die Breite, Doppelklick setzt sie zurück",
   "tab.parts": "Bauteile",
   "tab.nets": "Netze",
   "list.filter": "Filtern…",

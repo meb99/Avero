@@ -33,7 +33,7 @@ export interface BoardStyle {
 
 const GHOST_ALPHA = 0.12;
 const FAR_HIGHLIGHT_ALPHA = 0.45;
-const DIM_ALPHA = 0.4;
+const DIM_ALPHA = 0.55;
 const TRACE_DIM_ALPHA = 0.22;
 const INNER_ALPHA = 0.55;
 const FAR_TRACE_ALPHA = 0.35;
