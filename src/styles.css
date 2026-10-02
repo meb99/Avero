@@ -3679,3 +3679,40 @@ button.danger {
   align-items: center;
   gap: 6px;
 }
+
+.value-with-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.meter-take {
+  font-size: 13px;
+  min-width: 22px;
+}
+
+.meter-settings .settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.meter-settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.meter-settings label.check {
+  flex-direction: row;
+  align-items: center;
+}
+
+.meter-commands {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}

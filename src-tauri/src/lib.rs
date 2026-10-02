@@ -8,6 +8,7 @@ mod donors;
 mod duplicates;
 mod import;
 mod library;
+mod meter;
 mod notes;
 mod updater;
 
@@ -395,6 +396,37 @@ fn datasheets_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(data_dir(app)?.join("datasheets"))
 }
 
+/// Serial ports a multimeter may be on.
+#[tauri::command]
+fn meter_ports() -> Result<Vec<meter::PortInfo>, String> {
+    meter::ports()
+}
+
+#[tauri::command]
+async fn meter_connect(app: tauri::AppHandle, port: String, baud: u32) -> Result<(), String> {
+    use tauri::Manager;
+    tauri::async_runtime::spawn_blocking(move || meter::connect(&app.state::<meter::Meter>(), &port, baud))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn meter_disconnect(state: tauri::State<'_, meter::Meter>) {
+    meter::disconnect(&state);
+}
+
+/// Sends SCPI commands in order; returns the answer of each query.
+#[tauri::command]
+async fn meter_send(app: tauri::AppHandle, commands: Vec<String>) -> Result<Vec<Option<String>>, String> {
+    use tauri::Manager;
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<meter::Meter>();
+        commands.iter().map(|c| meter::send(&state, c)).collect()
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Text recognised on the scanned pages of a schematic, kept so a PDF is read once.
 #[tauri::command]
 fn load_ocr(app: tauri::AppHandle, key: String) -> Result<Option<String>, String> {
@@ -624,6 +656,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(PendingPaths::default())
+        .manage(meter::Meter::default())
         .invoke_handler(tauri::generate_handler![
             open_board,
             open_demo,
@@ -657,6 +690,10 @@ pub fn run() {
             import_datasheet,
             import_knowledge_images,
             load_ocr,
+            meter_ports,
+            meter_connect,
+            meter_disconnect,
+            meter_send,
             save_ocr,
             remove_datasheet,
             backup_restore,

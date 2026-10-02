@@ -3,6 +3,7 @@ import { useI18n, type MessageKey } from "../i18n";
 import { compare, conditionsFit, formatValue, parseValue, QUANTITIES, type HistoryEntry, type Quantity, type Reading, type Value } from "../workbench/measure";
 import { conditionsText } from "./Conditions";
 import { activeCase, addCase, setReading, setValue, type BoardNotes, type Target } from "../workbench/notes";
+import { METER_VALUE_EVENT, readMeter, useMeter } from "../workbench/meter";
 
 interface Props {
   net: string;
@@ -36,6 +37,25 @@ export function ValueInput({
   const [text, setText] = useState(shown);
   const [invalid, setInvalid] = useState(false);
   const editing = useRef(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const meter = useMeter();
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  // A reading from the multimeter (button here, or the pedal while focused).
+  const take = (v: Value) => {
+    editing.current = false;
+    setInvalid(false);
+    setText(formatValue(v, quantity, lang));
+    onChangeRef.current(v);
+  };
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    const listener = (e: Event) => take((e as CustomEvent<Value>).detail);
+    el.addEventListener(METER_VALUE_EVENT, listener);
+    return () => el.removeEventListener(METER_VALUE_EVENT, listener);
+  });
 
   useEffect(() => {
     if (!editing.current) setText(shown);
@@ -57,8 +77,10 @@ export function ValueInput({
     setText(formatValue(parsed, quantity, lang));
   };
 
-  return (
+  const input = (
     <input
+      ref={inputRef}
+      data-quantity={quantity}
       className={`value-input${invalid ? " invalid" : ""}${status ? ` status-${status}` : ""}`}
       value={text}
       aria-label={label}
@@ -81,6 +103,21 @@ export function ValueInput({
         }
       }}
     />
+  );
+  if (!meter.connected) return input;
+  return (
+    <span className="value-with-meter">
+      {input}
+      <button
+        className="tool icon-only meter-take"
+        disabled={meter.busy}
+        title={t("meter.take")}
+        aria-label={`${label}: ${t("meter.take")}`}
+        onClick={() => void readMeter(quantity).then(take, () => {})}
+      >
+        ⇣
+      </button>
+    </span>
   );
 }
 

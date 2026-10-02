@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "../i18n";
 import type { Settings } from "../settings";
 import { CloseIcon } from "./Icons";
+import { MeterSettings } from "./MeterSettings";
 
 export function Dialog({
   title,
@@ -151,6 +152,8 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
       <h3>{t("keys.title")}</h3>
       <p className="muted setting-hint">{t("keys.hint")}</p>
       <ShortcutEditor value={settings.shortcuts} onChange={(shortcuts) => set("shortcuts", shortcuts)} />
+      <h3>{t("meter.title")}</h3>
+      <MeterSettings value={settings.meter} onChange={(meter) => set("meter", meter)} />
       <h3>{t("backup.title")}</h3>
       <p className="muted setting-hint">{t("backup.hint")}</p>
       <BackupButtons />

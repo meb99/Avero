@@ -10,6 +10,8 @@ import { DiffView } from "./components/DiffView";
 import { DonorView } from "./components/DonorView";
 import { DatasheetPane } from "./components/DatasheetPane";
 import { CameraPane } from "./components/CameraPane";
+import { connectMeter, meterState, METER_VALUE_EVENT, readMeter } from "./workbench/meter";
+import type { Quantity } from "./workbench/measure";
 import { newDatasheetId, parseDatasheets, partNumbers, type Datasheet } from "./workbench/datasheets";
 import { CommandPalette } from "./components/CommandPalette";
 import { HelpDialog, SettingsDialog } from "./components/Dialogs";
@@ -1075,12 +1077,27 @@ export function App() {
     switch (action) {
       case "nextPoint":
         return nextListPoint();
-      case "commitNext":
+      case "commitNext": {
+        // An empty value field with a multimeter connected: its reading goes in first.
+        const field = document.activeElement;
+        const quantity = field instanceof HTMLInputElement && field.classList.contains("value-input") ? (field.dataset.quantity as Quantity | undefined) : undefined;
+        if (quantity && meterState().connected && field instanceof HTMLInputElement && !field.value.trim()) {
+          void readMeter(quantity).then(
+            (v) => {
+              field.dispatchEvent(new CustomEvent(METER_VALUE_EVENT, { detail: v }));
+              field.blur();
+              window.setTimeout(() => shortcutRef.current("nextPoint"), 50);
+            },
+            (e) => setToast(t("meter.failed", { message: String(e) })),
+          );
+          return;
+        }
         // Leaving the field saves its value; then on to the next point.
         (document.activeElement as HTMLElement | null)?.blur();
         // The current handler, which sees the value just saved.
         window.setTimeout(() => shortcutRef.current("nextPoint"), 50);
         return;
+      }
       case "flip":
         return flipSide();
       case "bothSides":
@@ -1152,6 +1169,14 @@ export function App() {
       setToast(t("sheet.failed", { message: String(e) }));
     }
   };
+
+  // --- multimeter -------------------------------------------------------------------
+  // Connect on start when set up; a meter that is not plugged in stays quiet.
+  useEffect(() => {
+    const m = settings.meter;
+    if (m?.autoConnect && m.port && !meterState().connected) void connectMeter(m).catch(() => {});
+    // Once, on start.
+  }, []);
 
   // --- camera ---------------------------------------------------------------------
   const openCamera = () => {
