@@ -1934,6 +1934,59 @@ button.danger {
   accent-color: var(--accent);
 }
 
+/* Photo beside the board */
+
+.photo-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.photo-pane .compare-name {
+  flex-shrink: 0;
+}
+
+.photo-pane-hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+
+.photo-pane-frame {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: #161616;
+}
+
+.photo-pane-frame canvas {
+  display: block;
+  touch-action: none;
+}
+
+.photo-pane-empty {
+  margin: auto;
+  max-width: 360px;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.photo-pane-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.photo-bar button.on {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
 /* Board comparison */
 
 .compare-pane {

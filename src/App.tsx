@@ -3,6 +3,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { invoke } from "@tauri-apps/api/core";
 import { BoardView, type BoardViewHandle, type PhotoLayer, type ViewState } from "./components/BoardView";
 import { PhotoBoardHint, PhotoPointDialog } from "./components/PhotoAlign";
+import { PhotoPane } from "./components/PhotoPane";
 import { CommandPalette } from "./components/CommandPalette";
 import { HelpDialog, SettingsDialog } from "./components/Dialogs";
 import { LibraryDialog, type LibraryDrop } from "./components/Library";
@@ -237,6 +238,8 @@ export function App() {
   const aligningRef = useRef(aligning);
   aligningRef.current = aligning;
   const [showPhoto, setShowPhoto] = useState(true);
+  // The aligned photo beside the board: click a part on it to select it.
+  const [photoPane, setPhotoPane] = useState(false);
   const storedPhoto = notes?.photos?.[side];
   const [photoImage, setPhotoImage] = useState<{ file: string; image: HTMLCanvasElement } | null>(null);
   const photoFile = storedPhoto?.file;
@@ -1021,6 +1024,7 @@ export function App() {
       { id: "marker", label: t("marker.place"), shortcut: "M", enabled: board && notes !== null, run: () => setPlacingMarker(true) },
       { id: "photo-add", label: t("photo.add"), enabled: board && notes !== null, run: a.addPhoto },
       { id: "photo-toggle", label: t("photo.toggle"), enabled: !!storedPhoto, run: a.togglePhoto },
+      { id: "photo-pane", label: t("photo.paneCommand"), enabled: !!model, run: () => setPhotoPane((v) => !v) },
       { id: "photo-realign", label: `${t("photo.title")}: ${t("photo.realign")}`, enabled: !!storedPhoto, run: () => storedPhoto && void startAlignment(storedPhoto.file, false) },
       { id: "photo-remove", label: `${t("photo.title")}: ${t("photo.remove")}`, enabled: !!storedPhoto, run: removePhoto },
       { id: "new-tab", label: t("tabs.new"), shortcut: "⌘T", run: a.newTab },
@@ -1331,6 +1335,43 @@ export function App() {
                     </div>
                   </>
                 )}
+                {model && photoPane && !aligning && (
+                  <>
+                    <Splitter
+                      container={workAreaRef}
+                      share={share}
+                      onDrag={setShare}
+                      onDone={(s) => setSettings((old) => ({ ...old, schematicShare: s }))}
+                    />
+                    <div className="compare-pane" style={{ width: `${share * 100}%` }}>
+                      {storedPhoto && photoImage?.file === storedPhoto.file ? (
+                        <PhotoPane
+                          image={photoImage.image}
+                          matrix={storedPhoto.matrix}
+                          model={model}
+                          side={side}
+                          selection={selection}
+                          onSelect={select}
+                          onClose={() => setPhotoPane(false)}
+                        />
+                      ) : (
+                        <div className="photo-pane-empty">
+                          <p>{t(side === "top" ? "photo.noneTop" : "photo.noneBottom")}</p>
+                          <div className="photo-pane-actions">
+                            {notes && (
+                              <button className="small primary" onClick={() => void addPhoto()}>
+                                {t("photo.add")}
+                              </button>
+                            )}
+                            <button className="small" onClick={() => setPhotoPane(false)}>
+                              {t("photo.paneClose")}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
                 {schematic && showSchematic && (
                   <>
                     {model && (
@@ -1469,6 +1510,9 @@ export function App() {
               />
               <button className="small" onClick={() => setShowPhoto((v) => !v)}>
                 {showPhoto ? t("photo.hide") : t("photo.show")}
+              </button>
+              <button className={photoPane ? "small on" : "small"} onClick={() => setPhotoPane((v) => !v)} title={t("photo.paneHint")}>
+                {t("photo.pane")}
               </button>
               <button className="small" onClick={() => void startAlignment(storedPhoto.file, false)}>
                 {t("photo.realign")}

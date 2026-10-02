@@ -31,8 +31,16 @@ export function VirtualList<T>({ items, rowHeight, render, scrollTo }: Props<T>)
     }
   }, [scrollTo, rowHeight]);
 
-  const first = Math.max(0, Math.floor(scrollTop / rowHeight) - 5);
-  const last = Math.min(items.length, Math.ceil((scrollTop + height) / rowHeight) + 5);
+  // A shorter list (rows deleted, a filter) moves the scroll position without
+  // always firing a scroll event: read it again so rows never go missing.
+  useEffect(() => {
+    const el = ref.current;
+    if (el && el.scrollTop !== scrollTop) setScrollTop(el.scrollTop);
+  }, [items.length]);
+
+  const top = Math.min(scrollTop, Math.max(0, items.length * rowHeight - height));
+  const first = Math.max(0, Math.floor(top / rowHeight) - 5);
+  const last = Math.min(items.length, Math.ceil((top + height) / rowHeight) + 5);
   const rows: ReactNode[] = [];
   for (let i = first; i < last; i++) {
     rows.push(

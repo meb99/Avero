@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { alignPhoto, applyAffine, parsePhoto, type Affine } from "./photo";
+import { BoardModel } from "../core/board";
+import { testBoard } from "../core/testBoard";
+import { alignPhoto, applyAffine, invertAffine, partAtPoint, parsePhoto, photoScale, type Affine } from "./photo";
 
 // Ground truth: scale 0.5 mil/px, rotated 30°, shifted.
 function truth(side: "top" | "bottom"): Affine {
@@ -44,5 +46,39 @@ describe("parsePhoto", () => {
     });
     expect(parsePhoto({ file: "/a.jpg", matrix: [1, 0, 0] })).toBeUndefined();
     expect(parsePhoto(null)).toBeUndefined();
+  });
+});
+
+describe("invertAffine", () => {
+  it("maps board points back to the photo", () => {
+    const m = truth("top");
+    const inv = invertAffine(m)!;
+    const p = { x: 0.37, y: 0.21 };
+    const back = applyAffine(inv, applyAffine(m, p));
+    expect(back.x).toBeCloseTo(p.x, 9);
+    expect(back.y).toBeCloseTo(p.y, 9);
+    expect(photoScale(m)).toBeCloseTo(0.5, 9);
+  });
+
+  it("refuses a degenerate matrix", () => {
+    expect(invertAffine([0, 0, 0, 0, 1, 1])).toBeNull();
+  });
+});
+
+describe("partAtPoint", () => {
+  const model = new BoardModel(testBoard());
+
+  it("finds the part under a point on the visible side", () => {
+    expect(partAtPoint(model, { x: 120, y: 100 }, "top", 20).inside).toBe(model.findPart("R1"));
+    // U10 is on the bottom: not on a photo of the top side.
+    expect(partAtPoint(model, { x: 450, y: 250 }, "top", 20).inside).toBeUndefined();
+    expect(partAtPoint(model, { x: 450, y: 250 }, "bottom", 20).inside).toBe(model.findPart("U10"));
+  });
+
+  it("falls back to the closest part when the click is a little off", () => {
+    const hit = partAtPoint(model, { x: 180, y: 100 }, "top", 20);
+    expect(hit.inside).toBeUndefined();
+    expect(hit.near).toBe(model.findPart("R1"));
+    expect(partAtPoint(model, { x: 300, y: 400 }, "top", 20)).toEqual({ inside: undefined, near: undefined });
   });
 });

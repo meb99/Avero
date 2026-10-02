@@ -278,6 +278,18 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
     return filterEntries((library.scan?.entries ?? []).filter(inBranch), query);
   }, [library.scan, query, branch]);
 
+  // After deleting or moving boards the chosen category may be gone or empty:
+  // fall back to everything instead of an empty list.
+  useEffect(() => {
+    if (!branch || !library.scan) return;
+    const b = branch.toLowerCase();
+    const left =
+      branch === UNSORTED
+        ? all.some((e) => !isSorted(e.folder))
+        : all.some((e) => e.folder.toLowerCase() === b || e.folder.toLowerCase().startsWith(`${b}/`));
+    if (!left) setBranch("");
+  }, [library.scan]);
+
   // Only files in Avero's own folder; they go to the Trash, not away for good.
   const remove = async (e: LibraryEntry) => {
     const paths = [...e.boards, ...e.schematics, ...e.unsupported].map((f) => f.path);
@@ -542,8 +554,6 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
         />
       ) : (library.scan?.entries.length ?? 0) === 0 && !scanning ? (
         <p className="library-empty">{t("library.empty")}</p>
-      ) : entries.length === 0 && !scanning ? (
-        <p className="library-empty">{t("library.noMatch")}</p>
       ) : (
         <div className="library-main">
           <CategoryTree
@@ -554,6 +564,22 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
             onSelect={setBranch}
           />
           <div className="library-list">
+            {entries.length === 0 && !scanning && (
+              <div className="library-empty">
+                <p>{t("library.noMatch")}</p>
+                {(branch || query) && (
+                  <button
+                    className="small"
+                    onClick={() => {
+                      setBranch("");
+                      setQuery("");
+                    }}
+                  >
+                    {t("library.showAll")}
+                  </button>
+                )}
+              </div>
+            )}
             <VirtualList
               items={entries}
               rowHeight={54}

@@ -7,6 +7,7 @@
  * pointing up, so a photo of the top side is mirrored against the board;
  * a photo of the bottom side, taken of the turned-over board, is not.
  */
+import { visibleFrom, type BoardModel, type ViewSide } from "../core/board";
 import type { Point } from "../core/types";
 
 /** Photo pixel (u, v) → board (A·u + C·v + E, B·u + D·v + F). */
@@ -40,6 +41,52 @@ export function alignPhoto(side: PhotoSide, photo: [Point, Point], board: [Point
 
 export function applyAffine(m: Affine, p: Point): Point {
   return { x: m[0] * p.x + m[2] * p.y + m[4], y: m[1] * p.x + m[3] * p.y + m[5] };
+}
+
+/** Board → photo, the other way round; null if the matrix is degenerate. */
+export function invertAffine(m: Affine): Affine | null {
+  const det = m[0] * m[3] - m[2] * m[1];
+  if (Math.abs(det) < 1e-12) return null;
+  const a = m[3] / det;
+  const b = -m[1] / det;
+  const c = -m[2] / det;
+  const d = m[0] / det;
+  return [a, b, c, d, -(a * m[4] + c * m[5]), -(b * m[4] + d * m[5])];
+}
+
+/** Board mils per photo unit (the photo's width is one unit). */
+export function photoScale(m: Affine): number {
+  return Math.hypot(m[0], m[1]);
+}
+
+/**
+ * The part at a board point clicked on a photo. A body under the point wins,
+ * the smallest first (a capacitor beside a shield, not the shield); otherwise
+ * the closest part within `slack` mils, because an alignment from two points
+ * is a little off away from them.
+ */
+export function partAtPoint(model: BoardModel, p: Point, view: ViewSide, slack: number): { inside?: number; near?: number } {
+  let inside: number | undefined;
+  let insideArea = Infinity;
+  let near: number | undefined;
+  let nearDist = Infinity;
+  model.partIndex.query({ minX: p.x - slack, minY: p.y - slack, maxX: p.x + slack, maxY: p.y + slack }, (i) => {
+    const part = model.parts[i];
+    if (!visibleFrom(part.side, view)) return;
+    const b = part.bounds;
+    const d = Math.hypot(Math.max(b.minX - p.x, 0, p.x - b.maxX), Math.max(b.minY - p.y, 0, p.y - b.maxY));
+    if (d === 0 && !part.marker) {
+      const area = (b.maxX - b.minX) * (b.maxY - b.minY);
+      if (area < insideArea) {
+        insideArea = area;
+        inside = i;
+      }
+    } else if (d <= slack && d < nearDist) {
+      nearDist = d;
+      near = i;
+    }
+  });
+  return { inside, near };
 }
 
 /** Board positions of the photo's corners: top-left, top-right, bottom-left, bottom-right. */
