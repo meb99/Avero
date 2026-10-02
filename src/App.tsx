@@ -5,6 +5,7 @@ import { BoardView, type BoardViewHandle, type PhotoLayer, type ViewState } from
 import { PhotoBoardHint, PhotoPointDialog } from "./components/PhotoAlign";
 import { PhotoPane } from "./components/PhotoPane";
 import { ImportReport } from "./components/ImportReport";
+import { BgaView } from "./components/BgaView";
 import { CommandPalette } from "./components/CommandPalette";
 import { HelpDialog, SettingsDialog } from "./components/Dialogs";
 import { LibraryDialog, type LibraryDrop } from "./components/Library";
@@ -49,6 +50,7 @@ import { useTheme } from "./theme";
 import { dailyCheck, fetchUpdate, type Update } from "./updates";
 import { pickImport, type LibraryEntry, type LibraryFile } from "./workbench/library";
 import {
+  addDrawing,
   addMarker,
   boardKey,
   idTokens,
@@ -58,6 +60,7 @@ import {
   renameNet,
   setPhoto,
   updateMarker,
+  type DrawingKind,
   type NetStatus,
 } from "./workbench/notes";
 import { MarkerEditor, PinnedLegend } from "./components/Markers";
@@ -479,15 +482,71 @@ export function App() {
     if (at) setEditingMarker({ id, at });
   }, [boardMarkers]);
   const placeMarker = useCallback(
-    (point: Point) => {
+    (point: Point, clicked: ViewSide = side) => {
       setPlacingMarker(false);
       if (!notesForModel) return;
       const id = newMarkerId();
-      updateNotes((n) => addMarker(n, { id, x: point.x, y: point.y, side, text: "" }));
-      const at = viewRef.current?.toScreen(point);
+      updateNotes((n) => addMarker(n, { id, x: point.x, y: point.y, side: clicked, text: "" }));
+      const at = viewRef.current?.toScreen(point, clicked);
       if (at) setEditingMarker({ id, at });
     },
     [notesForModel, updateNotes, side],
+  );
+
+  // --- drawings: lines, areas, jumpers ---------------------------------------
+  const [drawing, setDrawing] = useState<{ kind: DrawingKind; side: ViewSide; points: Point[]; ends: string[] } | null>(null);
+  const drawingRef = useRef(drawing);
+  drawingRef.current = drawing;
+  /** "U7.3 · PP3V3" for a point on a pin, else "". */
+  const pointLabel = (p: Point): string => {
+    if (!model) return "";
+    let label = "";
+    model.pinIndex.query({ minX: p.x - 0.5, minY: p.y - 0.5, maxX: p.x + 0.5, maxY: p.y + 0.5 }, (i) => {
+      const pin = model.pins[i];
+      if (!label && Math.abs(pin.x - p.x) < 0.5 && Math.abs(pin.y - p.y) < 0.5) label = `${model.pinLabel(i)} · ${model.nets[pin.net].name}`;
+    });
+    return label;
+  };
+  const finishDrawing = useCallback(
+    (d: { kind: DrawingKind; side: ViewSide; points: Point[]; ends: string[] }) => {
+      setDrawing(null);
+      if (d.points.length < (d.kind === "area" ? 3 : 2)) return;
+      updateNotes((n) =>
+        addDrawing(n, {
+          kind: d.kind,
+          side: d.side,
+          points: d.points,
+          ...(d.kind === "jumper" && { from: d.ends[0] || undefined, to: d.ends[1] || undefined }),
+        }),
+      );
+    },
+    [updateNotes],
+  );
+  const pickDrawPoint = (point: Point, clicked: ViewSide) => {
+    const d = drawingRef.current;
+    if (!d) return;
+    const next = { ...d, side: d.points.length ? d.side : clicked, points: [...d.points, point], ends: [...d.ends, pointLabel(point)] };
+    if (next.kind !== "area" && next.points.length >= 2) finishDrawing(next);
+    else setDrawing(next);
+  };
+  const startDrawing = (kind: DrawingKind) => {
+    setPlacingMarker(false);
+    setDrawing({ kind, side, points: [], ends: [] });
+  };
+  const drawingMarks = useMemo(
+    () => (notesForModel?.drawings ?? []).map((d) => ({ id: d.id, kind: d.kind, side: d.side, points: d.points, text: d.text ?? (d.kind === "jumper" ? undefined : undefined) })),
+    [notesForModel?.drawings],
+  );
+  const showDrawing = useCallback(
+    (id: string) => {
+      const d = notesForModel?.drawings?.find((x) => x.id === id);
+      if (!d) return;
+      setSide(d.side);
+      const xs = d.points.map((p) => p.x);
+      const ys = d.points.map((p) => p.y);
+      viewRef.current?.zoomTo({ minX: Math.min(...xs) - 100, minY: Math.min(...ys) - 100, maxX: Math.max(...xs) + 100, maxY: Math.max(...ys) + 100 }, d.side);
+    },
+    [notesForModel?.drawings],
   );
   const closeMarker = useCallback(() => {
     // A new marker left without text is not worth keeping.
@@ -806,6 +865,21 @@ export function App() {
   }, [detached, schematic, openSchematicPath, t]);
 
   // --- selection -----------------------------------------------------------
+
+  // Several parts chosen with ⌘/Shift-click (the first one is the selected part as well).
+  const [multiParts, setMultiParts] = useState<number[]>([]);
+  const [bgaPart, setBgaPart] = useState<number | null>(null);
+  const multiSet = useMemo(() => new Set(multiParts), [multiParts]);
+  useEffect(() => {
+    setMultiParts([]);
+    setBgaPart(null);
+  }, [model]);
+  const addPartToSelection = (part: number) => {
+    setMultiParts((list) => {
+      const base = list.length === 0 && selection.kind === "part" && selection.part !== part ? [selection.part] : list;
+      return base.includes(part) ? base.filter((p) => p !== part) : [...base, part];
+    });
+  };
 
   const select = useCallback(
     (sel: Selection, zoom: boolean) => {
@@ -1241,6 +1315,9 @@ export function App() {
       { id: "export", label: t("menu.exportImage"), shortcut: "⇧⌘E", enabled: board, run: a.exportImage },
       { id: "export-pdf", label: t("menu.exportPdf"), shortcut: "⌥⌘E", enabled: board, run: a.exportPdf },
       { id: "marker", label: t("marker.place"), shortcut: "M", enabled: board && notes !== null, run: () => setPlacingMarker(true) },
+      { id: "draw-line", label: t("draw.line"), enabled: board && notes !== null, run: () => startDrawing("line") },
+      { id: "draw-area", label: t("draw.area"), enabled: board && notes !== null, run: () => startDrawing("area") },
+      { id: "draw-jumper", label: t("draw.jumper"), enabled: board && notes !== null, run: () => startDrawing("jumper") },
       { id: "photo-add", label: t("photo.add"), enabled: board && notes !== null, run: a.addPhoto },
       { id: "photo-toggle", label: t("photo.toggle"), enabled: !!storedPhoto, run: a.togglePhoto },
       { id: "photo-pane", label: t("photo.paneCommand"), enabled: !!model, run: () => setPhotoPane((v) => !v) },
@@ -1346,7 +1423,8 @@ export function App() {
           searchRef.current?.focus();
           break;
         case "Escape":
-          if (aligningRef.current) cancelAlignment();
+          if (drawingRef.current) setDrawing(null);
+          else if (aligningRef.current) cancelAlignment();
           else if (placingMarkerRef.current) setPlacingMarker(false);
           else setSelection(NONE);
           break;
@@ -1384,6 +1462,10 @@ export function App() {
           view?.zoomBy(1 / 1.5);
           break;
         case "Enter": {
+          if (drawingRef.current?.kind === "area") {
+            finishDrawing(drawingRef.current);
+            break;
+          }
           const bounds = model?.selectionBounds(selection);
           if (bounds) view?.zoomTo(bounds);
           break;
@@ -1461,6 +1543,8 @@ export function App() {
           searchRef={searchRef}
           placingMarker={placingMarker}
           onMarker={() => setPlacingMarker((v) => !v)}
+          drawing={drawing?.kind ?? null}
+          onDraw={(kind) => (kind ? startDrawing(kind) : setDrawing(null))}
         />
 
         {tabs.length > 1 && <TabBar tabs={tabInfos} active={activeTab} onSwitch={switchTab} onClose={closeTab} onNew={newTab} />}
@@ -1502,11 +1586,31 @@ export function App() {
                     photo={bothSides ? undefined : photoLayer}
                     partValues={partValues}
                     onPointPick={
-                      placingMarker ? placeMarker : aligning && aligning.photoPoints.length >= 2 ? pickBoardPoint : undefined
+                      drawing ? pickDrawPoint : placingMarker ? placeMarker : aligning && aligning.photoPoints.length >= 2 ? pickBoardPoint : undefined
                     }
-                    onSelect={select}
+                    drawings={drawingMarks}
+                    draft={drawing && drawing.points.length ? { id: "draft", kind: drawing.kind, side: drawing.side, points: drawing.points } : null}
+                    onSelect={(sel, zoom) => {
+                      setMultiParts([]);
+                      select(sel, zoom);
+                    }}
+                    onAddPart={addPartToSelection}
+                    extraParts={multiSet}
                   >
                     {placingMarker && <div className="placing-hint">{t("marker.placing")}</div>}
+                    {drawing && (
+                      <div className="placing-hint drawing-hint">
+                        {t(`draw.hint.${drawing.kind}`)}
+                        {drawing.kind === "area" && (
+                          <button className="small primary" disabled={drawing.points.length < 3} onClick={() => finishDrawing(drawing)}>
+                            {t("draw.finish")}
+                          </button>
+                        )}
+                        <button className="small" onClick={() => setDrawing(null)}>
+                          {t("photo.cancel")}
+                        </button>
+                      </div>
+                    )}
                     <PinnedLegend
                       model={model}
                       pinned={pinnedNets}
@@ -1655,9 +1759,13 @@ export function App() {
                   pinnedNets={pinnedNets}
                   onTogglePin={togglePinned}
                   onShowMarker={showMarker}
+                  onShowDrawing={showDrawing}
                   obdata={boardObdata?.obdata ?? null}
                   knowledgeCount={knowledgeForBoard}
                   schematicFacts={schematicFacts}
+                  multiParts={multiParts}
+                  onMultiParts={setMultiParts}
+                  onOpenBga={setBgaPart}
                   width={sidebarWidth}
                   onWidth={(w, done) => {
                     setSidebarWidth(w);
@@ -1793,6 +1901,9 @@ export function App() {
 
         <StatusBar model={model} source={source} schematic={schematic} loading={loading} settings={settings} onReport={() => setDialog("report")} />
         {dialog === "report" && model && <ImportReport model={model} source={source} onClose={() => setDialog(null)} />}
+        {bgaPart !== null && model && (
+          <BgaView model={model} part={bgaPart} units={settings.units} onSelect={select} onClose={() => setBgaPart(null)} />
+        )}
 
         {dialog === "settings" && (
           <SettingsDialog

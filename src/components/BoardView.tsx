@@ -4,7 +4,7 @@ import { Camera, lerpCamera } from "../core/camera";
 import { bottomCamera, boundsToLayout, dualLayout, fromLayout, sideAt, toLayout, type DualLayout } from "../core/dualView";
 import type { Bounds, Point, Selection } from "../core/types";
 import { useI18n } from "../i18n";
-import { drawLabels, drawMarkers, markerAt, type MarkerMark } from "../render/labels";
+import { drawDrawings, drawLabels, drawMarkers, markerAt, type DrawingMark, type MarkerMark } from "../render/labels";
 import type { Palette, RGBA } from "../render/palette";
 import { BoardRenderer, type RenderView } from "../render/renderer";
 import { computeStyle } from "../render/style";
@@ -69,12 +69,20 @@ interface Props {
   photo?: PhotoLayer;
   /** Values to print under part names (from the schematic), by part index. */
   partValues?: ReadonlyMap<number, string>;
+  /** Lines, areas and jumpers drawn on the board. */
+  drawings?: readonly DrawingMark[];
+  /** The drawing being made; its next point follows the cursor. */
+  draft?: DrawingMark | null;
   /**
    * While set, clicks pick board points instead of selecting; the point
    * snaps to the pin or test point under the cursor.
    */
-  onPointPick?: (point: Point) => void;
+  onPointPick?: (point: Point, side: ViewSide) => void;
   onSelect(selection: Selection, zoom: boolean): void;
+  /** ⌘- or Shift-click: adds the part (or the part of the pin) to a multiple selection. */
+  onAddPart?(part: number): void;
+  /** Parts selected together with the selection (multiple selection). */
+  extraParts?: ReadonlySet<number>;
   ref?: Ref<BoardViewHandle>;
 }
 
@@ -92,6 +100,7 @@ interface Hover {
 const NO_LAYERS: ReadonlySet<number> = new Set();
 const NO_PINS: ReadonlyMap<number, RGBA> = new Map();
 const NO_MARKERS: readonly MarkerMark[] = [];
+const NO_DRAWINGS: readonly DrawingMark[] = [];
 const DRAG_THRESHOLD = 4;
 const FLY_MS = 280;
 
@@ -128,8 +137,12 @@ export function BoardView({
   initialView,
   photo,
   partValues,
+  drawings = NO_DRAWINGS,
+  draft = null,
   onPointPick,
   onSelect,
+  onAddPart,
+  extraParts,
   ref,
 }: Props) {
   const { t } = useI18n();
@@ -159,6 +172,10 @@ export function BoardView({
     markers,
     activeMarker,
     partValues,
+    drawings,
+    draft,
+    /** Board point under the cursor, for the draft's last segment. */
+    cursorWorld: null as Point | null,
     highlightedNet: undefined as number | undefined,
   });
   const [hover, setHover] = useState<Hover | null>(null);
@@ -314,8 +331,11 @@ export function BoardView({
         s.partValues,
       ),
     );
-    for (const v of views)
+    for (const v of views) {
+      const draftShown = s.draft && s.cursorWorld && s.draft.side === v.side ? { ...s.draft, points: [...s.draft.points, s.cursorWorld] } : s.draft;
+      drawDrawings(labels, v.camera, s.drawings, v.side, dprRef.current, draftShown);
       drawMarkers(labels, v.camera, s.markers, v.side, s.palette, dprRef.current, s.activeMarker, !s.dual && s.settings.ghostOtherSide);
+    }
     drawOverview();
   }, [sideViews, drawOverview]);
 
@@ -506,6 +526,7 @@ export function BoardView({
           hiddenLayers,
           pinnedNets,
           dimUnselected: settings.dimUnselected,
+          extraParts,
         },
         palette,
       );
@@ -516,7 +537,7 @@ export function BoardView({
     if (dual) rendererRef.current?.setStyle(styleFor("bottom"), palette, 1);
     requestDraw();
     // namesRevision: net names live in the model and are drawn as labels.
-  }, [model, side, dual, selection, settings, palette, hiddenLayers, pinnedNets, namesRevision, requestDraw, rendererVersion]);
+  }, [model, side, dual, selection, settings, palette, hiddenLayers, pinnedNets, namesRevision, requestDraw, rendererVersion, extraParts]);
 
   useEffect(() => {
     Object.assign(stateRef.current, { markers, activeMarker });
@@ -578,6 +599,11 @@ export function BoardView({
     stateRef.current.partValues = partValues;
     requestDraw();
   }, [partValues, requestDraw]);
+
+  useEffect(() => {
+    Object.assign(stateRef.current, { drawings, draft });
+    requestDraw();
+  }, [drawings, draft, requestDraw]);
 
   useEffect(() => () => cancelAnimationFrame(animRef.current), []);
 
@@ -672,7 +698,12 @@ export function BoardView({
       }
     }
 
-    setCursor(placeAt(p).world);
+    const world = placeAt(p).world;
+    setCursor(world);
+    if (stateRef.current.draft) {
+      stateRef.current.cursorWorld = world;
+      requestDraw();
+    }
     if (e.pointerType === "mouse") {
       const text = describe(hitAt(p));
       setHover(text ? { x: p.x, y: p.y, text } : null);
@@ -691,7 +722,8 @@ export function BoardView({
         const hit = hitAt(p);
         const snapped =
           hit?.kind === "pin" ? m.pins[hit.pin] : hit?.kind === "testPoint" ? m.testPoints[hit.testPoint] : undefined;
-        onPointPick(snapped ? { x: snapped.x, y: snapped.y } : placeAt(p).world);
+        const at = placeAt(p);
+        onPointPick(snapped ? { x: snapped.x, y: snapped.y } : at.world, at.side);
         return;
       }
       const s = stateRef.current;
@@ -702,7 +734,15 @@ export function BoardView({
         onMarkerClick!(marker.id);
         return;
       }
-      onSelect(hitToSelection(hitAt(p)), false);
+      const hit = hitAt(p);
+      if ((e.metaKey || e.shiftKey || e.ctrlKey) && onAddPart && hit) {
+        const part = hit.kind === "part" ? hit.part : hit.kind === "pin" ? stateRef.current.model.pins[hit.pin].part : undefined;
+        if (part !== undefined) {
+          onAddPart(part);
+          return;
+        }
+      }
+      onSelect(hitToSelection(hit), false);
     }
   };
 

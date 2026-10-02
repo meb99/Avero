@@ -5,6 +5,7 @@ import { checkPinout, type PinoutCheck } from "../knowledge/pinout";
 import { netReadings, partValues, type ObdData } from "../knowledge/obdata";
 import type { SchematicDocument } from "../schematic/document";
 import { SchematicHits } from "./SchematicHits";
+import { ballGrid } from "../core/bga";
 import type { SchematicFacts } from "../schematic/partInfo";
 import type { RGBA } from "../render/palette";
 import { visibleFrom, type BoardModel, type ViewSide } from "../core/board";
@@ -12,7 +13,8 @@ import type { NetKind, Selection, Side } from "../core/types";
 import { formatLength, formatSize } from "../format";
 import { useI18n, type MessageKey } from "../i18n";
 import type { Settings } from "../settings";
-import { activeCase, readingsFor, type BoardNotes } from "../workbench/notes";
+import { activeCase, addDrawing, readingsFor, type BoardNotes } from "../workbench/notes";
+import { jumperTargets } from "../core/jumper";
 import { formatValue } from "../workbench/measure";
 import { MeasureBlock } from "./MeasureBlock";
 
@@ -36,6 +38,8 @@ interface Props {
   obdata?: ObdData | null;
   /** Values, part numbers and net voltages read from the schematic's text. */
   schematicFacts?: SchematicFacts | null;
+  /** Opens the ball map of a BGA. */
+  onOpenBga?(part: number): void;
 }
 
 /** Datasheet name of a pin, its function and target value on hover. */
@@ -176,6 +180,7 @@ export function Details({
   onTogglePin,
   obdata,
   schematicFacts,
+  onOpenBga,
 }: Props) {
   const { t, lang } = useI18n();
   const u = settings.units;
@@ -376,6 +381,11 @@ export function Details({
             {part.device && <p className="details-device">{part.device}</p>}
           </header>
           {part.estimated && <p className="muted estimated-note">{t("details.estimated")}</p>}
+          {onOpenBga && ballGrid(model, selection.part) && (
+            <button className="small bga-open" onClick={() => onOpenBga(selection.part)}>
+              {t("bga.open")}
+            </button>
+          )}
           {(() => {
             const f = schematicFacts?.parts.get(part.name.toUpperCase());
             if (!f) return null;
@@ -504,6 +514,60 @@ export function Details({
             {datasheetPin?.expect && <Row label={t("details.expected")}>{datasheetPin.expect}</Row>}
           </dl>
           {measure(pin.net)}
+          {(() => {
+            const targets = jumperTargets(model, selection.pin, 5);
+            if (targets.length === 0) return null;
+            const pinSide = pin.side === "both" ? side : pin.side;
+            return (
+              <section className="details-section jumpers">
+                <h3 title={t("jumper.hint")}>{t("jumper.title")}</h3>
+                <table className="wb-table">
+                  <tbody>
+                    {targets.map((target) => {
+                      const at = target.kind === "pin" ? model.pins[target.index] : model.testPoints[target.index];
+                      return (
+                        <tr key={`${target.kind}${target.index}`}>
+                          <td>
+                            <button
+                              className="link mono"
+                              onClick={() => onSelect(target.kind === "pin" ? { kind: "pin", pin: target.index } : { kind: "testPoint", testPoint: target.index }, true)}
+                            >
+                              {target.label}
+                            </button>
+                            {!target.sameSide && <span className="muted"> · {t("jumper.otherSide")}</span>}
+                          </td>
+                          <td className="muted">{formatLength(target.distance, u)}</td>
+                          <td>
+                            {notes && target.sameSide && (
+                              <button
+                                className="small"
+                                onClick={() =>
+                                  updateNotes((n) =>
+                                    addDrawing(n, {
+                                      kind: "jumper",
+                                      side: pinSide,
+                                      points: [
+                                        { x: pin.x, y: pin.y },
+                                        { x: at.x, y: at.y },
+                                      ],
+                                      from: `${model.pinLabel(selection.pin)} · ${model.nets[pin.net].name}`,
+                                      to: target.label,
+                                    }),
+                                  )
+                                }
+                              >
+                                {t("jumper.draw")}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </section>
+            );
+          })()}
           {netMembers(pin.net, selection.pin)}
         </div>
       );

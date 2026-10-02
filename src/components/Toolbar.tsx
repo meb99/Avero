@@ -44,6 +44,9 @@ interface Props {
   /** Next click on the board places a note. */
   placingMarker: boolean;
   onMarker(): void;
+  /** Drawing tool in use, and starting or stopping one. */
+  drawing: "line" | "area" | "jumper" | null;
+  onDraw(kind: "line" | "area" | "jumper" | null): void;
 }
 
 export function Toolbar(p: Props) {
@@ -105,6 +108,18 @@ export function Toolbar(p: Props) {
             >
               <FlagIcon />
             </button>
+            <select
+              className={`tool draw-select${p.drawing ? " active" : ""}`}
+              value={p.drawing ?? ""}
+              title={t("draw.title")}
+              aria-label={t("draw.title")}
+              onChange={(e) => p.onDraw((e.target.value || null) as "line" | "area" | "jumper" | null)}
+            >
+              <option value="">✎ {t("draw.title")}</option>
+              <option value="line">{t("draw.line")}</option>
+              <option value="area">{t("draw.area")}</option>
+              <option value="jumper">{t("draw.jumper")}</option>
+            </select>
           </div>
           <div className="toolbar-search">
             <SearchBox model={p.model!} onPick={p.onPick} inputRef={p.searchRef} />

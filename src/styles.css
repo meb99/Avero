@@ -3294,3 +3294,184 @@ button.danger {
 .status-report {
   font-size: inherit;
 }
+
+/* Multiple selection */
+.multi-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.multi-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 2px 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.multi-table tr {
+  cursor: pointer;
+}
+
+/* BGA view */
+.dialog.bga-dialog {
+  width: min(1200px, calc(100% - 32px));
+  height: calc(100% - 48px);
+  max-height: none;
+}
+
+.bga-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.bga-dialog .dialog-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bga-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.bga-bar input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.bga-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.bga-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 12px;
+}
+
+.bga-grid {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  display: grid;
+  gap: 2px;
+  align-content: start;
+}
+
+.bga-row {
+  display: contents;
+}
+
+.bga-head {
+  font: 10px var(--mono);
+  color: var(--text-muted);
+  text-align: center;
+  align-self: center;
+}
+
+.bga-ball {
+  display: inline-block;
+  aspect-ratio: 1;
+  min-width: 10px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  background: #5f8fb4;
+  cursor: pointer;
+}
+
+.bga-legend .bga-ball {
+  width: 10px;
+  height: 10px;
+  cursor: default;
+}
+
+.bga-ball.kind-power {
+  background: #e53935;
+}
+
+.bga-ball.kind-ground {
+  background: #6b7280;
+}
+
+.bga-ball.kind-unconnected {
+  background: #2b2f36;
+  outline: 1px solid var(--border);
+}
+
+.bga-grid .bga-ball:not(.on) {
+  opacity: 0.55;
+}
+
+.bga-grid:not(:has(.on)) .bga-ball {
+  opacity: 1;
+}
+
+.bga-ball.on {
+  box-shadow: 0 0 0 2px #ffeb1e;
+  opacity: 1;
+}
+
+.bga-ball.chosen {
+  box-shadow: 0 0 0 3px #fff;
+}
+
+.bga-side {
+  width: 260px;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.bga-probes {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 13px;
+}
+
+.bga-open {
+  margin: 6px 0;
+}
+
+/* Drawings */
+.draw-select {
+  max-width: 120px;
+  font-size: 12px;
+}
+
+.draw-select.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.drawing-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drawing-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.drawing-text {
+  flex: 1;
+  min-width: 80px;
+  font-size: 12px;
+}

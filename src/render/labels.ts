@@ -366,3 +366,70 @@ export function drawMarkers(
   }
   ctx.globalAlpha = 1;
 }
+
+/** A drawing as shown on the board (see `Drawing` in notes.ts). */
+export interface DrawingMark {
+  id: string;
+  kind: "line" | "area" | "jumper";
+  side: ViewSide;
+  points: { x: number; y: number }[];
+  text?: string;
+}
+
+const DRAW_COLORS = { line: "#ff9800", area: "#ef5350", jumper: "#22c55e" } as const;
+
+/** Lines, areas and jumpers of the side in view; `draft` is the one being drawn (its last point follows the cursor). */
+export function drawDrawings(
+  ctx: CanvasRenderingContext2D,
+  camera: Camera,
+  drawings: readonly DrawingMark[],
+  view: ViewSide,
+  dpr: number,
+  draft?: DrawingMark | null,
+): void {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const all = draft ? [...drawings, draft] : drawings;
+  for (const d of all) {
+    if (d.side !== view || d.points.length === 0) continue;
+    const pts = d.points.map((p) => camera.toScreen(p));
+    const color = DRAW_COLORS[d.kind];
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+    if (d.kind === "area" && pts.length >= 3 && d !== draft) ctx.closePath();
+    if (d.kind === "area") {
+      ctx.fillStyle = "rgba(239, 83, 80, 0.22)";
+      ctx.fill();
+    }
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.lineWidth = d.kind === "jumper" ? 6 : 4;
+    ctx.stroke();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = d.kind === "jumper" ? 3.5 : 2;
+    if (d.kind === "line") ctx.setLineDash([7, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (d.kind === "jumper")
+      for (const p of [pts[0], pts[pts.length - 1]]) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4.5, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    if (d.text) {
+      const c = pts.reduce((s, p) => ({ x: s.x + p.x / pts.length, y: s.y + p.y / pts.length }), { x: 0, y: 0 });
+      ctx.font = `600 12px ${FONT}`;
+      const w = ctx.measureText(d.text).width + 10;
+      ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+      ctx.fillRect(c.x - w / 2, c.y - 22, w, 18);
+      ctx.fillStyle = "#fff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(d.text, c.x, c.y - 13);
+    }
+  }
+}

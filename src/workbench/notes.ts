@@ -37,6 +37,25 @@ export interface BoardMarker {
   created: string;
 }
 
+export type DrawingKind = "line" | "area" | "jumper";
+
+/**
+ * Something drawn on the board: a line (a cut trace), an area (corrosion,
+ * a burnt spot) or a jumper wire between two points, with an optional text.
+ */
+export interface Drawing {
+  id: string;
+  kind: DrawingKind;
+  side: "top" | "bottom";
+  /** Board positions in mils: two for a line or jumper, three or more for an area. */
+  points: { x: number; y: number }[];
+  text?: string;
+  /** Jumper ends, e.g. "U7.3 · PP3V3". */
+  from?: string;
+  to?: string;
+  created: string;
+}
+
 /**
  * Everything Avero remembers about a board: reference readings from a known
  * good board, repair cases and free notes. Stored per board key.
@@ -55,6 +74,8 @@ export interface BoardNotes {
   netNames?: Record<string, string>;
   /** Notes pinned to spots on the board. */
   markers?: BoardMarker[];
+  /** Lines, areas and jumpers drawn on the board. */
+  drawings?: Drawing[];
   /** OpenBoardData board (its ID, e.g. 820-00165) chosen for this board by hand. */
   obdata?: string;
   /** Conditions new reference readings are taken under. */
@@ -321,6 +342,41 @@ export function updateMarker(notes: BoardNotes, id: string, text: string): Board
   return { ...notes, markers: (notes.markers ?? []).map((m) => (m.id === id ? { ...m, text } : m)), updated: now() };
 }
 
+export function addDrawing(notes: BoardNotes, drawing: Omit<Drawing, "id" | "created">): BoardNotes {
+  const d: Drawing = { ...drawing, id: newId(), created: now() };
+  return { ...notes, drawings: [...(notes.drawings ?? []), d], updated: now() };
+}
+
+export function updateDrawing(notes: BoardNotes, id: string, text: string): BoardNotes {
+  return { ...notes, drawings: (notes.drawings ?? []).map((d) => (d.id === id ? { ...d, text: text || undefined } : d)), updated: now() };
+}
+
+export function removeDrawing(notes: BoardNotes, id: string): BoardNotes {
+  return { ...notes, drawings: (notes.drawings ?? []).filter((d) => d.id !== id), updated: now() };
+}
+
+function parseDrawings(value: unknown): Drawing[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out = value.flatMap((d): Drawing[] => {
+    if (!d || typeof d.id !== "string" || !["line", "area", "jumper"].includes(d.kind) || (d.side !== "top" && d.side !== "bottom")) return [];
+    const points = Array.isArray(d.points) ? d.points.filter((p: { x: unknown; y: unknown }) => Number.isFinite(p?.x) && Number.isFinite(p?.y)) : [];
+    if (points.length < (d.kind === "area" ? 3 : 2)) return [];
+    return [
+      {
+        id: d.id,
+        kind: d.kind,
+        side: d.side,
+        points: points.map((p: { x: number; y: number }) => ({ x: p.x, y: p.y })),
+        ...(typeof d.text === "string" && d.text && { text: d.text }),
+        ...(typeof d.from === "string" && { from: d.from }),
+        ...(typeof d.to === "string" && { to: d.to }),
+        created: typeof d.created === "string" ? d.created : new Date(0).toISOString(),
+      },
+    ];
+  });
+  return out.length ? out : undefined;
+}
+
 export function removeMarker(notes: BoardNotes, id: string): BoardNotes {
   return { ...notes, markers: (notes.markers ?? []).filter((m) => m.id !== id), updated: now() };
 }
@@ -406,6 +462,7 @@ export function parseNotes(json: string): BoardNotes | null {
       photos: parsePhotos(d.photos),
       netNames: parseNetNames(d.netNames),
       markers: parseMarkers(d.markers),
+      drawings: parseDrawings(d.drawings),
       obdata: typeof d.obdata === "string" && d.obdata ? d.obdata : undefined,
       referenceConditions: parseConditions(d.referenceConditions),
       lists: parseLists(d.lists),
@@ -423,6 +480,12 @@ function mergeReadings(a: Record<string, Reading>, b: Record<string, Reading>): 
     if (!mine || (r.updated ?? "") > (mine.updated ?? "")) out[net] = r;
   }
   return out;
+}
+
+function mergeById<T extends { id: string }>(mine: T[] | undefined, theirs: T[] | undefined): T[] | undefined {
+  if (!mine && !theirs) return undefined;
+  const ids = new Set((mine ?? []).map((x) => x.id));
+  return [...(mine ?? []), ...(theirs ?? []).filter((x) => !ids.has(x.id))];
 }
 
 function mergeLists(mine: MeasureList[] | undefined, theirs: MeasureList[] | undefined): MeasureList[] | undefined {
@@ -458,6 +521,7 @@ export function mergeNotes(mine: BoardNotes, theirs: BoardNotes): BoardNotes {
     reference: mergeReadings(mine.reference, theirs.reference),
     netNames: theirs.netNames || mine.netNames ? { ...theirs.netNames, ...mine.netNames } : undefined,
     markers: mergeMarkers(mine.markers, theirs.markers),
+    drawings: mergeById(mine.drawings, theirs.drawings),
     obdata: mine.obdata ?? theirs.obdata,
     referenceConditions: mine.referenceConditions ?? theirs.referenceConditions,
     lists: mergeLists(mine.lists, theirs.lists),

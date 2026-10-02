@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "./Icons";
 import { Diagnosis } from "./Diagnosis";
+import { MultiSelection } from "./MultiSelection";
+import { matchesQuery, parsePartQuery, partSpecs } from "../core/partSearch";
 import type { ObdData } from "../knowledge/obdata";
 import type { BoardModel, ViewSide } from "../core/board";
 import type { Selection } from "../core/types";
@@ -38,10 +40,15 @@ interface Props {
   pinnedNets: ReadonlyMap<number, RGBA>;
   onTogglePin(net: number): void;
   onShowMarker(id: string): void;
+  onShowDrawing(id: string): void;
   /** Known-good values of OpenBoardData for this board, if any. */
   obdata: ObdData | null;
   /** Values, part numbers and net voltages read from the schematic. */
   schematicFacts: SchematicFacts | null;
+  /** Parts chosen together (⌘/Shift-click). */
+  multiParts: readonly number[];
+  onMultiParts(parts: number[]): void;
+  onOpenBga(part: number): void;
   /** Contents of the "Knowledge" tab. */
   knowledge: ReactNode;
   knowledgeCount: number;
@@ -77,9 +84,13 @@ export function Sidebar({
   pinnedNets,
   onTogglePin,
   onShowMarker,
+  onShowDrawing,
   knowledge,
   knowledgeCount,
   schematicFacts,
+  multiParts,
+  onMultiParts,
+  onOpenBga,
   width,
   onWidth,
   collapsed,
@@ -91,15 +102,23 @@ export function Sidebar({
   const [partFilter, setPartFilter] = useState("");
   const [netFilter, setNetFilter] = useState("");
 
+  // A search by value, rating, package or type ("10 µF 16V 0603") or a plain name search.
+  const specQuery = useMemo(() => parsePartQuery(partFilter), [partFilter]);
   const parts = useMemo(() => {
     const q = partFilter.trim().toUpperCase();
     const all = model.sortedParts;
     if (!q) return all;
+    if (specQuery)
+      return all.filter((i) => {
+        const p = model.parts[i];
+        const facts = schematicFacts?.parts.get(p.name.toUpperCase());
+        return matchesQuery(partSpecs(p.name, p.device, facts), specQuery, p.name, p.device);
+      });
     return all.filter((i) => {
       const p = model.parts[i];
       return p.name.toUpperCase().includes(q) || (p.device?.toUpperCase().includes(q) ?? false);
     });
-  }, [model, partFilter]);
+  }, [model, partFilter, specQuery, schematicFacts]);
 
   const nets = useMemo(() => {
     const q = netFilter.trim().toUpperCase();
@@ -196,6 +215,15 @@ export function Sidebar({
 
       {tab === "details" && (
         <div className="panel scroll">
+          {multiParts.length >= 2 && (
+            <MultiSelection
+              model={model}
+              parts={multiParts}
+              onSelect={onSelect}
+              onRemove={(p) => onMultiParts(multiParts.filter((x) => x !== p))}
+              onClear={() => onMultiParts([])}
+            />
+          )}
           <Details
             model={model}
             selection={selection}
@@ -211,6 +239,7 @@ export function Sidebar({
             onTogglePin={onTogglePin}
             obdata={obdata}
             schematicFacts={schematicFacts}
+            onOpenBga={onOpenBga}
           />
         </div>
       )}
@@ -231,16 +260,29 @@ export function Sidebar({
             onTolerance={onTolerance}
             onSelect={onSelect}
             onShowMarker={onShowMarker}
+            onShowDrawing={onShowDrawing}
             error={notesError}
             selection={selection}
+            units={settings.units}
           />
         </div>
       )}
 
       {tab === "parts" && (
         <div className="panel list-panel">
-          <input className="filter" type="search" placeholder={t("list.filter")} value={partFilter} onChange={(e) => setPartFilter(e.target.value)} />
-          <div className="list-count">{t("list.count", { n: parts.length, total: model.parts.length })}</div>
+          <input
+            className="filter"
+            type="search"
+            placeholder={t("list.partFilter")}
+            title={t("list.partFilterHint")}
+            value={partFilter}
+            onChange={(e) => setPartFilter(e.target.value)}
+          />
+          <div className="list-count">
+            {t("list.count", { n: parts.length, total: model.parts.length })}
+            {specQuery && <span className="muted"> · {t("list.specSearch")}</span>}
+            {specQuery?.value && parts.length === 0 && !schematicFacts && <div className="muted">{t("list.specNeedsSchematic")}</div>}
+          </div>
           <VirtualList
             items={parts}
             rowHeight={30}
@@ -250,7 +292,7 @@ export function Sidebar({
               return (
                 <button className={`list-row${i === selectedPart ? " selected" : ""}`} onClick={() => onSelect({ kind: "part", part: i }, true)}>
                   <span className="list-name">{p.name}</span>
-                  <span className="list-meta">{p.device ?? ""}</span>
+                  <span className="list-meta">{schematicFacts?.parts.get(p.name.toUpperCase())?.value ?? p.device ?? ""}</span>
                   <span className={`side-dot side-${p.side}`} title={p.side} />
                 </button>
               );

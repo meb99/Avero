@@ -4,7 +4,8 @@ import type { BoardModel } from "../core/board";
 import type { Selection } from "../core/types";
 import { useI18n } from "../i18n";
 import { formatValue, QUANTITIES, type Reading } from "../workbench/measure";
-import { activeCase, addCase, netStatuses, removeCase, setConditions, updateCase, type BoardNotes, type NetStatus } from "../workbench/notes";
+import { activeCase, addCase, netStatuses, removeCase, removeDrawing, setConditions, updateCase, updateDrawing, type BoardNotes, type NetStatus } from "../workbench/notes";
+import { formatLength } from "../format";
 import { exportNotes, importNotes } from "../workbench/store";
 import { CaseEditor, CaseHistory } from "./CaseEditor";
 import { ConditionsEditor } from "./Conditions";
@@ -19,8 +20,10 @@ interface Props {
   onTolerance(t: number): void;
   onSelect(selection: Selection, zoom: boolean): void;
   onShowMarker(id: string): void;
+  onShowDrawing(id: string): void;
   error: string | null;
   selection: Selection;
+  units: "mm" | "mil";
 }
 
 const SHORT = { diode: "D", voltage: "U", resistance: "R" } as const;
@@ -49,7 +52,7 @@ function NotesField({ value, onSave, placeholder }: { value: string; onSave(v: s
 }
 
 /** The "Measure" tab: repair cases, all measured nets, notes, import/export. */
-export function Workbench({ model, notes, update, tolerance, onTolerance, onSelect, onShowMarker, error, selection }: Props) {
+export function Workbench({ model, notes, update, tolerance, onTolerance, onSelect, onShowMarker, onShowDrawing, error, selection, units }: Props) {
   const { t, lang } = useI18n();
   const [onlyDeviations, setOnlyDeviations] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -223,6 +226,39 @@ export function Workbench({ model, notes, update, tolerance, onTolerance, onSele
                 <span className="muted">{t(m.side === "top" ? "side.top" : "side.bottom")}</span>
               </li>
             ))}
+          </ul>
+        </section>
+      )}
+
+      {(notes.drawings?.length ?? 0) > 0 && (
+        <section className="wb-section">
+          <h3>
+            {t("draw.list")} <span className="muted">{notes.drawings!.length}</span>
+          </h3>
+          <ul className="marker-list drawing-list">
+            {notes.drawings!.map((d) => {
+              const length = d.points.slice(1).reduce((s, p, i) => s + Math.hypot(p.x - d.points[i].x, p.y - d.points[i].y), 0);
+              return (
+                <li key={d.id}>
+                  <button className="link" onClick={() => onShowDrawing(d.id)}>
+                    {t(`draw.kind.${d.kind}`)}
+                    {d.kind === "jumper" && d.from && d.to ? `: ${d.from} → ${d.to}` : ""}
+                  </button>
+                  {d.kind !== "area" && <span className="muted"> {t("draw.length", { length: formatLength(length, units) })}</span>}
+                  <span className="muted"> · {t(d.side === "top" ? "side.top" : "side.bottom")}</span>
+                  <input
+                    className="drawing-text"
+                    defaultValue={d.text ?? ""}
+                    placeholder={t("draw.text")}
+                    onBlur={(e) => e.target.value !== (d.text ?? "") && update((n) => updateDrawing(n, d.id, e.target.value.trim()))}
+                    onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                  />
+                  <button className="tool icon-only danger" onClick={() => update((n) => removeDrawing(n, d.id))} title={t("draw.delete")} aria-label={t("draw.delete")}>
+                    ×
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}

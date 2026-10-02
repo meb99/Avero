@@ -13,6 +13,8 @@ export interface DisplayOptions {
   pinnedNets?: ReadonlyMap<number, RGBA>;
   /** Fade everything that is not part of the current selection. */
   dimUnselected: boolean;
+  /** Parts selected together with the selection. */
+  extraParts?: ReadonlySet<number>;
 }
 
 /** Per-element colors for one frame, as GPU-ready byte arrays. */
@@ -72,7 +74,7 @@ export function computeStyle(
   const farGhost = options.ghostOtherSide ? GHOST_ALPHA : 0;
   const farHighlight = options.ghostOtherSide ? FAR_HIGHLIGHT_ALPHA : 0;
   const selectedPart = model.selectedPart(selection);
-  const hasFocus = selection.kind !== "none";
+  const hasFocus = selection.kind !== "none" || (options.extraParts?.size ?? 0) > 0;
   const dim = hasFocus && options.dimUnselected ? DIM_ALPHA : 1;
 
   const partsOnNet = new Set<number>();
@@ -166,14 +168,14 @@ export function computeStyle(
     partOutlineWidths[i] = 1;
     put(padMarkColors, i, palette.padMark, near ? dim : far);
     const pkg = parts[i].package;
-    if (pkg && i !== selectedPart) {
+    if (pkg && i !== selectedPart && !options.extraParts?.has(i)) {
       // Package families in their own colors: caps tan, coils grey, chips black.
       put(partFillColors, i, palette.packageFill[pkg], near ? (partsOnNet.has(i) ? 1 : dim) : far);
       put(partOutlineColors, i, partsOnNet.has(i) ? palette.partOnNetOutline : palette.partOutline, near ? (partsOnNet.has(i) ? 1 : dim) : far);
       partOutlineWidths[i] = partsOnNet.has(i) ? 2 : 1;
       continue;
     }
-    if (i === selectedPart) {
+    if (i === selectedPart || options.extraParts?.has(i)) {
       put(partFillColors, i, palette.partSelectedFill, near ? 1 : farHighlight);
       put(partOutlineColors, i, palette.partSelectedOutline, near ? 1 : farHighlight);
       partOutlineWidths[i] = 2;
