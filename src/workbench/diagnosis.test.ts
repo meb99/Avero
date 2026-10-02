@@ -34,6 +34,10 @@ describe("fault-finding guide", () => {
     expect(railVolts("+1V8_MAIN")).toBe(1.8);
     expect(railVolts("+19VB")).toBe(19);
     expect(railVolts("+0.6VSP")).toBe(0.6);
+    expect(railVolts("PP1V8_S0")).toBe(1.8);
+    expect(railVolts("PP3V3_HDMI")).toBe(3.3);
+    expect(railVolts("P5V_HDMI")).toBe(5);
+    expect(railVolts("PPBUS_G3H")).toBeUndefined();
     expect(railVolts("EN_3V")).toBeUndefined();
     expect(railVolts("VIN_3/5V")).toBeUndefined();
   });

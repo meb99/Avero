@@ -44,7 +44,8 @@ export interface DiagStep {
 
 /** Nominal voltage a rail name states: "+3VALW" 3.3, "+1.05VS" 1.05, "+1V8_MAIN" 1.8, "+19VB" 19. */
 export function railVolts(name: string): number | undefined {
-  const m = /^\+?(\d+(?:\.\d+)?)V(\d+)?/i.exec(name.trim());
+  // "+3VALW", or "PP1V8_S0" / "P5V_HDMI" as Apple and console boards name rails.
+  const m = /^(?:\+|PP_?|P(?=\d))?(\d+(?:\.\d+)?)V(\d+)?/i.exec(name.trim());
   if (!m) return undefined;
   const volts = m[2] ? Number(`${m[1]}.${m[2]}`) : Number(m[1]);
   // "3V" rails are 3.3 V.
