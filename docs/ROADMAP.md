@@ -60,9 +60,12 @@ Diese Punkte brauchen **echte Beispieldateien**, die Avero nicht mitliefern darf
 - Diodenwerte aus XZZ-Dateien (Abschnitt nach `v6v6555v6v6`) als Referenzwerte übernehmen – Aufbau des Abschnitts ist nicht öffentlich beschrieben
 - XZZ-Bauteile auf der Unterseite erkennen (bisher alles „Oben", wie bei OpenBoardView)
 - Teboview `.tvw` – keine freie Formatbeschreibung
+- Cadence Allegro `.brd` (binär), Altium `.PcbDoc`, `.cae` – werden erkannt, aber noch nicht gelesen
+- Boardviews, die nur als PDF vorliegen (Bauteilnamen und Pads als Zeichnung)
 - `.fz`-Dateien mit echtem Schlüssel gegenprüfen (bisher mit synthetischen Dateien nach OpenBoardView getestet)
+- Multimeter-Profile über Owon XDM hinaus mit echten Geräten prüfen (Antwort auf `*IDN?` und `MEAS?`)
+
+Erledigt in 0.9.20: Pin-Sprung in den Schaltplan, echte Pad-Formen aus GenCAD, frei belegbare Tastenkürzel, Texterkennung für gescannte Schaltpläne, XZZ über den Konverter vollständig öffnen.
 
 Weitere Ideen:
-- Pin-Nummern im Schaltplan dem Pin im Board zuordnen
-- echte Pad-Formen und Bauteil-Silkscreen, wo das Format sie enthält
-- frei belegbare Tastenkürzel
+- Bauteil-Silkscreen, wo das Format ihn enthält

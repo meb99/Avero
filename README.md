@@ -20,7 +20,7 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 
 **Boardview**
 - Liest Test_Link `.brd` (auch verschleierte Dateien), BRD2, Honhan `.bdv`, ASUS `.asc` und `.fz`, BoardViewer `.bvr` / BVR3, GenCAD, Panel-CAD, IBM `.cst`, XinZhiZao `.pcb`, KiCad `.kicad_pcb` und EAGLE / Fusion 360 `.brd` (XML).
-- XinZhiZao- und die meisten ASUS-`.fz`-Dateien sind verschlüsselt: Die Schlüssel trägst du einmal in den Einstellungen ein (Avero liefert sie nicht mit, genau wie OpenBoardView). XZZ-Dateien öffnen sich auch ohne Schlüssel mit allem, was nicht verschlüsselt ist (Umriss, Netze, Testpunkte); nur die Bauteile brauchen ihn. Unverschlüsselte `.fz`-Dateien öffnen sich direkt.
+- Die meisten ASUS-`.fz`-Dateien sind verschlüsselt: Den Schlüssel trägst du einmal in den Einstellungen ein (Avero liefert ihn nicht mit, genau wie OpenBoardView); unverschlüsselte `.fz`-Dateien öffnen sich direkt. XinZhiZao-`.pcb`-Dateien öffnen sich vollständig: Bleiben Bauteile beim direkten Lesen gesperrt, übernimmt der XZZ-Konverter der Bibliothek und liefert alle Bauteile samt Pad-Formen und Leiterbahnen. Ein eigener XZZ-Schlüssel aus den Einstellungen hat Vorrang.
 - Flüssige Darstellung per GPU (WebGL 2), auch bei zehntausenden Pins.
 - Oberseite / Unterseite (gespiegelt wie ein umgedrehtes Board), Drehen in 90°-Schritten. „Oben“ und „Unten“ schalten sich einzeln: beide an zeigt **beide Seiten zugleich** wie in FlexBV – die Unterseite gespiegelt neben (bei breiten Boards unter) der Oberseite, Verbindungslinien eines Netzes laufen über beide Seiten, Klicks wählen auf der Seite, auf die man klickt.
 - Klick auf einen Pin hebt das ganze Netz hervor. Pins desselben Netzes auf der anderen Seite bleiben schwach sichtbar, damit man sieht, wohin das Signal geht.
@@ -63,6 +63,20 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - **Notizen** pro Board und pro Fall, Export/Import als JSON (z. B. Referenzwerte weitergeben).
 - **Foto des echten Boards** unter der Boardview (Darstellung → „Foto dieser Seite hinzufügen…"): zwei markante Punkte im Foto anklicken, dann dieselben Punkte auf dem Board (Pins rasten ein) – das Foto liegt danach deckungsgleich darunter, mit einstellbarer Deckkraft, getrennt für Ober- und Unterseite. Liegt neben dem Board ein PDF mit einem Bild der Platine (wie bei manchen Boardview-Paketen), übernimmt Avero die angezeigte Seite mit einem Klick als Foto und legt es selbst auf den Board-Umriss – ohne Datei auswählen, ohne Punkte klicken. Mit „Daneben“ steht das Foto unverändert neben dem Board: ein Klick auf ein Bauteil im Foto wählt es auf dem Board aus und springt hin, das Bauteil unter dem Mauszeiger wird mit Namen angezeigt, und was auf dem Board ausgewählt ist (Bauteil, Pin, alle Pins eines Netzes), wird im Foto markiert.
 - **Inhaltssuche über die ganze Bibliothek** (Bibliothek → „Inhalt“): Schaltpläne werden nach Text durchsucht, Boardviews nach Bauteilen und Netzen. Alles wird einmal indiziert; ein Klick auf einen Treffer öffnet Board und Schaltplan und springt zur Fundstelle.
+
+**Neu in 0.9.20**
+- **Messen:** Messbedingungen je Wert (Netzteil, Akku, eingeschaltet, Standby …), Verlauf jeder Messung, Messlisten mit Fortschritt und „Nächster Punkt“, eigene Fehlersuch-Abläufe mit Verzweigungen („in Ordnung“ → weiter, „abweichend“ → anderer Schritt), ein Reparaturfall lässt sich als Ablauf speichern.
+- **Fehlersuche für Konsolen und Controller:** „lädt nicht“, „kein Bild (HDMI/Dock)“ und „geht sofort wieder aus“ – gebaut aus den Netznamen des offenen Boards und erkannten Chips (M92T36, BQ24193, MN864739, TDP158, NB7NQ621M …): Kurzschlussprüfung von VBUS, CC und HDMI-Leitungen, HDMI 5 V und Hot Plug, Lade-IC-Pins laut Datenblatt, Akku, Schienen nach der Spannung in ihrem Namen.
+- **Multimeter über USB** (Einstellungen → Multimeter): Owon XDM und andere SCPI-Tischmultimeter. Jedes Messfeld bekommt einen ⇣-Knopf; „Speichern und weiter“ (Taste oder Fußpedal) übernimmt den Wert des Messgeräts in ein leeres Feld und springt zum nächsten Punkt.
+- **Mikroskop / Kamera:** Livebild neben dem Board mit Zoom, Spiegeln, Drehen, Fadenkreuz und Standbild; Fotos gehen direkt in den Reparaturfall oder werden als Board-Foto ausgerichtet.
+- **Foto-Ausrichtung mit 3 oder 4 Punkten:** Vier Punkte richten auch schräg fotografierte Platinen perspektivisch gerade.
+- **Schaltplan:** Ein gewählter Pin springt im Schaltplan genau an seine Stelle am Symbol (Pinnummer und Netz markiert). **Gescannte Schaltpläne** lesbar machen: „Text erkennen“ liest Seiten ohne Text auf dem Mac (Tesseract, ohne Internet, auch senkrechte Beschriftungen), danach sind Bauteile und Netze such- und anklickbar; fast richtig erkannte Namen werden an die Schreibweise des Boards angepasst.
+- **Board-Werkzeuge:** Mehrfachauswahl (⌘/⇧-Klick) mit gemeinsamen Netzen, Bauteilsuche nach Werten („10uF 16V 0603“), BGA-Ansicht mit Ball-Raster, Zeichnen von Schadensbereichen, Linien und Jumpern (mit Vorschlag passender Jumper-Ziele), getrennte Ansichten für Ober- und Unterseite (frei oder synchron), echte Pad-Formen (rechteckig, rund, gedreht) aus GenCAD.
+- **Vergleich zweier Boards:** Unterschiede bei Bauteilen, Pins und Netzen als Liste, auf dem Board markierbar. **Spenderteile:** Wo steckt dasselbe Bauteil auf anderen Boards der Bibliothek, und wie gut passt die Pinbelegung?
+- **Datenblätter:** Hersteller-PDFs in Avero ablegen, Teilenummern zuordnen, beim Bauteil öffnen und wichtige Seiten (Pinbelegung, Kennwerte) als Lesezeichen merken.
+- **Wissen offline:** Im Browser als „Webseite, vollständig“ gesicherte Wiki-Seiten bringen ihre Bilder mit; Avero zeigt sie ohne Internet.
+- **Sicherheit:** Rückgängig/Wiederholen für Messwerte und Notizen, automatische Versionen je Board (alle 10 Minuten, 100 Stände), vollständige Sicherung von Bibliothek, Daten und Einstellungen in eine ZIP-Datei samt Wiederherstellung, Arbeitsplatz (offene Boards, Schaltpläne, Ansicht) beim Start zurück, Importbericht zu jeder Datei.
+- **Tastenkürzel frei belegbar** (Einstellungen → Tasten), auch für Fußpedale (F13–F24, Bild ↑/↓ wirken sogar beim Tippen in Messfeldern).
 - Gespeichert wird lokal unter `~/Library/Application Support/dev.meb99.avero/boards/`, eine Datei pro Board. Alle Dateien desselben Boards (etwa `.brd` und `.bdv`) teilen sich die Messwerte über die Boardnummer.
 
 **Mac**
@@ -172,11 +186,11 @@ Boardviews und Schaltpläne sind fast immer Eigentum der Hersteller. **Sie gehö
 
 ## Weiter geht's
 
-Was noch offen ist, steht in [docs/ROADMAP.md](docs/ROADMAP.md) – vor allem Dinge, die echte Beispieldateien brauchen (XZZ-Diodenwerte und Unterseite, `.tvw`).
+Was noch offen ist, steht in [docs/ROADMAP.md](docs/ROADMAP.md) – vor allem Formate, die echte Beispieldateien brauchen: Cadence Allegro `.brd`, Teboview `.tvw`, Altium `.PcbDoc`, `.cae` und Boardviews als PDF. Avero erkennt sie bereits und sagt, dass sie noch nicht lesbar sind.
 
 ## Dank
 
-Das Wissen über die Dateiformate stammt zu großen Teilen aus [OpenBoardView](https://github.com/OpenBoardView/OpenBoardView) (MIT). PDFs werden mit [PDF.js](https://mozilla.github.io/pdf.js/) (Apache-2.0) dargestellt. Details in [NOTICE](NOTICE).
+Das Wissen über die Dateiformate stammt zu großen Teilen aus [OpenBoardView](https://github.com/OpenBoardView/OpenBoardView) (MIT). PDFs werden mit [PDF.js](https://mozilla.github.io/pdf.js/) (Apache-2.0) dargestellt, gescannte Schaltpläne mit [Tesseract.js](https://github.com/naptha/tesseract.js) (Apache-2.0) gelesen. Details in [NOTICE](NOTICE).
 
 ## Lizenz
 

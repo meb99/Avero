@@ -42,3 +42,13 @@ pictures on Repair Wiki (https://repair.wiki; each page names its source), by
 its contributors, licensed under Creative Commons Attribution-ShareAlike 3.0
 (https://creativecommons.org/licenses/by-sa/3.0/). The values in that file
 are shared under the same license.
+
+Text recognition for scanned schematics bundles Tesseract.js (tesseract.js,
+tesseract.js-core; Copyright Jerome Wu and contributors) with the Tesseract
+OCR engine (Copyright Google and contributors) and its English model
+(@tesseract.js-data/eng, from tesseract-ocr/tessdata), all licensed under
+the Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0). They
+are copied into the app under ocr/.
+
+Serial ports for multimeters are opened with the `serialport` crate
+(MPL-2.0, https://github.com/serialport/serialport-rs).

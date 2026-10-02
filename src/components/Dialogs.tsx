@@ -303,6 +303,11 @@ export function HelpDialog({ onClose }: { onClose(): void }) {
     ["help.pages", "help.pagesLabel"],
     ["help.hits", "help.hitsLabel"],
     ["help.schematicSearch", "help.schematicSearchLabel"],
+    ["help.multi", "help.multiLabel"],
+    ["help.both", "help.bothLabel"],
+    ["help.next", "help.nextLabel"],
+    ["help.commitNext", "help.commitNextLabel"],
+    ["help.undo", "help.undoLabel"],
     ["help.clear", "help.clearLabel"],
   ] as const;
   return (
@@ -319,6 +324,7 @@ export function HelpDialog({ onClose }: { onClose(): void }) {
           ))}
         </tbody>
       </table>
+      <p className="muted setting-hint">{t("help.ownKeys")}</p>
     </Dialog>
   );
 }
