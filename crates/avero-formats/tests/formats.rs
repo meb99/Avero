@@ -992,3 +992,14 @@ fn gencad_pad_shapes() {
     assert_close(oblong.h, 20.0);
     assert!(oblong.round);
 }
+
+#[test]
+fn altium_pcbdoc_is_named_not_unknown() {
+    let mut ole = vec![0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+    ole.resize(512, 0);
+    assert_eq!(
+        avero_formats::detect(&ole, Some("Main.PcbDoc")),
+        avero_formats::Detected::Unsupported("Altium PcbDoc")
+    );
+    assert_eq!(parse(&ole, Some("Main.PcbDoc")).unwrap_err(), ParseError::Unsupported("Altium PcbDoc"));
+}

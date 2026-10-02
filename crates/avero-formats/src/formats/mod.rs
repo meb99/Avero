@@ -59,6 +59,10 @@ pub fn detect(buf: &[u8], file_name: Option<&str>) -> Detected {
         "fz" => return Detected::Supported(FormatId::Fz),
         "cae" => return Detected::Unsupported("CAE"),
         "tvw" => return Detected::Unsupported("Teboview TVW"),
+        // Altium's binary design files (an OLE compound document).
+        "pcbdoc" if buf.starts_with(&[0xD0, 0xCF, 0x11, 0xE0]) => {
+            return Detected::Unsupported("Altium PcbDoc")
+        }
         "asc" | "bom" => return Detected::AscBundle,
         _ => {}
     }

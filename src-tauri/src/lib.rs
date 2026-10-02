@@ -57,6 +57,12 @@ fn find_insensitive(dir: &Path, name: &str) -> Option<PathBuf> {
 pub fn load(path: &Path, options: ParseOptions) -> Result<Board, LoadError> {
     let bytes = read(path)?;
     let name = path.file_name().and_then(|n| n.to_str());
+    if matches!(
+        avero_formats::detect(&bytes, name),
+        avero_formats::Detected::Supported(avero_formats::FormatId::Xzz)
+    ) {
+        return load_xzz(&bytes, name, options);
+    }
     match avero_formats::parse_with(&bytes, name, options) {
         Err(ParseError::NeedsAscFiles) => {
             let dir = path.parent().unwrap_or(Path::new("."));
@@ -67,6 +73,32 @@ pub fn load(path: &Path, options: ParseOptions) -> Result<Board, LoadError> {
             Ok(avero_formats::parse_asc(format.as_deref(), &read(&pins)?, nails.as_deref())?)
         }
         other => Ok(other?),
+    }
+}
+
+/// XZZ boards: the direct reader first. Where it stays incomplete (parts
+/// locked without a matching key, or none read), the library converter
+/// fills in: its GenCAD output, read like any GenCAD file, has every part
+/// with pad shapes and traces. A complete direct read is kept as it is, so
+/// markers and photo alignments on such boards stay where they are.
+fn load_xzz(bytes: &[u8], name: Option<&str>, options: ParseOptions) -> Result<Board, LoadError> {
+    let key = options.xzz_key;
+    let direct = avero_formats::parse_with(bytes, name, options);
+    let complete = matches!(&direct, Ok(b) if b.locked_parts == 0 && !b.parts.is_empty());
+    if complete {
+        return Ok(direct?);
+    }
+    let converted = avero_formats::convert::xzz_to_gencad(bytes, name.unwrap_or("board"), key)
+        .ok()
+        .and_then(|c| avero_formats::parse(&c.cad, Some("converted.gcd")).ok())
+        .filter(|b| !b.parts.is_empty());
+    match (direct, converted) {
+        (_, Some(mut board)) => {
+            board.format = avero_formats::FormatId::Xzz;
+            board.format_name = format!("{} → GenCAD", avero_formats::FormatId::Xzz.display_name());
+            Ok(board)
+        }
+        (direct, None) => Ok(direct?),
     }
 }
 
@@ -746,6 +778,105 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A small synthetic XZZ board whose part is not encrypted: the direct
+    /// reader treats it as locked, the converter reads it.
+    fn plain_xzz() -> Vec<u8> {
+        fn word(d: &mut Vec<u8>, n: u32) {
+            d.extend(n.to_le_bytes());
+        }
+        fn put(d: &mut [u8], at: usize, n: u32) {
+            d[at..at + 4].copy_from_slice(&n.to_le_bytes());
+        }
+        fn block(out: &mut Vec<u8>, kind: u8, body: &[u8]) {
+            out.push(kind);
+            word(out, body.len() as u32);
+            out.extend(body);
+        }
+        fn label(s: &str) -> Vec<u8> {
+            let mut b = vec![0; 30];
+            put(&mut b, 26, s.len() as u32);
+            b.extend(s.as_bytes());
+            b
+        }
+        fn pin(name: &str, x: u32, y: u32, net: u32) -> Vec<u8> {
+            let mut b = vec![0; 24];
+            put(&mut b, 0, 1);
+            put(&mut b, 4, x * 10000);
+            put(&mut b, 8, y * 10000);
+            put(&mut b, 16, 900000);
+            put(&mut b, 20, name.len() as u32);
+            b.extend(name.as_bytes());
+            for _ in 0..3 {
+                word(&mut b, 40000);
+                word(&mut b, 20000);
+                b.push(2);
+            }
+            b.extend([0; 5]);
+            word(&mut b, net);
+            b.extend([0; 8]);
+            b
+        }
+        let mut part = vec![0; 26];
+        put(&mut part, 8, 1000000);
+        put(&mut part, 12, 2000000);
+        put(&mut part, 16, 900000);
+        put(&mut part, 22, 3);
+        part.extend(b"QFN");
+        block(&mut part, 6, &label("U1"));
+        block(&mut part, 6, &label("MCU"));
+        block(&mut part, 9, &pin("1", 110, 205, 5));
+        block(&mut part, 9, &pin("2", 130, 210, 7));
+        block(&mut part, 3, &[b'x'; 9]);
+        let size = part.len() - 4;
+        put(&mut part, 0, size as u32);
+        part.resize(part.len().div_ceil(8) * 8 + 3, 0);
+        let mut main = vec![0; 4];
+        for edge in [[100, 200, 140, 200], [140, 200, 140, 220], [140, 220, 100, 220], [100, 220, 100, 200]] {
+            let mut b = Vec::new();
+            word(&mut b, 28);
+            for n in edge {
+                word(&mut b, n * 10000);
+            }
+            word(&mut b, 10000);
+            word(&mut b, 0);
+            block(&mut main, 5, &b);
+        }
+        block(&mut main, 7, &part);
+        let mut nets = Vec::new();
+        for (id, name) in [(5, "GND"), (7, "PP3V3")] {
+            word(&mut nets, 8 + name.len() as u32);
+            word(&mut nets, id);
+            nets.extend(name.as_bytes());
+        }
+        let mut file = vec![0; 0x64];
+        file[..6].copy_from_slice(b"XZZPCB");
+        put(&mut file, 0x20, 0x40);
+        put(&mut file, 0x60, main.len() as u32);
+        file.extend(main);
+        let net_offset = file.len() - 0x20;
+        put(&mut file, 0x28, net_offset as u32);
+        word(&mut file, nets.len() as u32);
+        file.extend(nets);
+        file.extend(b"v6v6555v6v6 metadata");
+        file
+    }
+
+    #[test]
+    fn xzz_opens_through_the_converter_when_the_direct_read_is_incomplete() {
+        let path = std::env::temp_dir().join(format!("avero-xzz-{}.pcb", std::process::id()));
+        std::fs::write(&path, plain_xzz()).unwrap();
+        let direct = avero_formats::parse_with(&plain_xzz(), Some("x.pcb"), ParseOptions::default());
+        assert!(!matches!(&direct, Ok(b) if !b.parts.is_empty() && b.locked_parts == 0), "{direct:?}");
+        let board = load(&path, ParseOptions::default()).unwrap();
+        assert_eq!(board.format, avero_formats::FormatId::Xzz);
+        assert!(board.format_name.ends_with("GenCAD"), "{}", board.format_name);
+        assert_eq!(board.parts.len(), 1);
+        assert_eq!(board.parts[0].name, "U1");
+        assert_eq!(board.pins.len(), 2);
+        assert!(board.nets.iter().any(|n| n.name == "PP3V3"));
+        std::fs::remove_file(&path).unwrap();
+    }
 
     #[test]
     fn loads_asc_companions_case_insensitively() {
