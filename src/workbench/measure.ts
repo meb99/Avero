@@ -9,6 +9,32 @@ export const QUANTITIES: Quantity[] = ["diode", "voltage", "resistance"];
 /** A reading in base units (volts, ohms), or "OL" for an open/overload reading. */
 export type Value = number | "OL";
 
+/**
+ * How a reading was taken. Readings are only compared when their conditions
+ * fit: a diode value with the red probe on ground is not comparable with one
+ * taken the other way round, a voltage with the board on not with one off.
+ */
+export interface Conditions {
+  /** Board revision, e.g. "Rev 2.0". */
+  revision?: string;
+  power?: "off" | "standby" | "on";
+  /** Battery connected. */
+  battery?: boolean;
+  /** Diode mode: the probe on ground (red on ground gives the usual positive "diode readings"). */
+  polarity?: "red-gnd" | "black-gnd";
+  /** Meter used, e.g. "Owon XDM1241". */
+  meter?: string;
+}
+
+/** An earlier value of a reading, kept when it changed. */
+export interface HistoryEntry {
+  at: string;
+  diode?: Value;
+  voltage?: Value;
+  resistance?: Value;
+  cond?: Conditions;
+}
+
 export interface Reading {
   diode?: Value;
   voltage?: Value;
@@ -16,7 +42,14 @@ export interface Reading {
   note?: string;
   /** ISO timestamp of the last change. */
   updated?: string;
+  /** Conditions the current values were taken under. */
+  cond?: Conditions;
+  /** Earlier values, oldest first. */
+  history?: HistoryEntry[];
 }
+
+/** Most earlier values kept per reading. */
+export const HISTORY_MAX = 50;
 
 export type Comparison = "ok" | "deviation";
 
@@ -92,11 +125,37 @@ export function compare(reference: Value | undefined, measured: Value | undefine
   return Math.abs(measured - reference) <= allowed ? "ok" : "deviation";
 }
 
-/** Worst comparison over all quantities of two readings. */
-export function compareReadings(reference: Reading | undefined, measured: Reading | undefined, tolerance: number): Comparison | undefined {
-  let result: Comparison | undefined;
+/**
+ * Whether two readings of quantity `q` were taken under fitting conditions.
+ * Unknown conditions fit anything; only conditions stated on both sides and
+ * different rule a comparison out.
+ */
+export function conditionsFit(a: Conditions | undefined, b: Conditions | undefined, q: Quantity): boolean {
+  if (!a || !b) return true;
+  const differ = <K extends keyof Conditions>(k: K) => a[k] !== undefined && b[k] !== undefined && a[k] !== b[k];
+  if (differ("revision")) return false;
+  if (q === "voltage") return !differ("power") && !differ("battery");
+  // Diode and resistance readings: probe direction, and the board off (or not) on both sides.
+  return !differ("polarity") && !differ("power");
+}
+
+/**
+ * Worst comparison over all quantities of two readings; "mismatch" when the
+ * readings exist but were taken under conditions that do not fit.
+ */
+export function compareReadings(
+  reference: Reading | undefined,
+  measured: Reading | undefined,
+  tolerance: number,
+): Comparison | "mismatch" | undefined {
+  let result: Comparison | "mismatch" | undefined;
   for (const q of QUANTITIES) {
-    const c = compare(reference?.[q], measured?.[q], q, tolerance);
+    if (reference?.[q] === undefined || measured?.[q] === undefined) continue;
+    if (!conditionsFit(reference.cond, measured.cond, q)) {
+      result ??= "mismatch";
+      continue;
+    }
+    const c = compare(reference[q], measured[q], q, tolerance);
     if (c === "deviation") return "deviation";
     if (c === "ok") result = "ok";
   }

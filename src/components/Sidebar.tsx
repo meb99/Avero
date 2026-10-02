@@ -217,7 +217,7 @@ export function Sidebar({
 
       {tab === "diagnose" && (
         <div className="panel scroll">
-          <Diagnosis model={model} notes={notes} update={updateNotes} onSelect={onSelect} schematicFacts={schematicFacts} />
+          <Diagnosis model={model} notes={notes} update={updateNotes} onSelect={onSelect} schematicFacts={schematicFacts} selection={selection} />
         </div>
       )}
 
@@ -232,6 +232,7 @@ export function Sidebar({
             onSelect={onSelect}
             onShowMarker={onShowMarker}
             error={notesError}
+            selection={selection}
           />
         </div>
       )}

@@ -327,6 +327,24 @@ fn data_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path().app_data_dir().map_err(|e| e.to_string())
 }
 
+/// App-wide JSON stores in the data folder, by name: saved diagnosis flows,
+/// the datasheet register, the workspace to restore, key bindings.
+const STORES: &[&str] = &["flows", "datasheets", "workspace", "shortcuts"];
+
+fn store_name(name: &str) -> Result<&str, String> {
+    STORES.iter().copied().find(|s| *s == name).ok_or_else(|| format!("unknown store {name}"))
+}
+
+#[tauri::command]
+fn load_store(app: tauri::AppHandle, name: String) -> Result<Option<String>, String> {
+    notes::load(&data_dir(&app)?, store_name(&name)?)
+}
+
+#[tauri::command]
+fn save_store(app: tauri::AppHandle, name: String, data: String) -> Result<(), String> {
+    notes::save(&data_dir(&app)?, store_name(&name)?, &data)
+}
+
 /// Imported repair knowledge (wiki pages), one JSON file.
 #[tauri::command]
 fn load_knowledge(app: tauri::AppHandle) -> Result<Option<String>, String> {
@@ -476,6 +494,8 @@ pub fn run() {
             remove_photo,
             load_text_index,
             load_knowledge,
+            load_store,
+            save_store,
             save_knowledge,
             save_text_index,
             check_update,

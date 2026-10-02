@@ -230,7 +230,8 @@ export async function caseReport(input: ReportInput): Promise<Uint8Array> {
         while (s.length > 1 && font.widthOfTextAtSize(s, 9) > max) s = s.slice(0, -2) + "…";
         w.page.drawText(s, { x: cols[i], y: w.y - 9, size: 9, font, color: INK });
       });
-      if (result) {
+      // Readings under different conditions are not judged.
+      if (result === "ok" || result === "deviation") {
         w.page.drawText(safeText(bold, result === "ok" ? texts.ok : texts.deviation), {
           x: cols[3],
           y: w.y - 9,

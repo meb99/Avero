@@ -4,9 +4,11 @@ import type { BoardModel } from "../core/board";
 import type { Selection } from "../core/types";
 import { useI18n } from "../i18n";
 import { formatValue, QUANTITIES, type Reading } from "../workbench/measure";
-import { activeCase, addCase, netStatuses, removeCase, updateCase, type BoardNotes, type NetStatus } from "../workbench/notes";
+import { activeCase, addCase, netStatuses, removeCase, setConditions, updateCase, type BoardNotes, type NetStatus } from "../workbench/notes";
 import { exportNotes, importNotes } from "../workbench/store";
 import { CaseEditor, CaseHistory } from "./CaseEditor";
+import { ConditionsEditor } from "./Conditions";
+import { MeasureLists } from "./MeasureLists";
 
 interface Props {
   model: BoardModel;
@@ -17,6 +19,7 @@ interface Props {
   onSelect(selection: Selection, zoom: boolean): void;
   onShowMarker(id: string): void;
   error: string | null;
+  selection: Selection;
 }
 
 const SHORT = { diode: "D", voltage: "U", resistance: "R" } as const;
@@ -45,7 +48,7 @@ function NotesField({ value, onSave, placeholder }: { value: string; onSave(v: s
 }
 
 /** The "Measure" tab: repair cases, all measured nets, notes, import/export. */
-export function Workbench({ model, notes, update, tolerance, onTolerance, onSelect, onShowMarker, error }: Props) {
+export function Workbench({ model, notes, update, tolerance, onTolerance, onSelect, onShowMarker, error, selection }: Props) {
   const { t, lang } = useI18n();
   const [onlyDeviations, setOnlyDeviations] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -131,7 +134,21 @@ export function Workbench({ model, notes, update, tolerance, onTolerance, onSele
           />
         )}
         {current && <CaseEditor notes={notes} repair={current} update={update} tolerance={tolerance} onMessage={setMessage} />}
+        <details className="wb-conditions">
+          <summary>{t("cond.title")}</summary>
+          {current && (
+            <>
+              <div className="wb-label">{current.title}</div>
+              <ConditionsEditor value={current.conditions} onChange={(c) => update((n) => setConditions(n, { caseId: current.id }, c))} />
+            </>
+          )}
+          <div className="wb-label">{t("measure.reference")}</div>
+          <ConditionsEditor value={notes.referenceConditions} onChange={(c) => update((n) => setConditions(n, "reference", c))} />
+          <p className="muted">{t("cond.hint")}</p>
+        </details>
       </section>
+
+      <MeasureLists model={model} notes={notes} update={update} selection={selection} onSelect={onSelect} />
 
       <section className="wb-section">
         <div className="wb-row wb-head">

@@ -201,6 +201,7 @@ export function drawLabels(
 
 const STATUS_COLOR: Record<NetStatus, string> = {
   ok: "#43a047",
+  mismatch: "#ab47bc",
   deviation: "#e53935",
   measured: "#1e88e5",
   reference: "#8d9aa6",

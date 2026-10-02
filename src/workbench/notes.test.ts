@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   addCase,
+  addList,
+  listProgress,
+  setConditions,
   addMarker,
   boardKey,
   caseToReference,
@@ -142,5 +145,64 @@ describe("OpenBoardData choice", () => {
     expect(parseNotes(JSON.stringify(chosen))?.obdata).toBe("820-00165");
     expect(mergeNotes(emptyNotes("820-00165", "A1466"), chosen).obdata).toBe("820-00165");
     expect(linkObdata(chosen, null).obdata).toBeUndefined();
+  });
+});
+
+describe("measuring conditions and history", () => {
+  const base = () => addCase(emptyNotes("820-02100", "x"), "Gerät 1");
+
+  it("keeps earlier values when a reading changes", () => {
+    let n = base();
+    const target = { caseId: n.activeCase! };
+    n = setValue(n, target, "PP3V3", "diode", 0.42);
+    n = setValue(n, target, "PP3V3", "diode", 0.05);
+    n = setValue(n, target, "PP3V3", "diode", 0.43);
+    const r = n.cases[0].readings.PP3V3;
+    expect(r.diode).toBe(0.43);
+    expect(r.history?.map((h) => h.diode)).toEqual([0.42, 0.05]);
+    // A note alone does not make a history entry.
+    n = setReading(n, target, "PP3V3", { note: "nach Tausch von C12" });
+    expect(n.cases[0].readings.PP3V3.history).toHaveLength(2);
+  });
+
+  it("stamps readings with the target's conditions and compares only fitting ones", () => {
+    let n = base();
+    const target = { caseId: n.activeCase! };
+    n = setConditions(n, "reference", { polarity: "red-gnd", power: "off" });
+    n = setConditions(n, target, { polarity: "black-gnd", power: "off", meter: "XDM1241" });
+    n = setValue(n, "reference", "PP3V3", "diode", 0.42);
+    n = setValue(n, target, "PP3V3", "diode", 0.7);
+    expect(n.reference.PP3V3.cond).toEqual({ polarity: "red-gnd", power: "off" });
+    expect(n.cases[0].readings.PP3V3.cond?.meter).toBe("XDM1241");
+    expect(netStatuses(n, 0.1).get("PP3V3")).toBe("mismatch");
+    // Same polarity: compared again, and the deviation shows.
+    n = setConditions(n, target, { polarity: "red-gnd", power: "off" });
+    n = setValue(n, target, "PP3V3", "diode", 0.71);
+    expect(netStatuses(n, 0.1).get("PP3V3")).toBe("deviation");
+  });
+
+  it("round-trips conditions and lists through JSON", () => {
+    let n = base();
+    n = setConditions(n, "reference", { battery: false, revision: "Rev 2.0" });
+    n = addList(n, "Ladeteil", [
+      { net: "PP3V3", quantity: "diode" },
+      { net: "PP3V3", quantity: "diode" },
+      { net: "VBUS", quantity: "voltage" },
+    ]);
+    const back = parseNotes(JSON.stringify(n))!;
+    expect(back.referenceConditions).toEqual({ battery: false, revision: "Rev 2.0" });
+    expect(back.lists?.[0].items).toEqual([
+      { net: "PP3V3", quantity: "diode" },
+      { net: "VBUS", quantity: "voltage" },
+    ]);
+  });
+
+  it("tracks list progress for the active case", () => {
+    let n = addList(base(), "L", [
+      { net: "PP3V3", quantity: "diode" },
+      { net: "VBUS", quantity: "voltage" },
+    ]);
+    n = setValue(n, { caseId: n.activeCase! }, "VBUS", "voltage", 5.1);
+    expect(listProgress(n, n.lists![0])).toEqual({ done: [false, true], count: 1 });
   });
 });

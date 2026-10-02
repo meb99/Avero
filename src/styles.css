@@ -1423,6 +1423,10 @@ button.danger {
   background: #1e88e5;
 }
 
+.status-dot.status-mismatch {
+  background: #ab47bc;
+}
+
 /* Workbench tab */
 
 .workbench {
@@ -3005,4 +3009,203 @@ button.danger {
   text-align: right;
   color: var(--accent);
   white-space: nowrap;
+}
+
+/* Measuring conditions, history and measurement lists */
+.conditions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 6px 8px;
+  margin: 4px 0 8px;
+}
+
+.conditions label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.conditions select,
+.conditions input {
+  font-size: 12px;
+  min-width: 0;
+}
+
+.wb-conditions > summary,
+.measure-history > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 6px 0;
+}
+
+.measure-cond {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  margin: 4px 0;
+}
+
+.measure-history ol {
+  margin: 0 0 6px;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+.measure-history li.now {
+  font-weight: 600;
+}
+
+.value-input.status-mismatch {
+  border-color: #ab47bc;
+}
+
+.list-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 12px;
+}
+
+.list-progress progress {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.list-table td.list-done {
+  color: #43a047;
+}
+
+.list-table td.list-open {
+  color: var(--text-muted);
+}
+
+.list-label {
+  font-size: 11px;
+}
+
+.list-add {
+  flex-wrap: wrap;
+}
+
+/* Fault-finding: guide choice, actions and the editor for own guides */
+.diag-pick select {
+  width: 100%;
+}
+
+.diag-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.diag-message {
+  font-size: 12px;
+}
+
+.diag-rest summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.flow-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.flow-editor > label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.flow-editor input,
+.flow-editor textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.flow-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.flow-step {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.flow-step .wb-row {
+  align-items: center;
+}
+
+.flow-step-title {
+  flex: 1;
+  font-weight: 600;
+}
+
+.flow-points {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.flow-point {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+
+.flow-point-net {
+  font-weight: 600;
+  min-width: 90px;
+}
+
+.flow-point-cell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+
+.flow-point select {
+  max-width: 130px;
+}
+
+.flow-editor .flow-num {
+  width: 64px;
+}
+
+.flow-branches {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.flow-branches label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--text-muted);
 }

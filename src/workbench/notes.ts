@@ -1,4 +1,4 @@
-import { compareReadings, hasValues, QUANTITIES, type Comparison, type Quantity, type Reading, type Value } from "./measure";
+import { compareReadings, hasValues, HISTORY_MAX, QUANTITIES, type Comparison, type Conditions, type HistoryEntry, type Quantity, type Reading, type Value } from "./measure";
 import { parsePhoto, type BoardPhoto, type PhotoSide } from "./photo";
 
 export type CaseStatus = "open" | "waiting" | "repaired" | "unrepairable";
@@ -19,6 +19,8 @@ export interface RepairCase {
   customer?: string;
   /** Stored photo files (copied into Avero's data folder). */
   photos?: string[];
+  /** Conditions new readings of this case are taken under. */
+  conditions?: Conditions;
 }
 
 /** Fields of a case that are edited as a whole. */
@@ -55,7 +57,25 @@ export interface BoardNotes {
   markers?: BoardMarker[];
   /** OpenBoardData board (its ID, e.g. 820-00165) chosen for this board by hand. */
   obdata?: string;
+  /** Conditions new reference readings are taken under. */
+  referenceConditions?: Conditions;
+  /** Lists of points to measure, worked through one after the other. */
+  lists?: MeasureList[];
   updated: string;
+}
+
+/** One point of a measurement list. */
+export interface ListItem {
+  net: string;
+  quantity: Quantity;
+  label?: string;
+}
+
+/** Points to measure in order, e.g. all rails around the charger. */
+export interface MeasureList {
+  id: string;
+  title: string;
+  items: ListItem[];
 }
 
 /** Where a reading goes: the reference or a repair case. */
@@ -135,9 +155,44 @@ export function readingsFor(notes: BoardNotes, target: Target): Record<string, R
   return notes.cases.find((c) => c.id === target.caseId)?.readings ?? {};
 }
 
-function withReading(readings: Record<string, Reading>, net: string, change: Partial<Reading>): Record<string, Reading> {
+/** Conditions new readings of a target are taken under. */
+export function conditionsOf(notes: BoardNotes, target: Target): Conditions | undefined {
+  if (target === "reference") return notes.referenceConditions;
+  return notes.cases.find((c) => c.id === target.caseId)?.conditions;
+}
+
+export function setConditions(notes: BoardNotes, target: Target, conditions: Conditions): BoardNotes {
+  const clean = Object.fromEntries(Object.entries(conditions).filter(([, v]) => v !== undefined && v !== "")) as Conditions;
+  const value = Object.keys(clean).length ? clean : undefined;
+  if (target === "reference") return { ...notes, referenceConditions: value, updated: now() };
+  return { ...notes, cases: notes.cases.map((c) => (c.id === target.caseId ? { ...c, conditions: value } : c)), updated: now() };
+}
+
+function withReading(
+  readings: Record<string, Reading>,
+  net: string,
+  change: Partial<Reading>,
+  conditions?: Conditions,
+): Record<string, Reading> {
+  const old = readings[net];
+  const valuesChange = QUANTITIES.some((q) => q in change && change[q] !== old?.[q]);
+  // The values being replaced go to the history, so before and after a repair stay visible.
+  let history = old?.history;
+  if (valuesChange && old && hasValues(old)) {
+    const entry: HistoryEntry = { at: old.updated ?? now() };
+    for (const q of QUANTITIES) if (old[q] !== undefined) entry[q] = old[q];
+    if (old.cond) entry.cond = old.cond;
+    history = [...(old.history ?? []), entry].slice(-HISTORY_MAX);
+  }
   // An explicit timestamp (from an import) wins over "now".
-  const next: Reading = { ...readings[net], updated: now(), ...change };
+  const next: Reading = {
+    ...old,
+    updated: now(),
+    ...(valuesChange && { cond: conditions }),
+    ...(history && { history }),
+    ...change,
+  };
+  if (next.cond === undefined) delete next.cond;
   for (const key of Object.keys(change) as (keyof Reading)[]) {
     if (change[key] === undefined) delete next[key];
   }
@@ -153,15 +208,57 @@ export function setValue(notes: BoardNotes, target: Target, net: string, q: Quan
 }
 
 export function setReading(notes: BoardNotes, target: Target, net: string, change: Partial<Reading>): BoardNotes {
-  if (target === "reference") return { ...notes, reference: withReading(notes.reference, net, change), updated: now() };
+  const conditions = conditionsOf(notes, target);
+  if (target === "reference") return { ...notes, reference: withReading(notes.reference, net, change, conditions), updated: now() };
   return {
     ...notes,
-    cases: notes.cases.map((c) => (c.id === target.caseId ? { ...c, readings: withReading(c.readings, net, change) } : c)),
+    cases: notes.cases.map((c) => (c.id === target.caseId ? { ...c, readings: withReading(c.readings, net, change, conditions) } : c)),
     updated: now(),
   };
 }
 
-export type NetStatus = Comparison | "measured" | "reference";
+/** "mismatch": measured, but under other conditions than the reference. */
+export type NetStatus = Comparison | "mismatch" | "measured" | "reference";
+
+// --- measurement lists -------------------------------------------------------
+
+export function addList(notes: BoardNotes, title: string, items: ListItem[] = []): BoardNotes {
+  const list: MeasureList = { id: newId(), title, items: dedupeItems(items) };
+  return { ...notes, lists: [...(notes.lists ?? []), list], updated: now() };
+}
+
+function dedupeItems(items: ListItem[]): ListItem[] {
+  const seen = new Set<string>();
+  return items.filter((i) => {
+    const k = `${i.net}|${i.quantity}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+export function updateList(notes: BoardNotes, id: string, change: (list: MeasureList) => MeasureList): BoardNotes {
+  return {
+    ...notes,
+    lists: (notes.lists ?? []).map((l) => {
+      if (l.id !== id) return l;
+      const next = change(l);
+      return { ...next, items: dedupeItems(next.items) };
+    }),
+    updated: now(),
+  };
+}
+
+export function removeList(notes: BoardNotes, id: string): BoardNotes {
+  return { ...notes, lists: (notes.lists ?? []).filter((l) => l.id !== id), updated: now() };
+}
+
+/** Items of a list measured in the active case (or the reference without one). */
+export function listProgress(notes: BoardNotes, list: MeasureList): { done: boolean[]; count: number } {
+  const readings = activeCase(notes)?.readings ?? notes.reference;
+  const done = list.items.map((i) => readings[i.net]?.[i.quantity] !== undefined);
+  return { done, count: done.filter(Boolean).length };
+}
 
 /**
  * State of each measured net for the active case: compared with the
@@ -262,6 +359,32 @@ export function linkObdata(notes: BoardNotes, id: string | null): BoardNotes {
   return { ...notes, obdata: id ?? undefined, updated: now() };
 }
 
+function parseConditions(value: unknown): Conditions | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const v = value as Record<string, unknown>;
+  const out: Conditions = {};
+  if (typeof v.revision === "string" && v.revision) out.revision = v.revision;
+  if (v.power === "off" || v.power === "standby" || v.power === "on") out.power = v.power;
+  if (typeof v.battery === "boolean") out.battery = v.battery;
+  if (v.polarity === "red-gnd" || v.polarity === "black-gnd") out.polarity = v.polarity;
+  if (typeof v.meter === "string" && v.meter) out.meter = v.meter;
+  return Object.keys(out).length ? out : undefined;
+}
+
+function parseLists(value: unknown): MeasureList[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const lists = value
+    .filter((l): l is MeasureList => !!l && typeof l.id === "string" && typeof l.title === "string" && Array.isArray(l.items))
+    .map((l) => ({
+      id: l.id,
+      title: l.title,
+      items: l.items.filter(
+        (i): i is ListItem => !!i && typeof i.net === "string" && (QUANTITIES as string[]).includes(i.quantity as string),
+      ),
+    }));
+  return lists.length ? lists : undefined;
+}
+
 export function parseNotes(json: string): BoardNotes | null {
   try {
     const d = JSON.parse(json) as Partial<BoardNotes>;
@@ -274,12 +397,18 @@ export function parseNotes(json: string): BoardNotes | null {
       reference: d.reference ?? {},
       cases: d.cases
         .filter((c): c is RepairCase => !!c && typeof c.id === "string" && typeof c.readings === "object")
-        .map((c) => ({ ...c, photos: Array.isArray(c.photos) ? c.photos.filter((p) => typeof p === "string") : undefined })),
+        .map((c) => ({
+          ...c,
+          photos: Array.isArray(c.photos) ? c.photos.filter((p) => typeof p === "string") : undefined,
+          conditions: parseConditions(c.conditions),
+        })),
       activeCase: typeof d.activeCase === "string" ? d.activeCase : null,
       photos: parsePhotos(d.photos),
       netNames: parseNetNames(d.netNames),
       markers: parseMarkers(d.markers),
       obdata: typeof d.obdata === "string" && d.obdata ? d.obdata : undefined,
+      referenceConditions: parseConditions(d.referenceConditions),
+      lists: parseLists(d.lists),
       updated: typeof d.updated === "string" ? d.updated : new Date(0).toISOString(),
     };
   } catch {
@@ -294,6 +423,12 @@ function mergeReadings(a: Record<string, Reading>, b: Record<string, Reading>): 
     if (!mine || (r.updated ?? "") > (mine.updated ?? "")) out[net] = r;
   }
   return out;
+}
+
+function mergeLists(mine: MeasureList[] | undefined, theirs: MeasureList[] | undefined): MeasureList[] | undefined {
+  if (!mine && !theirs) return undefined;
+  const ids = new Set((mine ?? []).map((l) => l.id));
+  return [...(mine ?? []), ...(theirs ?? []).filter((l) => !ids.has(l.id))];
 }
 
 function mergeMarkers(mine: BoardMarker[] | undefined, theirs: BoardMarker[] | undefined): BoardMarker[] | undefined {
@@ -324,6 +459,8 @@ export function mergeNotes(mine: BoardNotes, theirs: BoardNotes): BoardNotes {
     netNames: theirs.netNames || mine.netNames ? { ...theirs.netNames, ...mine.netNames } : undefined,
     markers: mergeMarkers(mine.markers, theirs.markers),
     obdata: mine.obdata ?? theirs.obdata,
+    referenceConditions: mine.referenceConditions ?? theirs.referenceConditions,
+    lists: mergeLists(mine.lists, theirs.lists),
     cases,
     activeCase: mine.activeCase ?? theirs.activeCase,
     updated: now(),
