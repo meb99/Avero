@@ -946,7 +946,15 @@ export function App() {
       return;
     }
     const text = model ? focusText(model, selection) : undefined;
-    setFocus(text ? { text, jump, nonce: ++focusNonce.current } : null);
+    // A pin: the occurrence of the part where that pin is, by its number and net.
+    const pin =
+      model && selection.kind === "pin"
+        ? {
+            number: model.pins[selection.pin].number,
+            nets: [...new Set([model.nets[model.pins[selection.pin].net].name, model.fileNetName(model.pins[selection.pin].net)])],
+          }
+        : undefined;
+    setFocus(text ? { text, jump, nonce: ++focusNonce.current, ...(pin && { pin }) } : null);
   }, [model, selection, textQuery]);
 
   // Schematic -> board.

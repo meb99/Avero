@@ -14,6 +14,7 @@ import {
 import { useI18n } from "../i18n";
 import type { OutlineEntry, PageSize, SchematicDocument } from "./document";
 import { PageCamera } from "./pageCamera";
+import { findPinSpot, type PinSpot } from "./pinFind";
 import type { Box, Word } from "./textIndex";
 
 /** What the schematic should show; a new nonce re-applies the same text. */
@@ -26,6 +27,8 @@ export interface SchematicFocus {
   partial?: boolean;
   /** Occurrence to show, in reading order (from the occurrence list). */
   hit?: number;
+  /** A pin of the part: show the occurrence where it is, and mark it. */
+  pin?: { number: string; nets: string[] };
 }
 
 export interface SchematicViewHandle {
@@ -97,6 +100,8 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
   const framedRef = useRef<{ box: Box; scale: number } | null>(null);
   const hitsRef = useRef<Word[]>([]);
   const hitRef = useRef(0);
+  // The selected pin at its symbol (pin number and net label), when found.
+  const pinSpotRef = useRef<PinSpot | null>(null);
   const scrollRef = useRef(scroll);
   scrollRef.current = scroll;
 
@@ -150,6 +155,32 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
       ctx.lineWidth = (i === hitRef.current ? 2.5 : 1.2) * px;
       ctx.strokeRect(b.x0 - pad, b.y0 - pad, b.x1 - b.x0 + 2 * pad, b.y1 - b.y0 + 2 * pad);
     });
+
+    const spot = pinSpotRef.current;
+    const spotPart = spot ? hitsRef.current[spot.hit] : undefined;
+    if (spot && spotPart?.page === pageRef.current) {
+      for (const w of [spot.pin, spot.net]) {
+        if (!w) continue;
+        const b = w.box;
+        const pad = 2 * px;
+        ctx.fillStyle = "rgba(216, 27, 96, 0.22)";
+        ctx.fillRect(b.x0 - pad, b.y0 - pad, b.x1 - b.x0 + 2 * pad, b.y1 - b.y0 + 2 * pad);
+        ctx.strokeStyle = "rgba(216, 27, 96, 1)";
+        ctx.lineWidth = 2.5 * px;
+        ctx.strokeRect(b.x0 - pad, b.y0 - pad, b.x1 - b.x0 + 2 * pad, b.y1 - b.y0 + 2 * pad);
+      }
+      if (spot.pin && spot.net) {
+        // Pin number to net label.
+        const a = spot.pin.box;
+        const n = spot.net.box;
+        ctx.setLineDash([4 * px, 3 * px]);
+        ctx.beginPath();
+        ctx.moveTo((a.x0 + a.x1) / 2, (a.y0 + a.y1) / 2);
+        ctx.lineTo((n.x0 + n.x1) / 2, (n.y0 + n.y1) / 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
 
     const hover = hoverRef.current;
     if (hover && hover.page === pageRef.current) {
@@ -275,6 +306,22 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
       const h = Math.max(w.box.y1 - w.box.y0, 1);
       const pad = h * 6;
       const box = { x0: w.box.x0 - pad, y0: w.box.y0 - pad, x1: w.box.x1 + pad, y1: w.box.y1 + pad };
+      // With the pin found at this occurrence: frame designator and pin together.
+      const spot = pinSpotRef.current;
+      if (spot?.hit === i) {
+        for (const p of [spot.pin, spot.net]) {
+          if (!p) continue;
+          box.x0 = Math.min(box.x0, p.box.x0 - pad);
+          box.y0 = Math.min(box.y0, p.box.y0 - pad);
+          box.x1 = Math.max(box.x1, p.box.x1 + pad);
+          box.y1 = Math.max(box.y1, p.box.y1 + pad);
+        }
+        // Text readable, but both in view.
+        const el = containerRef.current;
+        const room = Math.min(el?.clientWidth || 600, el?.clientHeight || 600) * 0.9;
+        void showPage(w.page, box, Math.min(JUMP_TEXT_PX / h, room / Math.max(box.x1 - box.x0, box.y1 - box.y0)));
+        return;
+      }
       void showPage(w.page, box, Math.max(JUMP_TEXT_PX / h, Math.min(cam.scale, 6)));
     },
     [cam, showPage],
@@ -325,6 +372,7 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
   useEffect(() => {
     const found = typed ? doc.index.search(typed) : focus ? doc.index.find(focus.text) : [];
     hitsRef.current = found;
+    pinSpotRef.current = !typed && focus?.pin && found.length ? findPinSpot(doc.index, found, focus.pin.number, focus.pin.nets) : null;
     setHits(found);
     if (found.length === 0) {
       hitRef.current = 0;
@@ -337,7 +385,7 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
       jumpedFor.current = jumpKey;
       // A chosen occurrence, else stay on the current page when the text is on it.
       const here = found.findIndex((w) => w.page === pageRef.current);
-      const wanted = !typed && focus?.hit !== undefined && focus.hit < found.length ? focus.hit : undefined;
+      const wanted = !typed && focus?.hit !== undefined && focus.hit < found.length ? focus.hit : pinSpotRef.current?.hit;
       jumpTo(wanted ?? (here >= 0 ? here : 0));
     } else {
       hitRef.current = Math.min(hitRef.current, found.length - 1);
