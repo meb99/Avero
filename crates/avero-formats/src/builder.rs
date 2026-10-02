@@ -7,8 +7,8 @@
 use std::collections::HashMap;
 
 use crate::model::{
-    Board, Bounds, FormatId, Layer, Mount, Net, NetKind, Package, PadMark, Part, Pin, Point, Side, TestPoint,
-    TestPointKind, Trace,
+    Board, Bounds, FormatId, Layer, Mount, Net, NetKind, Package, PadMark, PadShape, Part, Pin, Point, Side,
+    TestPoint, TestPointKind, Trace,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -21,6 +21,7 @@ pub(crate) struct RawPin {
     pub name: Option<String>,
     pub radius: Option<f64>,
     pub probe: Option<i32>,
+    pub pad: Option<PadShape>,
 }
 
 #[derive(Debug, Clone)]
@@ -148,6 +149,7 @@ impl RawBoard {
                     side,
                     net,
                     probe: rp.probe,
+                    pad: rp.pad,
                 });
             }
 

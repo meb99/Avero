@@ -167,6 +167,17 @@ pub struct Part {
     pub pads: Vec<PadMark>,
 }
 
+/// A pad's shape where the file gives one: size in mils, rotation in
+/// degrees counter-clockwise, `round` for pads with rounded ends (oblong).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PadShape {
+    pub w: f64,
+    pub h: f64,
+    pub angle: f64,
+    pub round: bool,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Pin {
@@ -184,6 +195,9 @@ pub struct Pin {
     pub net: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub probe: Option<i32>,
+    /// Shape of a pad that is no plain circle (rectangles, oblongs, polygons).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pad: Option<PadShape>,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -6,6 +6,7 @@ import { PhotoBoardHint, PhotoPointDialog } from "./components/PhotoAlign";
 import { PhotoPane } from "./components/PhotoPane";
 import { ImportReport } from "./components/ImportReport";
 import { BgaView } from "./components/BgaView";
+import { DiffView } from "./components/DiffView";
 import { CommandPalette } from "./components/CommandPalette";
 import { HelpDialog, SettingsDialog } from "./components/Dialogs";
 import { LibraryDialog, type LibraryDrop } from "./components/Library";
@@ -875,10 +876,14 @@ export function App() {
   // Several parts chosen with ⌘/Shift-click (the first one is the selected part as well).
   const [multiParts, setMultiParts] = useState<number[]>([]);
   const [bgaPart, setBgaPart] = useState<number | null>(null);
-  const multiSet = useMemo(() => new Set(multiParts), [multiParts]);
+  // Board comparison: the list of differences, and parts of A marked on the board.
+  const [showDiff, setShowDiff] = useState(false);
+  const [diffMarks, setDiffMarks] = useState<number[] | null>(null);
+  const multiSet = useMemo(() => new Set([...multiParts, ...(diffMarks ?? [])]), [multiParts, diffMarks]);
   useEffect(() => {
     setMultiParts([]);
     setBgaPart(null);
+    setDiffMarks(null);
   }, [model]);
   const addPartToSelection = (part: number) => {
     setMultiParts((list) => {
@@ -1726,6 +1731,9 @@ export function App() {
                         {selection.kind !== "none" && compareSelection.kind === "none" && (
                           <span className="muted">{t("compare.missing")}</span>
                         )}
+                        <button className="small" onClick={() => setShowDiff(true)}>
+                          {t("diff.button")}
+                        </button>
                         <span className="schematic-spacer" />
                         <button className="tool icon-only" onClick={() => setCompareTab(null)} aria-label={t("compare.stop")} title={t("compare.stop")}>
                           <CloseIcon />
@@ -1977,6 +1985,17 @@ export function App() {
 
         <StatusBar model={model} source={source} schematic={schematic} loading={loading} settings={settings} onReport={() => setDialog("report")} />
         {dialog === "report" && model && <ImportReport model={model} source={source} onClose={() => setDialog(null)} />}
+        {showDiff && model && compareModel && compared && (
+          <DiffView
+            a={model}
+            b={compareModel}
+            nameA={source?.name ?? ""}
+            nameB={compared.source?.name ?? ""}
+            onSelect={select}
+            onMark={setDiffMarks}
+            onClose={() => setShowDiff(false)}
+          />
+        )}
         {bgaPart !== null && model && (
           <BgaView model={model} part={bgaPart} units={settings.units} onSelect={select} onClose={() => setBgaPart(null)} />
         )}

@@ -52,6 +52,8 @@ const PAD_VS = `#version 300 es
 layout(location=0) in vec2 a_corner;
 layout(location=1) in vec4 a_pad;
 layout(location=2) in vec4 a_color;
+// Rectangular and oblong pads: half width, half height (board units), angle (radians), rounded ends.
+layout(location=3) in vec4 a_shape;
 uniform mat3 u_world;
 uniform vec2 u_viewport;
 uniform float u_scale;
@@ -61,14 +63,31 @@ out vec2 v_local;
 out vec4 v_color;
 flat out float v_shape;
 out float v_radius;
+flat out vec2 v_half;
+flat out vec2 v_axis;
+flat out float v_round;
 void main() {
   vec2 c = (u_world * vec3(a_pad.xy, 1.0)).xy;
   // Negative radii are CSS pixels (markers), positive ones board units.
   float r = a_pad.z < 0.0 ? -a_pad.z * u_dpr : max(a_pad.z * u_scale, u_minRadius);
   float extent = r + 1.5;
+  v_shape = a_pad.w;
+  v_half = vec2(0.0);
+  v_axis = vec2(1.0, 0.0);
+  v_round = 0.0;
+  if (a_shape.x > 0.0) {
+    vec2 h = max(a_shape.xy * u_scale, vec2(u_minRadius));
+    // The pad's long axis on screen, through the same transform as the board.
+    vec2 axis = (u_world * vec3(cos(a_shape.z), sin(a_shape.z), 0.0)).xy;
+    v_axis = length(axis) > 0.0 ? normalize(axis) : vec2(1.0, 0.0);
+    v_half = h;
+    v_round = a_shape.w;
+    v_shape = 3.0;
+    r = min(h.x, h.y);
+    extent = length(h) + 1.5;
+  }
   v_local = a_corner * extent;
   v_radius = r;
-  v_shape = a_pad.w;
   v_color = a_color;
   vec2 clip = (c + v_local) / u_viewport * 2.0 - 1.0;
   gl_Position = a_color.a > 0.0 ? vec4(clip.x, -clip.y, 0.0, 1.0) : vec4(2.0, 2.0, 2.0, 1.0);
@@ -80,6 +99,9 @@ in vec2 v_local;
 in vec4 v_color;
 flat in float v_shape;
 in float v_radius;
+flat in vec2 v_half;
+flat in vec2 v_axis;
+flat in float v_round;
 out vec4 o;
 void main() {
   float r = v_radius;
@@ -89,8 +111,14 @@ void main() {
   } else if (v_shape < 1.5) {
     vec2 q = abs(v_local) - vec2(r * 0.86);
     d = max(q.x, q.y);
-  } else {
+  } else if (v_shape < 2.5) {
     d = (abs(v_local.x) + abs(v_local.y)) * 0.7071 - r * 0.78;
+  } else {
+    // In the pad's own axes: a rectangle, or a stadium for rounded ends.
+    vec2 p = vec2(dot(v_local, v_axis), dot(v_local, vec2(-v_axis.y, v_axis.x)));
+    float cap = v_round > 0.5 ? min(v_half.x, v_half.y) : 0.0;
+    vec2 e = abs(p) - (v_half - vec2(cap));
+    d = length(max(e, 0.0)) + min(max(e.x, e.y), 0.0) - cap;
   }
   float coverage = clamp(0.5 - d, 0.0, 1.0);
   if (coverage <= 0.0) discard;
@@ -263,14 +291,20 @@ export class BoardRenderer {
     return v;
   }
 
-  private padSet(instances: Float32Array, count: number): InstanceSet {
+  private padSet(instances: Float32Array, count: number, shapes?: Float32Array): InstanceSet {
     const gl = this.gl;
     const geometry = this.boardBuffer(instances, gl.STATIC_DRAW);
+    const shapeBuffer = shapes ? this.boardBuffer(shapes, gl.STATIC_DRAW) : undefined;
     const slots: Slot[] = [];
     for (let k = 0; k < SLOTS; k++) {
       const vao = this.vao();
       this.attrib(0, this.quad, 2, gl.FLOAT, false, 0);
       this.attrib(1, geometry, 4, gl.FLOAT, false, 1);
+      if (shapeBuffer) this.attrib(3, shapeBuffer, 4, gl.FLOAT, false, 1);
+      else {
+        gl.disableVertexAttribArray(3);
+        gl.vertexAttrib4f(3, 0, 0, 0, 0);
+      }
       const colors = this.boardBuffer(new Uint8Array(count * 4), gl.DYNAMIC_DRAW);
       this.attrib(2, colors, 4, gl.UNSIGNED_BYTE, true, 1);
       slots.push({ vao, colors });
@@ -306,11 +340,18 @@ export class BoardRenderer {
     const { pins, testPoints, parts, board } = model;
 
     const pinData = new Float32Array(pins.length * 4);
+    // Pads with a shape of their own (rectangles, oblongs); zero for round pads.
+    const shapeData = new Float32Array(pins.length * 4);
+    let shaped = false;
     pins.forEach((p, i) => {
       const first = p.number === "1" || p.number.toUpperCase() === "A1";
       pinData.set([p.x, p.y, p.radius, first ? SHAPE_SQUARE : SHAPE_CIRCLE], i * 4);
+      if (p.pad && p.pad.w > 0 && p.pad.h > 0) {
+        shapeData.set([p.pad.w / 2, p.pad.h / 2, (p.pad.angle * Math.PI) / 180, p.pad.round ? 1 : 0], i * 4);
+        shaped = true;
+      }
     });
-    this.pins = this.padSet(pinData, pins.length);
+    this.pins = this.padSet(pinData, pins.length, shaped ? shapeData : undefined);
 
     const tpData = new Float32Array(testPoints.length * 4);
     testPoints.forEach((t, i) => tpData.set([t.x, t.y, t.radius, t.kind === "nail" ? SHAPE_DIAMOND : SHAPE_CIRCLE], i * 4));

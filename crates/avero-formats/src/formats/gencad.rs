@@ -10,7 +10,7 @@ use std::f64::consts::{PI, TAU};
 
 use crate::builder::{RawBoard, RawPart, RawPin, RawTestPoint, RawTrace};
 use crate::infer::{self, Placement};
-use crate::model::{FormatId, Mount, Point, Side, TestPointKind};
+use crate::model::{FormatId, Mount, PadShape, Point, Side, TestPointKind};
 use crate::text::{contains, lines, trim, Fields};
 use crate::ParseError;
 
@@ -38,6 +38,30 @@ enum Section {
 struct Pad {
     radius: Option<f64>,
     drilled: bool,
+    /// Bounding box of the pad's geometry (min x, min y, max x, max y).
+    bbox: Option<(f64, f64, f64, f64)>,
+    /// Made of arcs: rounded ends.
+    arcs: bool,
+    circle: bool,
+}
+
+impl Pad {
+    fn extend(&mut self, x: f64, y: f64) {
+        self.bbox = Some(match self.bbox {
+            None => (x, y, x, y),
+            Some((a, b, c, d)) => (a.min(x), b.min(y), c.max(x), d.max(y)),
+        });
+    }
+
+    /// The pad's shape before rotation; circles need none.
+    fn shape(&self) -> Option<PadShape> {
+        let (x0, y0, x1, y1) = self.bbox?;
+        let (w, h) = (x1 - x0, y1 - y0);
+        if w <= 0.0 || h <= 0.0 || (self.circle && (w - h).abs() < 1e-6) {
+            return None;
+        }
+        Some(PadShape { w, h, angle: 0.0, round: self.arcs && (w - h).abs() > 1e-6 })
+    }
 }
 
 #[derive(Default)]
@@ -46,6 +70,7 @@ struct Padstack {
     drilled: bool,
     top: bool,
     bottom: bool,
+    shape: Option<PadShape>,
 }
 
 impl Padstack {
@@ -63,6 +88,8 @@ struct ShapePin {
     name: String,
     pad: String,
     pos: Point,
+    /// Degrees, from `PIN name pad x y layer rotation mirror`.
+    rotation: f64,
 }
 
 #[derive(Default)]
@@ -340,29 +367,78 @@ impl Parser {
             let name = f.quoted_or_plain().unwrap_or_default();
             let _shape = f.string();
             let drilled = f.float().is_some_and(|d| d > 0.0);
-            self.pads.insert(name.clone(), Pad { radius: None, drilled });
+            self.pads.insert(name.clone(), Pad { drilled, ..Default::default() });
             self.current = Some(name);
             return;
         }
         let Some(name) = self.current.clone() else {
             return;
         };
+        let mut points: Vec<(f64, f64)> = Vec::new();
+        let mut circle = false;
+        let mut arcs = false;
         let size = match keyword {
             b"CIRCLE" => {
-                let _center = self.xy(f);
-                self.num(f)
+                let center = self.xy(f);
+                let r = self.num(f);
+                if let (Some(c), Some(r)) = (center, r) {
+                    points.extend([(c.x - r, c.y - r), (c.x + r, c.y + r)]);
+                    circle = true;
+                }
+                r
             }
             b"RECTANGLE" => {
-                let _origin = self.xy(f);
-                match (self.num(f), self.num(f)) {
-                    (Some(w), Some(h)) => Some(w.abs().min(h.abs()) / 2.0),
+                let origin = self.xy(f);
+                match (origin, self.num(f), self.num(f)) {
+                    (Some(o), Some(w), Some(h)) => {
+                        points.extend([(o.x, o.y), (o.x + w, o.y + h)]);
+                        Some(w.abs().min(h.abs()) / 2.0)
+                    }
                     _ => None,
                 }
             }
+            b"LINE" => {
+                if let (Some(a), Some(b)) = (self.xy(f), self.xy(f)) {
+                    points.extend([(a.x, a.y), (b.x, b.y)]);
+                }
+                None
+            }
+            b"ARC" => {
+                // Start, end and centre: the whole circle bounds the arc well enough for a pad.
+                if let (Some(a), Some(b), Some(c)) = (self.xy(f), self.xy(f), self.xy(f)) {
+                    let r = a.distance(c);
+                    // Arc ends plus the circle's extent along the axes the arc spans.
+                    points.extend([(a.x, a.y), (b.x, b.y)]);
+                    for (dx, dy) in [(r, 0.0), (-r, 0.0), (0.0, r), (0.0, -r)] {
+                        let (px, py) = (c.x + dx, c.y + dy);
+                        if on_arc(a, b, c, px, py) {
+                            points.push((px, py));
+                        }
+                    }
+                    arcs = true;
+                }
+                None
+            }
             _ => None,
         };
-        if let (Some(r), Some(pad)) = (size, self.pads.get_mut(&name)) {
-            pad.radius = Some(pad.radius.map_or(r, |old| old.max(r)));
+        if let Some(pad) = self.pads.get_mut(&name) {
+            if let Some(r) = size {
+                pad.radius = Some(pad.radius.map_or(r, |old| old.max(r)));
+            }
+            for (x, y) in points {
+                pad.extend(x, y);
+            }
+            pad.circle |= circle;
+            pad.arcs |= arcs;
+            // Polygon pads have no size line: half their smaller side is their radius.
+            if pad.radius.is_none() || keyword == b"LINE" || keyword == b"ARC" {
+                if let Some((x0, y0, x1, y1)) = pad.bbox {
+                    let r = (x1 - x0).min(y1 - y0) / 2.0;
+                    if r > 0.0 {
+                        pad.radius = Some(pad.radius.map_or(r, |old| old.max(r)));
+                    }
+                }
+            }
         }
     }
 
@@ -382,14 +458,20 @@ impl Parser {
         };
         let pad_name = f.quoted_or_plain().unwrap_or_default();
         let layer = f.string().unwrap_or_default().to_ascii_uppercase();
-        let (pad_radius, pad_drilled) =
-            self.pads.get(&pad_name).map_or((None, false), |p| (p.radius, p.drilled));
+        let (pad_radius, pad_drilled, pad_shape) =
+            self.pads.get(&pad_name).map_or((None, false, None), |p| (p.radius, p.drilled, p.shape()));
         if let Some(stack) = self.padstacks.get_mut(&name) {
             stack.top |= layer.contains("TOP") || layer == "ALL";
             stack.bottom |= layer.contains("BOTTOM") || layer == "ALL";
             stack.drilled |= pad_drilled;
             if let Some(r) = pad_radius {
                 stack.radius = Some(stack.radius.map_or(r, |old| old.max(r)));
+            }
+            // The largest pad of the stack shows its shape.
+            if let Some(s) = pad_shape {
+                if stack.shape.is_none_or(|old| s.w * s.h > old.w * old.h) {
+                    stack.shape = Some(s);
+                }
             }
         }
     }
@@ -407,7 +489,11 @@ impl Parser {
         let geometry = self.geometry(keyword, f);
         let pin = if keyword == b"PIN" {
             match (f.quoted_or_plain(), f.quoted_or_plain(), self.xy(f)) {
-                (Some(pin), Some(pad), Some(pos)) => Some(ShapePin { name: pin, pad, pos }),
+                (Some(pin), Some(pad), Some(pos)) => {
+                    let _layer = f.string();
+                    let rotation = f.float().unwrap_or(0.0);
+                    Some(ShapePin { name: pin, pad, pos, rotation })
+                }
                 _ => None,
             }
         } else {
@@ -563,6 +649,14 @@ impl Parser {
                     net: self.signals.get(&(c.name.clone(), sp.name.clone())).cloned().unwrap_or_default(),
                     number: Some(sp.name.clone()),
                     radius: stack.and_then(|s| s.radius).or(pad.and_then(|p| p.radius)),
+                    pad: stack.and_then(|s| s.shape).or(pad.and_then(Pad::shape)).map(|s| {
+                        // The pad turns with the pin and the component; a mirror reverses the turn.
+                        let mut angle = c.rotation + sp.rotation;
+                        if sref.mirror_x != sref.mirror_y {
+                            angle = 180.0 - angle;
+                        }
+                        PadShape { angle: angle.rem_euclid(360.0), ..s }
+                    }),
                     ..Default::default()
                 });
             }
@@ -688,6 +782,21 @@ impl Transform {
             self.origin.y + self.my * (p.x * self.sin + p.y * self.cos),
         )
     }
+}
+
+/// Whether the point at angle of (`x`, `y`) around `center` lies on the
+/// counter-clockwise arc from `start` to `end`.
+fn on_arc(start: Point, end: Point, center: Point, x: f64, y: f64) -> bool {
+    let a0 = (start.y - center.y).atan2(start.x - center.x);
+    let mut a1 = (end.y - center.y).atan2(end.x - center.x);
+    if a1 <= a0 + 1e-9 {
+        a1 += TAU;
+    }
+    let mut a = (y - center.y).atan2(x - center.x);
+    while a < a0 {
+        a += TAU;
+    }
+    a <= a1 + 1e-9
 }
 
 /// Counter-clockwise arc from `start` to `end` around `center`, as segments.

@@ -44,6 +44,14 @@ export interface Part {
   pads?: PadMark[];
 }
 
+/** Shape of a pad that is no circle: size in mils, rotation in degrees, rounded ends. */
+export interface PadShape {
+  w: number;
+  h: number;
+  angle: number;
+  round: boolean;
+}
+
 export interface Pin {
   part: number;
   number: string;
@@ -54,6 +62,8 @@ export interface Pin {
   side: Side;
   net: number;
   probe?: number;
+  /** Pad shape where the file gives one; otherwise a circle of `radius`. */
+  pad?: PadShape;
 }
 
 export interface TestPoint {

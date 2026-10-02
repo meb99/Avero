@@ -968,3 +968,27 @@ fn bvr3_with_absolute_pin_origins() {
     assert_close(b.pins[1].x, 2010.0);
     assert_close(b.bounds.max_x, 4000.0);
 }
+
+#[test]
+fn gencad_pad_shapes() {
+    // Rectangular 20 × 40 mil pads, and an oblong pad drawn from lines and arcs.
+    let src = GENCAD
+        .replace("RECTANGLE -0.01 -0.01 0.02 0.02", "RECTANGLE -0.01 -0.02 0.02 0.04")
+        .replace(
+            "PAD TH60 ROUND 0.035\nCIRCLE 0 0 0.03",
+            "PAD TH60 POLYGON 0.035\nLINE -0.02 -0.01 0.02 -0.01\nARC 0.02 -0.01 0.02 0.01 0.02 0\nLINE 0.02 0.01 -0.02 0.01\nARC -0.02 0.01 -0.02 -0.01 -0.02 0",
+        );
+    let b = parse(src.as_bytes(), Some("board.cad")).unwrap();
+    let r1 = b.find_part("R1").unwrap();
+    let pad = b.part_pins(r1)[0].pad.expect("rectangular pad");
+    assert_close(pad.w, 20.0);
+    assert_close(pad.h, 40.0);
+    // R1 is rotated by 90°: the pad turns with it.
+    assert_close(pad.angle, 90.0);
+    assert!(!pad.round);
+    let j1 = b.find_part("J1").unwrap();
+    let oblong = b.part_pins(j1)[0].pad.expect("oblong pad");
+    assert_close(oblong.w, 60.0);
+    assert_close(oblong.h, 20.0);
+    assert!(oblong.round);
+}

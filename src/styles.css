@@ -3499,3 +3499,46 @@ button.danger {
 .shortcut-table td:last-child {
   text-align: right;
 }
+
+/* Board differences */
+.dialog.diff-dialog {
+  width: min(1000px, calc(100% - 32px));
+  height: calc(100% - 64px);
+}
+
+.diff-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.diff-dialog .dialog-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.diff-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.diff-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.diff-body tr.clickable {
+  cursor: pointer;
+}
+
+.diff-nets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  font-size: 12px;
+}
