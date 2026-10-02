@@ -4,7 +4,7 @@
 import { getDocument, GlobalWorkerOptions, Util, type PDFDocumentProxy, type PDFPageProxy } from "pdfjs-dist/legacy/build/pdf.mjs";
 import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import type { PdfTextIndex } from "../workbench/fulltext";
-import { splitWords, WordIndex, wordsFromRuns, type TextRun } from "./textIndex";
+import { splitWords, WordIndex, wordsFromRuns, type TextRun, type Word } from "./textIndex";
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -67,6 +67,10 @@ export interface PageSize {
 export class SchematicDocument {
   readonly index = new WordIndex();
   private indexed = 0;
+  /** Words found per page: none on a page with text means a scan. */
+  private readonly wordCount: number[] = [];
+  /** Counts additions after the PDF text (recognised scans). */
+  private added = 0;
   private readonly sizes: (PageSize | undefined)[];
   private readonly listeners = new Set<() => void>();
   private cancelled = false;
@@ -149,13 +153,36 @@ export class SchematicDocument {
           if (!("str" in item) || !item.str) continue;
           runs.push({ str: item.str, width: item.width, transform: Util.transform(viewport.transform, item.transform) });
         }
-        this.index.add(wordsFromRuns(runs, i));
+        const words = wordsFromRuns(runs, i);
+        this.index.add(words);
+        this.wordCount[i] = words.length;
       } catch {
         // A broken page must not stop the rest of the document from indexing.
       }
       this.indexed = i + 1;
       for (const l of this.listeners) l();
     }
+  }
+
+  /** Pages without a text layer (scans), once indexing is through. */
+  textlessPages(): number[] {
+    const out: number[] = [];
+    for (let i = 0; i < this.indexed; i++) if (!this.wordCount[i]) out.push(i);
+    return out;
+  }
+
+  /** Changes whenever words are added after indexing (recognised text). */
+  get revision(): number {
+    return this.added;
+  }
+
+  /** Recognised words of a scanned page, searchable like PDF text. */
+  addWords(page: number, words: Word[]): void {
+    if (this.cancelled) return;
+    this.index.add(words);
+    this.wordCount[page] = (this.wordCount[page] ?? 0) + words.length;
+    this.added++;
+    for (const l of this.listeners) l();
   }
 
   destroy(): void {

@@ -395,6 +395,19 @@ fn datasheets_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(data_dir(app)?.join("datasheets"))
 }
 
+/// Text recognised on the scanned pages of a schematic, kept so a PDF is read once.
+#[tauri::command]
+fn load_ocr(app: tauri::AppHandle, key: String) -> Result<Option<String>, String> {
+    notes::load(&data_dir(&app)?.join("ocr"), &key)
+}
+
+#[tauri::command]
+fn save_ocr(app: tauri::AppHandle, key: String, data: String) -> Result<(), String> {
+    let dir = data_dir(&app)?.join("ocr");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    notes::save(&dir, &key, &data)
+}
+
 /// Copies the pictures of saved wiki pages into Avero's data folder, so the
 /// pages show them offline; a picture that cannot be read gives `None`.
 #[tauri::command]
@@ -643,6 +656,8 @@ pub fn run() {
             find_donors,
             import_datasheet,
             import_knowledge_images,
+            load_ocr,
+            save_ocr,
             remove_datasheet,
             backup_restore,
             save_store,

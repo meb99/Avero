@@ -30,9 +30,37 @@ function pdfjsAssets(): Plugin {
   };
 }
 
+// Text recognition for scanned schematics runs locally: Tesseract's worker,
+// one WebAssembly core (SIMD, LSTM engine) and the English model, served
+// from /ocr/ like the pdf.js assets.
+const OCR_FILES: Record<string, string> = {
+  "worker.min.js": "node_modules/tesseract.js/dist/worker.min.js",
+  "tesseract-core-simd-lstm.wasm.js": "node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm.js",
+  "eng.traineddata.gz": "node_modules/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz",
+};
+
+function ocrAssets(): Plugin {
+  return {
+    name: "avero-ocr-assets",
+    configureServer(server) {
+      server.middlewares.use("/ocr", (req, res, next) => {
+        const name = decodeURIComponent((req.url ?? "").split("?")[0]).replace(/^\/+/, "");
+        const file = OCR_FILES[name];
+        if (!file) return next();
+        res.setHeader("Content-Type", name.endsWith(".gz") ? "application/gzip" : "text/javascript");
+        createReadStream(path.resolve(file)).pipe(res);
+      });
+    },
+    writeBundle(options) {
+      const out = path.join(options.dir ?? "dist", "ocr");
+      for (const [name, file] of Object.entries(OCR_FILES)) cpSync(path.resolve(file), path.join(out, name));
+    },
+  };
+}
+
 // Tauri serves the dev build from a fixed port and expects no screen clearing.
 export default defineConfig({
-  plugins: [react(), pdfjsAssets()],
+  plugins: [react(), pdfjsAssets(), ocrAssets()],
   clearScreen: false,
   server: { port: 1420, strictPort: true },
   envPrefix: ["VITE_", "TAURI_ENV_"],

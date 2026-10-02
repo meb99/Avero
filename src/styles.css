@@ -3673,3 +3673,9 @@ button.danger {
   padding: 16px;
   text-align: center;
 }
+
+.ocr-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

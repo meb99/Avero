@@ -16,6 +16,7 @@ import type { OutlineEntry, PageSize, SchematicDocument } from "./document";
 import { PageCamera } from "./pageCamera";
 import { findPinSpot, type PinSpot } from "./pinFind";
 import type { Box, Word } from "./textIndex";
+import { useOcr } from "./useOcr";
 
 /** What the schematic should show; a new nonce re-applies the same text. */
 export interface SchematicFocus {
@@ -108,6 +109,9 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
   const [page, setPage] = useState(0);
   const [pageInput, setPageInput] = useState("1");
   const [indexed, setIndexed] = useState(doc.indexedPages);
+  // Recognised text of scanned pages arrives after indexing.
+  const [revision, setRevision] = useState(doc.revision);
+  const ocr = useOcr(doc, indexed >= doc.pageCount, (key) => classify({ key, text: key, page: 0, box: { x0: 0, y0: 0, x1: 0, y1: 0 } }) !== null);
   const [outline, setOutline] = useState<{ title: string; page: number; depth: number }[]>([]);
   const [hits, setHits] = useState<Word[]>([]);
   const [hit, setHit] = useState(0);
@@ -351,7 +355,10 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
     pageRef.current = -1;
     void showPage(0);
     setIndexed(doc.indexedPages);
-    const unsubscribe = doc.subscribe(() => setIndexed(doc.indexedPages));
+    const unsubscribe = doc.subscribe(() => {
+      setIndexed(doc.indexedPages);
+      setRevision(doc.revision);
+    });
     void doc.outline().then((o) => setOutline(flattenOutline(o)));
     const pending = tasks.current;
     return () => {
@@ -391,7 +398,7 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
       hitRef.current = Math.min(hitRef.current, found.length - 1);
       requestDraw();
     }
-  }, [doc, focus, typed, indexed, jumpTo, requestDraw]);
+  }, [doc, focus, typed, indexed, revision, jumpTo, requestDraw]);
 
   // Size tracking.
   useEffect(() => {
@@ -653,6 +660,21 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
           <span className="muted hits-none">{t("schematic.notFound", { text: typed || focus?.text || "" })}</span>
         )}
         {indexed < doc.pageCount && <span className="muted">{t("schematic.indexing", { n: indexed, total: doc.pageCount })}</span>}
+        {ocr.progress ? (
+          <span className="ocr-status">
+            <span className="muted">{t("ocr.running", { n: ocr.progress.done, total: ocr.progress.total })}</span>
+            <button className="small" onClick={ocr.cancel}>
+              {t("ocr.stop")}
+            </button>
+          </span>
+        ) : (
+          ocr.scanned > 0 && (
+            <button className="small ocr-start" onClick={ocr.start} title={t("ocr.hint", { n: ocr.scanned })}>
+              {t("ocr.start", { n: ocr.scanned })}
+            </button>
+          )
+        )}
+        {ocr.error && <span className="wb-error">{t("ocr.failed", { message: ocr.error })}</span>}
         {onPopOut && (
           <button className="tool icon-only" onClick={onPopOut} aria-label={t("schematic.popOut")} title={t("schematic.popOut")}>
             <PopOutIcon />
