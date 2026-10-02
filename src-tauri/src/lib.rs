@@ -1,6 +1,7 @@
 //! Desktop shell. Parsing runs natively through `avero-formats`; the web UI
 //! receives the finished board as JSON.
 
+mod collection;
 mod conversion;
 mod duplicates;
 mod import;
@@ -253,6 +254,30 @@ async fn convert_xzz_file(
     .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+async fn find_xzz_files(path: String) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || conversion::find_files(Path::new(&path)))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn import_console_collection(
+    app: tauri::AppHandle,
+    path: String,
+    xzz_key: Option<String>,
+    on_progress: tauri::ipc::Channel<collection::CollectionProgress>,
+) -> Result<collection::CollectionResult, String> {
+    let root = library_dir(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        collection::import_collection(&root, Path::new(&path), xzz_key.as_deref(), |event| {
+            let _ = on_progress.send(event);
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 fn notes_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     use tauri::Manager;
     app.path().app_data_dir().map(|d| d.join("boards")).map_err(|e| e.to_string())
@@ -417,6 +442,8 @@ pub fn run() {
             library_root,
             import_files,
             convert_xzz_file,
+            find_xzz_files,
+            import_console_collection,
             board_words,
             rename_library_file,
             move_library_files,
