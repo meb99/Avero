@@ -11,12 +11,13 @@ import { computeStyle } from "../render/style";
 import type { Settings } from "../settings";
 import { formatLength } from "../format";
 import type { NetStatus } from "../workbench/notes";
-import { photoCorners, type Affine } from "../workbench/photo";
+import { photoCorners, type Affine, type Homography } from "../workbench/photo";
 
 /** A decoded photo with its alignment (photo units: pixels / image width). */
 export interface PhotoLayer {
   image: HTMLCanvasElement;
   matrix: Affine;
+  perspective?: Homography;
   opacity: number;
 }
 
@@ -573,17 +574,18 @@ export function BoardView({
   // Photo of the real board: new image or alignment re-uploads, opacity only redraws.
   const photoImage = photo?.image;
   const photoMatrix = photo?.matrix;
+  const photoPerspective = photo?.perspective;
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer) return;
     if (photoImage && photoMatrix) {
-      renderer.setPhoto(photoImage, photoCorners(photoMatrix, 1, photoImage.height / photoImage.width));
+      renderer.setPhoto(photoImage, photoCorners({ matrix: photoMatrix, perspective: photoPerspective }, 1, photoImage.height / photoImage.width));
     } else {
       renderer.setPhoto(null);
     }
     requestDraw();
     // The model dependency re-uploads after setBoard released the photo.
-  }, [model, photoImage, photoMatrix, requestDraw, rendererVersion]);
+  }, [model, photoImage, photoMatrix, photoPerspective, requestDraw, rendererVersion]);
 
   const photoOpacity = photo?.opacity ?? 1;
   useEffect(() => {

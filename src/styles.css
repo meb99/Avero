@@ -3593,3 +3593,83 @@ button.danger {
 .details-section.datasheets {
   margin-bottom: 12px;
 }
+
+.photo-align-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.camera-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.camera-pane .compare-bar {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 40px;
+  gap: 6px;
+  padding: 4px 8px;
+}
+
+.camera-pane .spacer {
+  flex: 1;
+}
+
+.camera-zoom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.camera-zoom input {
+  width: 110px;
+}
+
+.camera-frame {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-frame video {
+  max-width: 100%;
+  max-height: 100%;
+  transform-origin: center;
+}
+
+.camera-frame.flash::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.camera-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to right, transparent calc(50% - 0.5px), rgba(255, 213, 79, 0.9) calc(50% - 0.5px), rgba(255, 213, 79, 0.9) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(50% - 0.5px), rgba(255, 213, 79, 0.9) calc(50% - 0.5px), rgba(255, 213, 79, 0.9) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+    repeating-linear-gradient(to right, transparent 0 calc(10% - 1px), rgba(255, 255, 255, 0.18) calc(10% - 1px) 10%),
+    repeating-linear-gradient(to bottom, transparent 0 calc(10% - 1px), rgba(255, 255, 255, 0.18) calc(10% - 1px) 10%);
+}
+
+.camera-error {
+  color: var(--text);
+  max-width: 420px;
+  padding: 16px;
+  text-align: center;
+}

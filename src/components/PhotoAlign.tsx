@@ -4,17 +4,23 @@ import { useI18n } from "../i18n";
 import { Dialog } from "./Dialogs";
 
 /**
- * Step 1 of aligning a photo: two points picked on the photo. Points are in
- * photo units (pixels divided by the image width).
+ * Step 1 of aligning a photo: two to four points picked on the photo. Points
+ * are in photo units (pixels divided by the image width).
  */
 export function PhotoPointDialog({
   image,
   points,
+  count,
+  onCount,
+  onUndo,
   onPoint,
   onCancel,
 }: {
   image: HTMLCanvasElement;
   points: Point[];
+  count: 2 | 3 | 4;
+  onCount(count: 2 | 3 | 4): void;
+  onUndo(): void;
   onPoint(p: Point): void;
   onCancel(): void;
 }) {
@@ -32,7 +38,19 @@ export function PhotoPointDialog({
   const aspect = image.height / image.width;
   return (
     <Dialog title={t("photo.alignTitle")} onClose={onCancel} className="photo-dialog">
-      <p className="muted">{t("photo.alignPhoto")}</p>
+      <div className="photo-align-bar">
+        <div className="segmented" role="radiogroup" aria-label={t("photo.pointsLabel")}>
+          {([2, 3, 4] as const).map((n) => (
+            <button key={n} role="radio" aria-checked={count === n} className={count === n ? "on" : ""} title={t(`photo.points${n}Hint`)} onClick={() => onCount(n)}>
+              {t(`photo.points${n}`)}
+            </button>
+          ))}
+        </div>
+        <button className="small" disabled={points.length === 0} onClick={onUndo}>
+          {t("photo.undoPoint")}
+        </button>
+      </div>
+      <p className="muted">{t("photo.alignPhotoN", { n: count, left: count - points.length })}</p>
       <div
         ref={frameRef}
         className="photo-frame"
@@ -59,11 +77,13 @@ export function PhotoBoardHint({
   image,
   point,
   index,
+  count,
   onCancel,
 }: {
   image: HTMLCanvasElement;
   point: Point;
   index: number;
+  count: number;
   onCancel(): void;
 }) {
   const { t } = useI18n();
@@ -94,7 +114,7 @@ export function PhotoBoardHint({
       <canvas ref={ref} width={SIZE} height={SIZE} />
       <div>
         <strong>{t("photo.alignTitle")}</strong>
-        <p>{t("photo.alignBoard", { n: index + 1 })}</p>
+        <p>{t("photo.alignBoard", { n: index + 1 })} ({index + 1}/{count})</p>
         <button className="small" onClick={onCancel}>
           {t("photo.cancel")}
         </button>

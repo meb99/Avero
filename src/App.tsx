@@ -9,6 +9,7 @@ import { BgaView } from "./components/BgaView";
 import { DiffView } from "./components/DiffView";
 import { DonorView } from "./components/DonorView";
 import { DatasheetPane } from "./components/DatasheetPane";
+import { CameraPane } from "./components/CameraPane";
 import { newDatasheetId, parseDatasheets, partNumbers, type Datasheet } from "./workbench/datasheets";
 import { CommandPalette } from "./components/CommandPalette";
 import { HelpDialog, SettingsDialog } from "./components/Dialogs";
@@ -54,6 +55,8 @@ import { useTheme } from "./theme";
 import { dailyCheck, fetchUpdate, type Update } from "./updates";
 import { pickImport, type LibraryEntry, type LibraryFile } from "./workbench/library";
 import {
+  activeCase,
+  addCase,
   addDrawing,
   addMarker,
   boardKey,
@@ -63,6 +66,7 @@ import {
   removeMarker,
   renameNet,
   setPhoto,
+  updateCase,
   updateMarker,
   type DrawingKind,
   type NetStatus,
@@ -88,7 +92,7 @@ import { parseWorkspace, type Workspace, type WorkspaceTab } from "./workbench/w
 import { BUILTIN_PAGES } from "./knowledge/builtin";
 import { guessCategory } from "./workbench/catalog";
 import { PIN_COLORS } from "./render/palette";
-import { alignPhoto, fitToBounds } from "./workbench/photo";
+import { alignFromPoints, fitToBounds } from "./workbench/photo";
 import { boardInPicture, loadPhotoImage, renderPageImage } from "./workbench/photoImage";
 import { useBoardNotes } from "./workbench/store";
 
@@ -111,6 +115,8 @@ interface PhotoAlignment {
   image: HTMLCanvasElement;
   /** True for a photo imported for this alignment (deleted when cancelled). */
   fresh: boolean;
+  /** Points to pick: 2 (straight photo), 3 (slightly squashed), 4 (taken at an angle). */
+  count: 2 | 3 | 4;
   photoPoints: Point[];
   boardPoints: Point[];
 }
@@ -219,6 +225,8 @@ export function App() {
   const [photoPane, setPhotoPane] = useState(false);
   // A datasheet beside the board, in the schematic's place as well.
   const [sheetPane, setSheetPane] = useState<{ doc: SchematicDocument; sheet: Datasheet; page: number } | null>(null);
+  // Live picture of a USB microscope or camera, in the same place.
+  const [cameraPane, setCameraPane] = useState(false);
   // The schematic is shown in its own window instead of the split view.
   const [detached, setDetached] = useState(false);
   const [focus, setFocus] = useState<SchematicFocus | null>(null);
@@ -257,7 +265,7 @@ export function App() {
   const palette = theme === "dark" ? DARK : LIGHT;
   const compared = compareTab !== null && compareTab !== activeTab ? tabs.find((t) => t.id === compareTab) : undefined;
   const compareModel = compared?.model ?? null;
-  const showSchematic = schematic !== null && schematicVisible && !detached && !compareModel && !photoPane && !sheetPane;
+  const showSchematic = schematic !== null && schematicVisible && !detached && !compareModel && !photoPane && !sheetPane && !cameraPane;
   const compareSelection = useMemo(
     () => (model && compareModel ? mapSelection(model, compareModel, selection) : NONE),
     [model, compareModel, selection],
@@ -335,13 +343,13 @@ export function App() {
   }, [photoFile, lang]);
   const photoLayer: PhotoLayer | undefined =
     storedPhoto && showPhoto && !aligning && photoImage?.file === storedPhoto.file
-      ? { image: photoImage.image, matrix: storedPhoto.matrix, opacity: storedPhoto.opacity }
+      ? { image: photoImage.image, matrix: storedPhoto.matrix, perspective: storedPhoto.perspective, opacity: storedPhoto.opacity }
       : undefined;
 
   const startAlignment = async (file: string, fresh: boolean) => {
     try {
       const image = await loadPhotoImage(file);
-      setAligning({ side, file, image, fresh, photoPoints: [], boardPoints: [] });
+      setAligning({ side, file, image, fresh, count: settings.photoPoints ?? 2, photoPoints: [], boardPoints: [] });
     } catch (e) {
       setToast(t("photo.failed", { message: e instanceof Error ? e.message : String(e) }));
       if (fresh) void invoke("remove_photo", { path: file }).catch(() => {});
@@ -418,20 +426,20 @@ export function App() {
 
   const pickBoardPoint = (p: Point) => {
     const a = aligningRef.current;
-    if (!a || a.photoPoints.length < 2) return;
+    if (!a || a.photoPoints.length < a.count) return;
     const boardPoints = [...a.boardPoints, p];
-    if (boardPoints.length < 2) {
+    if (boardPoints.length < a.count) {
       setAligning({ ...a, boardPoints });
       return;
     }
-    const matrix = alignPhoto(a.side, [a.photoPoints[0], a.photoPoints[1]], [boardPoints[0], boardPoints[1]]);
-    if (!matrix) {
+    const alignment = alignFromPoints(a.side, a.photoPoints, boardPoints);
+    if (!alignment) {
       setToast(t("photo.samePoints"));
       setAligning({ ...a, boardPoints: [] });
       return;
     }
     const previous = notes?.photos?.[a.side];
-    updateNotes((n) => setPhoto(n, a.side, { file: a.file, matrix, opacity: previous?.opacity ?? 0.8 }));
+    updateNotes((n) => setPhoto(n, a.side, { file: a.file, ...alignment, opacity: previous?.opacity ?? 0.8 }));
     if (previous && previous.file !== a.file) dropPhotoFile(previous.file, [notes?.photos?.[a.side === "top" ? "bottom" : "top"]?.file]);
     setAligning(null);
     setShowPhoto(true);
@@ -1108,6 +1116,7 @@ export function App() {
         return { doc, sheet, page };
       });
       setPhotoPane(false);
+      setCameraPane(false);
     } catch (e) {
       setToast(t("sheet.failed", { message: e instanceof Error ? e.message : String(e) }));
     }
@@ -1133,6 +1142,34 @@ export function App() {
       void openDatasheet(sheet);
     } catch (e) {
       setToast(t("sheet.failed", { message: String(e) }));
+    }
+  };
+
+  // --- camera ---------------------------------------------------------------------
+  const openCamera = () => {
+    setCameraPane(true);
+    setPhotoPane(false);
+    setSheetPane((old) => {
+      old?.doc.destroy();
+      return null;
+    });
+  };
+  const cameraSnapshot = async (png: Uint8Array, use: "case" | "board") => {
+    if (!notes) return setToast(t("photo.notesLoading"));
+    try {
+      const file = await invoke<string>("store_photo_png", png, {
+        headers: { "x-key": encodeURIComponent(notes.key), "x-side": use === "case" ? "case" : side },
+      });
+      if (use === "board") return void (await startAlignment(file, true));
+      const title = t("measure.caseTitle", { n: notes.cases.length + 1 });
+      updateNotes((n) => {
+        const withCase = activeCase(n) ? n : addCase(n, title);
+        const c = activeCase(withCase)!;
+        return updateCase(withCase, c.id, { photos: [...(c.photos ?? []), file] });
+      });
+      setToast(t("camera.saved", { title: activeCase(notes)?.title ?? title }));
+    } catch (e) {
+      setToast(t("camera.failed", { message: e instanceof Error ? e.message : String(e) }));
     }
   };
 
@@ -1439,7 +1476,11 @@ export function App() {
       { id: "draw-jumper", label: t("draw.jumper"), enabled: board && notes !== null, run: () => startDrawing("jumper") },
       { id: "photo-add", label: t("photo.add"), enabled: board && notes !== null, run: a.addPhoto },
       { id: "photo-toggle", label: t("photo.toggle"), enabled: !!storedPhoto, run: a.togglePhoto },
-      { id: "photo-pane", label: t("photo.paneCommand"), enabled: !!model, run: () => setPhotoPane((v) => !v) },
+      { id: "photo-pane", label: t("photo.paneCommand"), enabled: !!model, run: () => {
+          setPhotoPane((v) => !v);
+          setCameraPane(false);
+        } },
+      { id: "camera", label: t("camera.command"), enabled: board, run: () => (cameraPane ? setCameraPane(false) : openCamera()) },
       { id: "photo-pdf", label: t("photo.pdfCommand"), enabled: !!model && notes !== null && !!schematic, run: () => void photoFromPdf() },
       { id: "photo-realign", label: `${t("photo.title")}: ${t("photo.realign")}`, enabled: !!storedPhoto, run: () => storedPhoto && void startAlignment(storedPhoto.file, false) },
       { id: "photo-remove", label: `${t("photo.title")}: ${t("photo.remove")}`, enabled: !!storedPhoto, run: removePhoto },
@@ -1689,7 +1730,7 @@ export function App() {
                     photo={bothSides ? undefined : photoLayer}
                     partValues={partValues}
                     onPointPick={
-                      drawing ? pickDrawPoint : placingMarker ? placeMarker : aligning && aligning.photoPoints.length >= 2 ? pickBoardPoint : undefined
+                      drawing ? pickDrawPoint : placingMarker ? placeMarker : aligning && aligning.photoPoints.length >= aligning.count ? pickBoardPoint : undefined
                     }
                     drawings={drawingMarks}
                     draft={drawing && drawing.points.length ? { id: "draft", kind: drawing.kind, side: drawing.side, points: drawing.points } : null}
@@ -1835,7 +1876,20 @@ export function App() {
                     </div>
                   </>
                 )}
-                {model && photoPane && !aligning && !sheetPane && (
+                {model && cameraPane && !sheetPane && (
+                  <>
+                    <Splitter
+                      container={workAreaRef}
+                      share={share}
+                      onDrag={setShare}
+                      onDone={(s) => setSettings((old) => ({ ...old, schematicShare: s }))}
+                    />
+                    <div className="compare-pane" style={{ width: `${share * 100}%` }}>
+                      <CameraPane onSnapshot={(png, use) => void cameraSnapshot(png, use)} onClose={() => setCameraPane(false)} />
+                    </div>
+                  </>
+                )}
+                {model && photoPane && !aligning && !sheetPane && !cameraPane && (
                   <>
                     <Splitter
                       container={workAreaRef}
@@ -1848,6 +1902,7 @@ export function App() {
                         <PhotoPane
                           image={photoImage.image}
                           matrix={storedPhoto.matrix}
+                          perspective={storedPhoto.perspective}
                           model={model}
                           side={side}
                           selection={selection}
@@ -2016,11 +2071,12 @@ export function App() {
             </div>
           )}
 
-          {aligning && aligning.photoPoints.length >= 2 && (
+          {aligning && aligning.photoPoints.length >= aligning.count && (
             <PhotoBoardHint
               image={aligning.image}
               point={aligning.photoPoints[aligning.boardPoints.length]}
               index={aligning.boardPoints.length}
+              count={aligning.count}
               onCancel={cancelAlignment}
             />
           )}
@@ -2043,7 +2099,10 @@ export function App() {
               <button className="small" onClick={() => setShowPhoto((v) => !v)}>
                 {showPhoto ? t("photo.hide") : t("photo.show")}
               </button>
-              <button className={photoPane ? "small on" : "small"} onClick={() => setPhotoPane((v) => !v)} title={t("photo.paneHint")}>
+              <button className={photoPane ? "small on" : "small"} onClick={() => {
+                  setPhotoPane((v) => !v);
+                  setCameraPane(false);
+                }} title={t("photo.paneHint")}>
                 {t("photo.pane")}
               </button>
               <button className="small" onClick={() => void startAlignment(storedPhoto.file, false)}>
@@ -2123,10 +2182,16 @@ export function App() {
           />
         )}
         {dialog === "help" && <HelpDialog onClose={() => setDialog(null)} />}
-        {aligning && aligning.photoPoints.length < 2 && (
+        {aligning && aligning.photoPoints.length < aligning.count && (
           <PhotoPointDialog
             image={aligning.image}
             points={aligning.photoPoints}
+            count={aligning.count}
+            onCount={(count) => {
+              setSettings((old) => ({ ...old, photoPoints: count }));
+              setAligning((a) => a && { ...a, count, photoPoints: a.photoPoints.slice(0, count) });
+            }}
+            onUndo={() => setAligning((a) => a && { ...a, photoPoints: a.photoPoints.slice(0, -1) })}
             onPoint={(p) => setAligning((a) => a && { ...a, photoPoints: [...a.photoPoints, p] })}
             onCancel={cancelAlignment}
           />

@@ -112,7 +112,8 @@ pub fn store_photo(dir: &Path, key: &str, side: &str, source: &Path, stamp: u128
     Ok(target)
 }
 
-/// Stores a PNG the app made itself (a board picture taken from a PDF page).
+/// Stores a PNG the app made itself (a board picture taken from a PDF page,
+/// or a camera snapshot).
 pub fn store_photo_png(
     dir: &Path,
     key: &str,
@@ -120,7 +121,8 @@ pub fn store_photo_png(
     png: &[u8],
     stamp: u128,
 ) -> Result<PathBuf, String> {
-    if !matches!(side, "top" | "bottom") {
+    // Board pictures per side, or camera snapshots for a repair case.
+    if !matches!(side, "top" | "bottom" | "case") {
         return Err(format!("unknown side {side}"));
     }
     if !png.starts_with(b"\x89PNG") {
@@ -214,7 +216,10 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("avero-png-{}", std::process::id()));
         let stored = store_photo_png(&dir, "PS5 EDM-010", "top", b"\x89PNG\r\n", 9).unwrap();
         assert_eq!(stored.file_name().unwrap(), "ps5_edm-010-top-9.png");
-        assert!(store_photo_png(&dir, "x", "case", b"\x89PNG", 9).is_err());
+        // Camera snapshots for a repair case.
+        let snap = store_photo_png(&dir, "x", "case", b"\x89PNG", 9).unwrap();
+        assert_eq!(snap.file_name().unwrap(), "x-case-9.png");
+        assert!(store_photo_png(&dir, "x", "left", b"\x89PNG", 9).is_err());
         assert!(store_photo_png(&dir, "x", "top", b"GIF89a", 9).is_err());
         std::fs::remove_dir_all(&dir).unwrap();
     }

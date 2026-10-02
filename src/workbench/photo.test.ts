@@ -1,7 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { BoardModel } from "../core/board";
 import { testBoard } from "../core/testBoard";
-import { alignPhoto, applyAffine, contentBox, fitToBounds, invertAffine, partAtPoint, parsePhoto, photoScale, type Affine } from "./photo";
+import {
+  alignFromPoints,
+  alignPhoto,
+  applyAffine,
+  applyHomography,
+  boardToPhoto,
+  contentBox,
+  fitToBounds,
+  homographyFrom4,
+  invertAffine,
+  partAtPoint,
+  parsePhoto,
+  photoCorners,
+  photoScale,
+  photoToBoard,
+  type Affine,
+  type Homography,
+} from "./photo";
 
 // Ground truth: scale 0.5 mil/px, rotated 30°, shifted.
 function truth(side: "top" | "bottom"): Affine {
@@ -113,5 +130,52 @@ describe("contentBox and fitToBounds", () => {
 
   it("refuses pictures of another shape", () => {
     expect(fitToBounds({ x0: 0, y0: 0, x1: 100, y1: 100 }, 100, { minX: 0, minY: 0, maxX: 16000, maxY: 8000 })).toBeNull();
+  });
+});
+
+describe("alignment by three and four points", () => {
+  const photo = [
+    { x: 0.1, y: 0.1 },
+    { x: 0.9, y: 0.15 },
+    { x: 0.85, y: 0.6 },
+    { x: 0.12, y: 0.55 },
+  ];
+
+  it("recovers an affine transform from three points", () => {
+    const m: Affine = [1200, -30, 80, -900, 500, 7000];
+    const board = photo.map((p) => applyAffine(m, p));
+    const got = alignFromPoints("top", photo.slice(0, 3), board.slice(0, 3))!;
+    expect(got.perspective).toBeUndefined();
+    got.matrix.forEach((x, i) => expect(x).toBeCloseTo(m[i], 6));
+  });
+
+  it("recovers a perspective transform from four points and inverts it", () => {
+    const h: Homography = [1000, 50, 200, -40, -950, 6000, 0.3, -0.2, 1];
+    const board = photo.map((p) => applyHomography(h, p));
+    const got = alignFromPoints("top", photo, board)!;
+    expect(got.perspective).toBeDefined();
+    const test = { x: 0.5, y: 0.4 };
+    const b = photoToBoard(got, test);
+    const want = applyHomography(h, test);
+    expect(b.x).toBeCloseTo(want.x, 4);
+    expect(b.y).toBeCloseTo(want.y, 4);
+    const back = boardToPhoto(got)!(b);
+    expect(back.x).toBeCloseTo(test.x, 8);
+    expect(back.y).toBeCloseTo(test.y, 8);
+    // The corners follow the perspective, not the affine part.
+    const corners = photoCorners(got, 1, 0.7);
+    expect(corners[3].x).toBeCloseTo(applyHomography(h, { x: 1, y: 0.7 }).x, 4);
+  });
+
+  it("refuses points on one line", () => {
+    const line = [0, 1, 2, 3].map((i) => ({ x: i * 0.1, y: i * 0.1 }));
+    expect(homographyFrom4(line, photo)).toBeNull();
+    expect(alignFromPoints("top", line.slice(0, 3), photo.slice(0, 3))).toBeNull();
+  });
+
+  it("keeps a stored perspective", () => {
+    const h = [1, 0, 0, 0, 1, 0, 0.1, 0, 1];
+    expect(parsePhoto({ file: "a.jpg", matrix: [1, 0, 0, 1, 0, 0], perspective: h })?.perspective).toEqual(h);
+    expect(parsePhoto({ file: "a.jpg", matrix: [1, 0, 0, 1, 0, 0], perspective: [1, 2] })?.perspective).toBeUndefined();
   });
 });

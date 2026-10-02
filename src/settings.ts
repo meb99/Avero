@@ -30,6 +30,8 @@ export interface Settings {
   autoSchematic: boolean;
   /** Reopen the boards, schematics and window of the last session on start. */
   restoreWorkspace: boolean;
+  /** Points picked to align a board photo (2, 3 or 4; 4 for photos at an angle). */
+  photoPoints: 2 | 3 | 4;
   /** Own key bindings over the defaults (see shortcuts.ts). */
   shortcuts: Shortcuts;
   showSidebar: boolean;
@@ -70,6 +72,7 @@ export const DEFAULT_SETTINGS: Settings = {
   updateCheck: true,
   autoSchematic: true,
   restoreWorkspace: true,
+  photoPoints: 2,
   shortcuts: {},
   showSidebar: true,
   sidebarWidth: 340,

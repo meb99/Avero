@@ -2,13 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { visibleFrom, type BoardModel, type ViewSide } from "../core/board";
 import type { Point, Selection } from "../core/types";
 import { useI18n } from "../i18n";
-import { applyAffine, invertAffine, partAtPoint, photoScale, type Affine } from "../workbench/photo";
+import { boardToPhoto, partAtPoint, photoScale, photoToBoard, type Affine, type Homography } from "../workbench/photo";
 import { CloseIcon } from "./Icons";
 
 interface Props {
   image: HTMLCanvasElement;
   /** Photo units (pixels / image width) → board mils. */
   matrix: Affine;
+  /** Perspective alignment, when the photo was aligned by four points. */
+  perspective?: Homography;
   model: BoardModel;
   side: ViewSide;
   selection: Selection;
@@ -33,7 +35,7 @@ const CLICK_SLOP = 4;
  * selects that part on the board, and the selection on the board is marked
  * on the photo. No searching for a part you can see in front of you.
  */
-export function PhotoPane({ image, matrix, model, side, selection, onSelect, onClose }: Props) {
+export function PhotoPane({ image, matrix, perspective, model, side, selection, onSelect, onClose }: Props) {
   const { t } = useI18n();
   const frameRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -41,7 +43,7 @@ export function PhotoPane({ image, matrix, model, side, selection, onSelect, onC
   const [view, setView] = useState<View | null>(null);
   const [hover, setHover] = useState<{ part: number; at: Point } | null>(null);
   const drag = useRef<{ start: Point; view: View; moved: boolean } | null>(null);
-  const inverse = useMemo(() => invertAffine(matrix), [matrix]);
+  const inverse = useMemo(() => boardToPhoto({ matrix, perspective }), [matrix, perspective]);
 
   const fit = (): View | null => {
     if (!size.width || !size.height) return null;
@@ -64,13 +66,13 @@ export function PhotoPane({ image, matrix, model, side, selection, onSelect, onC
 
   const toScreen = (board: Point, v: View): Point | null => {
     if (!inverse) return null;
-    const uv = applyAffine(inverse, board);
+    const uv = inverse(board);
     return { x: uv.x * image.width * v.scale + v.x, y: uv.y * image.width * v.scale + v.y };
   };
   const toBoard = (screen: Point, v: View): Point => {
     const u = (screen.x - v.x) / v.scale / image.width;
     const w = (screen.y - v.y) / v.scale / image.width;
-    return applyAffine(matrix, { x: u, y: w });
+    return photoToBoard({ matrix, perspective }, { x: u, y: w });
   };
   /** Board mils per screen pixel at the current zoom. */
   const milsPerPixel = (v: View) => photoScale(matrix) / (image.width * v.scale);
@@ -183,7 +185,7 @@ export function PhotoPane({ image, matrix, model, side, selection, onSelect, onC
       ctx.stroke();
     }
     if (hover && hover.part !== marks.part) label(model.parts[hover.part].name, hover.at);
-  }, [view, size, image, matrix, marks, hover]);
+  }, [view, size, image, matrix, perspective, marks, hover]);
 
   // Zoom around the pointer; a non-passive listener so the page does not scroll.
   useEffect(() => {

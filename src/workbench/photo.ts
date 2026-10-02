@@ -1,9 +1,11 @@
 /**
  * Photos of the real board laid over the boardview.
  *
- * A photo is aligned by two points picked on the photo and the same two
- * points picked on the board. That fixes a similarity transform (scale,
- * rotation, shift). Photo pixels have Y pointing down and board mils Y
+ * A photo is aligned by points picked on the photo and the same points
+ * picked on the board. Two fix a similarity transform (scale, rotation,
+ * shift), three an affine one (also a slightly squashed photo), four a
+ * perspective one (a board photographed at an angle, or a microscope that
+ * does not look straight down). Photo pixels have Y pointing down and board mils Y
  * pointing up, so a photo of the top side is mirrored against the board;
  * a photo of the bottom side, taken of the turned-over board, is not.
  */
@@ -13,10 +15,19 @@ import type { Bounds, Point } from "../core/types";
 /** Photo pixel (u, v) → board (A·u + C·v + E, B·u + D·v + F). */
 export type Affine = [number, number, number, number, number, number];
 
+/**
+ * Photo pixel (u, v) → board, with perspective: (h0·u + h1·v + h2, h3·u + h4·v + h5) / (h6·u + h7·v + h8).
+ * For a board photographed at an angle, aligned by four points.
+ */
+export type Homography = [number, number, number, number, number, number, number, number, number];
+
 export interface BoardPhoto {
   /** Copy of the photo in the app's data folder. */
   file: string;
+  /** The alignment, or its affine part when `perspective` is set. */
   matrix: Affine;
+  /** Perspective alignment from four points; wins over `matrix`. */
+  perspective?: Homography;
   /** 0–1. */
   opacity: number;
 }
@@ -37,6 +48,98 @@ export function alignPhoto(side: PhotoSide, photo: [Point, Point], board: [Point
   const b = { re: board[0].x - (a.re * z1.re - a.im * z1.im), im: board[0].y - (a.re * z1.im + a.im * z1.re) };
   // a·z = (a.re·u − a.im·s·v) + i(a.im·u + a.re·s·v), s = sign
   return [a.re, a.im, -a.im * sign, a.re * sign, b.re, b.im];
+}
+
+/** The affine transform through three point pairs; null if the points lie on one line. */
+export function affineFrom3(photo: Point[], board: Point[]): Affine | null {
+  const [p0, p1, p2] = photo;
+  const det = (p1.x - p0.x) * (p2.y - p0.y) - (p2.x - p0.x) * (p1.y - p0.y);
+  if (Math.abs(det) < 1e-9) return null;
+  // Board = M·(photo − p0) + board0, M from the two edge vectors.
+  const du1 = p1.x - p0.x, dv1 = p1.y - p0.y, du2 = p2.x - p0.x, dv2 = p2.y - p0.y;
+  const bx1 = board[1].x - board[0].x, by1 = board[1].y - board[0].y, bx2 = board[2].x - board[0].x, by2 = board[2].y - board[0].y;
+  const a = (bx1 * dv2 - bx2 * dv1) / det;
+  const c = (bx2 * du1 - bx1 * du2) / det;
+  const b = (by1 * dv2 - by2 * dv1) / det;
+  const d = (by2 * du1 - by1 * du2) / det;
+  return [a, b, c, d, board[0].x - a * p0.x - c * p0.y, board[0].y - b * p0.x - d * p0.y];
+}
+
+/** The perspective transform through four point pairs; null if three of them lie on one line. */
+export function homographyFrom4(photo: Point[], board: Point[]): Homography | null {
+  for (const pts of [photo, board])
+    for (let i = 0; i < 4; i++) {
+      const [a, b, c] = [0, 1, 2, 3].filter((k) => k !== i).map((k) => pts[k]);
+      if (Math.abs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)) < 1e-9 * (1 + Math.hypot(b.x - a.x, b.y - a.y) ** 2)) return null;
+    }
+  // Eight equations for h0..h7 (h8 = 1), solved by Gaussian elimination.
+  const rows: number[][] = [];
+  for (let i = 0; i < 4; i++) {
+    const { x: u, y: v } = photo[i];
+    const { x, y } = board[i];
+    rows.push([u, v, 1, 0, 0, 0, -u * x, -v * x, x]);
+    rows.push([0, 0, 0, u, v, 1, -u * y, -v * y, y]);
+  }
+  for (let col = 0; col < 8; col++) {
+    let pivot = col;
+    for (let r = col + 1; r < 8; r++) if (Math.abs(rows[r][col]) > Math.abs(rows[pivot][col])) pivot = r;
+    if (Math.abs(rows[pivot][col]) < 1e-12) return null;
+    [rows[col], rows[pivot]] = [rows[pivot], rows[col]];
+    for (let r = 0; r < 8; r++) {
+      if (r === col) continue;
+      const f = rows[r][col] / rows[col][col];
+      for (let k = col; k < 9; k++) rows[r][k] -= f * rows[col][k];
+    }
+  }
+  const h = rows.map((r, i) => r[8] / r[i]);
+  return [h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], 1];
+}
+
+export function applyHomography(h: Homography, p: Point): Point {
+  const w = h[6] * p.x + h[7] * p.y + h[8];
+  return { x: (h[0] * p.x + h[1] * p.y + h[2]) / w, y: (h[3] * p.x + h[4] * p.y + h[5]) / w };
+}
+
+export function invertHomography(h: Homography): Homography | null {
+  const [a, b, c, d, e, f, g, k, l] = h;
+  const A = e * l - f * k, B = -(d * l - f * g), C = d * k - e * g;
+  const det = a * A + b * B + c * C;
+  if (Math.abs(det) < 1e-18) return null;
+  const inv: Homography = [A, -(b * l - c * k), b * f - c * e, B, a * l - c * g, -(a * f - c * d), C, -(a * k - b * g), a * e - b * d];
+  return inv.map((x) => x / det) as Homography;
+}
+
+/** Photo units → board, by whichever alignment the photo has. */
+export function photoToBoard(photo: Pick<BoardPhoto, "matrix" | "perspective">, p: Point): Point {
+  return photo.perspective ? applyHomography(photo.perspective, p) : applyAffine(photo.matrix, p);
+}
+
+/** Board → photo units; a function, so the inverse is worked out once. */
+export function boardToPhoto(photo: Pick<BoardPhoto, "matrix" | "perspective">): ((p: Point) => Point) | null {
+  if (photo.perspective) {
+    const inv = invertHomography(photo.perspective);
+    return inv && ((p) => applyHomography(inv, p));
+  }
+  const inv = invertAffine(photo.matrix);
+  return inv && ((p) => applyAffine(inv, p));
+}
+
+/**
+ * The alignment from the picked points: 2 → similarity, 3 → affine,
+ * 4 → perspective (with the affine of the first three as `matrix`).
+ */
+export function alignFromPoints(side: PhotoSide, photo: Point[], board: Point[]): Pick<BoardPhoto, "matrix" | "perspective"> | null {
+  if (photo.length >= 4 && board.length >= 4) {
+    const perspective = homographyFrom4(photo.slice(0, 4), board.slice(0, 4));
+    const matrix = affineFrom3(photo, board);
+    return perspective && matrix ? { matrix, perspective } : null;
+  }
+  if (photo.length === 3 && board.length === 3) {
+    const matrix = affineFrom3(photo, board);
+    return matrix && { matrix };
+  }
+  const matrix = alignPhoto(side, [photo[0], photo[1]], [board[0], board[1]]);
+  return matrix && { matrix };
 }
 
 export function applyAffine(m: Affine, p: Point): Point {
@@ -155,13 +258,14 @@ export function fitToBounds(box: PixelBox, imageWidth: number, bounds: Bounds): 
 }
 
 /** Board positions of the photo's corners: top-left, top-right, bottom-left, bottom-right. */
-export function photoCorners(m: Affine, width: number, height: number): Point[] {
+export function photoCorners(m: Affine | Pick<BoardPhoto, "matrix" | "perspective">, width: number, height: number): Point[] {
+  const photo = Array.isArray(m) ? { matrix: m } : m;
   return [
     { x: 0, y: 0 },
     { x: width, y: 0 },
     { x: 0, y: height },
     { x: width, y: height },
-  ].map((p) => applyAffine(m, p));
+  ].map((p) => photoToBoard(photo, p));
 }
 
 export function parsePhoto(value: unknown): BoardPhoto | undefined {
@@ -170,5 +274,7 @@ export function parsePhoto(value: unknown): BoardPhoto | undefined {
   if (typeof p.file !== "string" || !Array.isArray(p.matrix) || p.matrix.length !== 6) return undefined;
   if (!p.matrix.every((x) => typeof x === "number" && Number.isFinite(x))) return undefined;
   const opacity = typeof p.opacity === "number" ? Math.min(1, Math.max(0, p.opacity)) : 0.8;
-  return { file: p.file, matrix: p.matrix as Affine, opacity };
+  const h = p.perspective;
+  const perspective = Array.isArray(h) && h.length === 9 && h.every((x) => typeof x === "number" && Number.isFinite(x)) ? (h as Homography) : undefined;
+  return { file: p.file, matrix: p.matrix as Affine, opacity, ...(perspective && { perspective }) };
 }

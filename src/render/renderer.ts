@@ -140,12 +140,30 @@ void main() {
   v_color = a_color;
 }`;
 
+/**
+ * Weights for texturing a quad in perspective: each corner's distance to
+ * where the diagonals cross, against the opposite corner's. A
+ * parallelogram gives the same weight everywhere (plain affine texturing).
+ */
+export function quadWeights(tl: Point, tr: Point, bl: Point, br: Point): [number, number, number, number] {
+  // Diagonals tl→br and tr→bl.
+  const d1 = { x: br.x - tl.x, y: br.y - tl.y };
+  const d2 = { x: bl.x - tr.x, y: bl.y - tr.y };
+  const den = d1.x * d2.y - d1.y * d2.x;
+  if (Math.abs(den) < 1e-12) return [1, 1, 1, 1];
+  const t = ((tr.x - tl.x) * d2.y - (tr.y - tl.y) * d2.x) / den;
+  const s = ((tr.x - tl.x) * d1.y - (tr.y - tl.y) * d1.x) / den;
+  if (!(t > 0 && t < 1 && s > 0 && s < 1)) return [1, 1, 1, 1];
+  // Distances along each diagonal: tl t, br 1−t; tr s, bl 1−s.
+  return [1 / (1 - t), 1 / (1 - s), 1 / s, 1 / t];
+}
+
 const IMAGE_VS = `#version 300 es
 layout(location=0) in vec2 a_pos;
-layout(location=1) in vec2 a_uv;
+layout(location=1) in vec3 a_uv;
 uniform mat3 u_world;
 uniform vec2 u_viewport;
-out vec2 v_uv;
+out vec3 v_uv;
 void main() {
   vec2 p = (u_world * vec3(a_pos, 1.0)).xy;
   vec2 clip = p / u_viewport * 2.0 - 1.0;
@@ -155,12 +173,13 @@ void main() {
 
 const IMAGE_FS = `#version 300 es
 precision mediump float;
-in vec2 v_uv;
+in vec3 v_uv;
 uniform sampler2D u_tex;
 uniform float u_opacity;
 out vec4 o;
 void main() {
-  vec4 c = texture(u_tex, v_uv);
+  // Projective coordinates: a photo aligned in perspective stays straight.
+  vec4 c = texture(u_tex, v_uv.xy / v_uv.z);
   o = vec4(c.rgb, c.a * u_opacity);
 }`;
 
@@ -516,16 +535,22 @@ export class BoardRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     const [tl, tr, bl, br] = corners;
-    const data = new Float32Array([tl.x, tl.y, 0, 0, tr.x, tr.y, 1, 0, bl.x, bl.y, 0, 1, br.x, br.y, 1, 1]);
+    const [qtl, qtr, qbl, qbr] = quadWeights(tl, tr, bl, br);
+    const data = new Float32Array([
+      ...[tl.x, tl.y, 0, 0, qtl],
+      ...[tr.x, tr.y, qtr, 0, qtr],
+      ...[bl.x, bl.y, 0, qbl, qbl],
+      ...[br.x, br.y, qbr, qbr, qbr],
+    ]);
     const vao = gl.createVertexArray()!;
     gl.bindVertexArray(vao);
     const buffer = gl.createBuffer()!;
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 20, 0);
     gl.enableVertexAttribArray(1);
-    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 8);
+    gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 20, 8);
     gl.bindVertexArray(null);
     this.photo = { texture, vao, buffer, opacity };
   }
