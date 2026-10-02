@@ -19,15 +19,27 @@ function saveNotes(notes: BoardNotes): Promise<void> {
  * Notes of the open board. Changes are saved shortly after they happen and
  * flushed when the board changes, so nothing typed is lost.
  */
+/** Most steps that can be undone per board. */
+const UNDO_STEPS = 100;
+
 export function useBoardNotes(source: BoardSource | null): {
   notes: BoardNotes | null;
   update(change: (n: BoardNotes) => BoardNotes): void;
+  /** Takes back the last change (a reading, a note, a case …); false when there is none. */
+  undo(): boolean;
+  redo(): boolean;
+  canUndo: boolean;
+  canRedo: boolean;
   error: string | null;
 } {
   const [notes, setNotes] = useState<BoardNotes | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pending = useRef<BoardNotes | null>(null);
   const timer = useRef(0);
+  // Earlier and undone states of this board's notes.
+  const past = useRef<BoardNotes[]>([]);
+  const future = useRef<BoardNotes[]>([]);
+  const [, setHistoryRevision] = useState(0);
 
   const flush = useCallback(() => {
     window.clearTimeout(timer.current);
@@ -44,6 +56,8 @@ export function useBoardNotes(source: BoardSource | null): {
     let cancelled = false;
     // Never show one board's notes on another while loading.
     setNotes(null);
+    past.current = [];
+    future.current = [];
     const key = boardKey(source);
     loadNotes(key, source.name)
       .then((n) => !cancelled && setNotes(n))
@@ -68,6 +82,10 @@ export function useBoardNotes(source: BoardSource | null): {
       setNotes((old) => {
         if (!old) return old;
         const next = change(old);
+        if (next === old) return old;
+        past.current = [...past.current, old].slice(-UNDO_STEPS);
+        future.current = [];
+        setHistoryRevision((r) => r + 1);
         pending.current = next;
         window.clearTimeout(timer.current);
         timer.current = window.setTimeout(flush, SAVE_DELAY_MS);
@@ -77,7 +95,27 @@ export function useBoardNotes(source: BoardSource | null): {
     [flush],
   );
 
-  return { notes, update, error };
+  const step = useCallback(
+    (from: { current: BoardNotes[] }, to: { current: BoardNotes[] }): boolean => {
+      const target = from.current.at(-1);
+      if (!target || !notes) return false;
+      from.current = from.current.slice(0, -1);
+      to.current = [...to.current, notes].slice(-UNDO_STEPS);
+      // Saved like any change, with a fresh time stamp so imports and syncs see it as newest.
+      const next = { ...target, updated: new Date().toISOString() };
+      setNotes(next);
+      setHistoryRevision((r) => r + 1);
+      pending.current = next;
+      window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(flush, SAVE_DELAY_MS);
+      return true;
+    },
+    [notes, flush],
+  );
+  const undo = useCallback(() => step(past, future), [step]);
+  const redo = useCallback(() => step(future, past), [step]);
+
+  return { notes, update, undo, redo, canUndo: past.current.length > 0, canRedo: future.current.length > 0, error };
 }
 
 /** Save panel, then writes the notes as JSON. Resolves false when cancelled. */

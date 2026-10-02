@@ -43,6 +43,51 @@ pub fn save(dir: &Path, key: &str, json: &str) -> Result<(), String> {
     write_json(&dir.join(file_name(key)), json)
 }
 
+/// A board's notes as they were: one snapshot at most every
+/// `VERSION_EVERY` seconds, the newest `VERSIONS_KEPT` kept, in
+/// `versions/<board>/<unix seconds>.json`.
+const VERSION_EVERY: u64 = 600;
+const VERSIONS_KEPT: usize = 100;
+
+fn versions_dir(dir: &Path, key: &str) -> PathBuf {
+    dir.join("versions").join(file_name(key).trim_end_matches(".json"))
+}
+
+/// Snapshot times of a board, newest first.
+pub fn versions(dir: &Path, key: &str) -> Vec<u64> {
+    let mut out: Vec<u64> = std::fs::read_dir(versions_dir(dir, key))
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .filter_map(|e| {
+                    e.file_name().to_string_lossy().strip_suffix(".json").and_then(|s| s.parse().ok())
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    out.sort_unstable_by(|a, b| b.cmp(a));
+    out
+}
+
+pub fn load_version(dir: &Path, key: &str, stamp: u64) -> Result<String, String> {
+    let path = versions_dir(dir, key).join(format!("{stamp}.json"));
+    std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Saves the board's notes and, when the last snapshot is old enough, a new snapshot.
+pub fn save_with_version(dir: &Path, key: &str, json: &str, now: u64) -> Result<(), String> {
+    save(dir, key, json)?;
+    let existing = versions(dir, key);
+    if existing.first().is_some_and(|&last| now.saturating_sub(last) < VERSION_EVERY) {
+        return Ok(());
+    }
+    write_json(&versions_dir(dir, key).join(format!("{now}.json")), json)?;
+    for old in existing.iter().skip(VERSIONS_KEPT - 1) {
+        let _ = std::fs::remove_file(versions_dir(dir, key).join(format!("{old}.json")));
+    }
+    Ok(())
+}
+
 /// Image types a board photo may have.
 const PHOTO_TYPES: &[&str] = &["jpg", "jpeg", "png", "heic", "webp"];
 
@@ -132,6 +177,18 @@ mod tests {
         assert_eq!(stored.file_name().unwrap(), "ps5_edm-010-top-9.png");
         assert!(store_photo_png(&dir, "x", "case", b"\x89PNG", 9).is_err());
         assert!(store_photo_png(&dir, "x", "top", b"GIF89a", 9).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn keeps_snapshots_apart_in_time() {
+        let dir = std::env::temp_dir().join(format!("avero-versions-{}", std::process::id()));
+        save_with_version(&dir, "820-02100", "{\"a\":1}", 1000).unwrap();
+        save_with_version(&dir, "820-02100", "{\"a\":2}", 1300).unwrap();
+        save_with_version(&dir, "820-02100", "{\"a\":3}", 1700).unwrap();
+        assert_eq!(versions(&dir, "820-02100"), vec![1700, 1000]);
+        assert_eq!(load_version(&dir, "820-02100", 1000).unwrap(), "{\"a\":1}");
+        assert_eq!(load(&dir, "820-02100").unwrap().as_deref(), Some("{\"a\":3}"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

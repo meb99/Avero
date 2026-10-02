@@ -9,6 +9,7 @@ import { exportNotes, importNotes } from "../workbench/store";
 import { CaseEditor, CaseHistory } from "./CaseEditor";
 import { ConditionsEditor } from "./Conditions";
 import { MeasureLists } from "./MeasureLists";
+import { Versions } from "./Versions";
 
 interface Props {
   model: BoardModel;
@@ -230,6 +231,8 @@ export function Workbench({ model, notes, update, tolerance, onTolerance, onSele
         <label className="wb-label">{t("measure.boardNotes")}</label>
         <NotesField value={notes.notes} placeholder={notes.key} onSave={(v) => update((n) => ({ ...n, notes: v }))} />
       </section>
+
+      <Versions notes={notes} update={update} />
 
       <section className="wb-section wb-row">
         <button className="small" onClick={() => void exportNotes(notes, t("measure.export")).catch((e) => setMessage(String(e)))}>

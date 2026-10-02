@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { BoardView, type BoardViewHandle, type PhotoLayer, type ViewState } from "./components/BoardView";
 import { PhotoBoardHint, PhotoPointDialog } from "./components/PhotoAlign";
 import { PhotoPane } from "./components/PhotoPane";
+import { ImportReport } from "./components/ImportReport";
 import { CommandPalette } from "./components/CommandPalette";
 import { HelpDialog, SettingsDialog } from "./components/Dialogs";
 import { LibraryDialog, type LibraryDrop } from "./components/Library";
@@ -74,6 +75,8 @@ import {
   obdataFor,
 } from "./knowledge/store";
 import { linkObdata } from "./workbench/notes";
+import { loadStore, saveStore } from "./workbench/appStore";
+import { parseWorkspace, type Workspace, type WorkspaceTab } from "./workbench/workspace";
 import { BUILTIN_PAGES } from "./knowledge/builtin";
 import { guessCategory } from "./workbench/catalog";
 import { PIN_COLORS } from "./render/palette";
@@ -86,6 +89,12 @@ const NO_NETS: number[] = [];
 const DEMO_SCHEMATIC = `${import.meta.env.BASE_URL}demo/avero-demo-schematic.pdf`;
 const WEBSITE = "https://github.com/meb99/Avero";
 const TOAST_MS = 4000;
+
+/** Focus is in a text field: undo belongs to its text. */
+function editingText(): boolean {
+  const el = document.activeElement as HTMLElement | null;
+  return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+}
 
 /** A photo being aligned: two points on the photo, then the same two on the board. */
 interface PhotoAlignment {
@@ -181,7 +190,7 @@ export function App() {
   const [error, setError] = useState<{ name: string; path?: string; error: LoadError } | null>(null);
   // A file that failed for lack of an XZZ key, reopened once the key is set.
   const retryPath = useRef<string | null>(null);
-  const [dialog, setDialog] = useState<"settings" | "help" | "library" | "palette" | null>(null);
+  const [dialog, setDialog] = useState<"settings" | "help" | "library" | "palette" | "report" | null>(null);
   const dialogRef = useRef(dialog);
   dialogRef.current = dialog;
   const [libraryDrop, setLibraryDrop] = useState<LibraryDrop | null>(null);
@@ -238,7 +247,7 @@ export function App() {
     () => (model && compareModel ? mapSelection(model, compareModel, selection) : NONE),
     [model, compareModel, selection],
   );
-  const { notes, update: updateNotes, error: notesError } = useBoardNotes(source);
+  const { notes, update: updateNotes, undo: undoNotes, redo: redoNotes, error: notesError } = useBoardNotes(source);
 
   // Own net names (Net10 -> GND) live in the board notes and are applied to
   // the model in place; the revision makes name-sorted views refresh.
@@ -602,6 +611,9 @@ export function App() {
     [openSchematicBytes],
   );
 
+  // Side, rotation and view of a board being reopened from the last session.
+  const pendingRestore = useRef<WorkspaceTab | null>(null);
+
   const finishLoad = useCallback((loaded: Loaded): boolean => {
     setLoading(null);
     const { result, source } = loaded;
@@ -609,13 +621,15 @@ export function App() {
       setError({ name: source.name, path: source.path, error: result.error });
       return false;
     }
+    const restore = pendingRestore.current?.path === source.path ? pendingRestore.current : null;
+    pendingRestore.current = null;
     setError(null);
     setModel(new BoardModel(result.board));
     setSource(source);
     setSelection(NONE);
-    setSide("top");
-    setRotation(0);
-    setInitialView(undefined);
+    setSide(restore?.side ?? "top");
+    setRotation(restore?.rotation ?? 0);
+    setInitialView(restore?.view);
     if (source.path) setRecent(rememberRecent(source.path));
     return true;
   }, []);
@@ -708,6 +722,12 @@ export function App() {
     // switchTab and newTab only use refs and setters.
     [finishLoad, openSchematicPath, settings.autoSchematic, settings.xzzKey, settings.fzKey],
   );
+
+  // For the one-time restore on start, which must use the current copies.
+  const openPathRef = useRef(openPath);
+  openPathRef.current = openPath;
+  const switchTabRef = useRef(switchTab);
+  switchTabRef.current = switchTab;
 
   const openDialog = useCallback(async () => {
     const path = await pickPath(t("welcome.open"), "any");
@@ -923,6 +943,85 @@ export function App() {
     };
   }, [openPath]);
 
+  // --- workspace: what was open, back on the next start ------------------------
+
+  const workspaceSnapshot = useCallback(async (): Promise<Workspace> => {
+    const tabsNow = tabsRef.current.map((t) => (t.id === live.current.id ? { ...live.current, view: viewRef.current?.viewState() } : t));
+    const withFiles = tabsNow.filter((t) => t.source?.path);
+    let frame: Workspace["window"];
+    try {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const win = getCurrentWindow();
+      const [pos, size, maximized] = await Promise.all([win.outerPosition(), win.outerSize(), win.isMaximized()]);
+      frame = { x: pos.x, y: pos.y, width: size.width, height: size.height, maximized };
+    } catch {
+      frame = undefined;
+    }
+    return {
+      version: 1,
+      tabs: withFiles.map((t) => ({
+        path: t.source!.path!,
+        ...(t.schematic?.path && { schematicPath: t.schematic.path }),
+        schematicVisible: t.schematicVisible,
+        side: t.side,
+        rotation: t.rotation,
+        ...(t.view && { view: t.view }),
+      })),
+      active: Math.max(0, withFiles.findIndex((t) => t.id === live.current.id)),
+      ...(frame && { window: frame }),
+    };
+  }, []);
+
+  // Saved every few seconds while something changed: also pans and zooms, which are no React state.
+  const restoring = useRef(true);
+  useEffect(() => {
+    let last = "";
+    const timer = window.setInterval(() => {
+      if (restoring.current) return;
+      void workspaceSnapshot().then((ws) => {
+        const json = JSON.stringify(ws);
+        if (json === last) return;
+        last = json;
+        void saveStore("workspace", ws).catch(() => {});
+      });
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [workspaceSnapshot]);
+
+  // On start: reopen the last session, unless Finder handed over files to open.
+  useEffect(() => {
+    const restore = async () => {
+      await new Promise((r) => window.setTimeout(r, 400));
+      if (!loadSettings().restoreWorkspace || live.current.model !== null) return;
+      const ws = parseWorkspace(await loadStore("workspace").catch(() => null));
+      if (!ws) return;
+      if (ws.window) {
+        try {
+          const { getCurrentWindow, PhysicalPosition, PhysicalSize } = await import("@tauri-apps/api/window");
+          const win = getCurrentWindow();
+          if (ws.window.maximized) await win.maximize();
+          else {
+            await win.setSize(new PhysicalSize(ws.window.width, ws.window.height));
+            await win.setPosition(new PhysicalPosition(ws.window.x, ws.window.y));
+          }
+        } catch {
+          // Window placement is a nicety.
+        }
+      }
+      for (const tab of ws.tabs) {
+        pendingRestore.current = tab;
+        await openPathRef.current(tab.path, tab.schematicPath);
+        if (!tab.schematicVisible) setSchematicVisible(false);
+      }
+      const active = tabsRef.current.filter((t) => (t.id === live.current.id ? live.current : t).source?.path)[ws.active];
+      if (active && active.id !== live.current.id) switchTabRef.current(active.id);
+    };
+    void restore().finally(() => {
+      restoring.current = false;
+    });
+    // Once, on start.
+  }, []);
+
   // --- comparison ----------------------------------------------------------
 
   // The compared board follows the selection.
@@ -1076,6 +1175,14 @@ export function App() {
       requestAnimationFrame(() => schematicViewRef.current?.focusSearch());
     },
     palette: () => setDialog((d) => (d === "palette" ? null : d ?? "palette")),
+    undo: () => {
+      if (editingText()) document.execCommand("undo");
+      else if (undoNotes()) setToast(t("undo.done"));
+    },
+    redo: () => {
+      if (editingText()) document.execCommand("redo");
+      else if (redoNotes()) setToast(t("undo.redone"));
+    },
     flip: flipSide,
     rotate: () => setRotation((r) => (r + 1) & 3),
     rotateBack: () => setRotation((r) => (r + 3) & 3),
@@ -1188,6 +1295,12 @@ export function App() {
       if (mod && key === "k") {
         e.preventDefault();
         actionsRef.current.palette();
+        return;
+      }
+      if (mod && key === "z" && !editingText()) {
+        e.preventDefault();
+        if (e.shiftKey) actionsRef.current.redo();
+        else actionsRef.current.undo();
         return;
       }
       if (mod && key === "o") {
@@ -1678,7 +1791,8 @@ export function App() {
           {dragOver && <div className="drop-overlay">{t(dialog === "library" ? "library.dropHere" : "drop.hint")}</div>}
         </main>
 
-        <StatusBar model={model} source={source} schematic={schematic} loading={loading} settings={settings} />
+        <StatusBar model={model} source={source} schematic={schematic} loading={loading} settings={settings} onReport={() => setDialog("report")} />
+        {dialog === "report" && model && <ImportReport model={model} source={source} onClose={() => setDialog(null)} />}
 
         {dialog === "settings" && (
           <SettingsDialog

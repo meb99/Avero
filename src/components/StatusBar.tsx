@@ -11,9 +11,10 @@ interface Props {
   schematic: SchematicDocument | null;
   loading: string | null;
   settings: Settings;
+  onReport(): void;
 }
 
-export function StatusBar({ model, source, schematic, loading, settings }: Props) {
+export function StatusBar({ model, source, schematic, loading, settings, onReport }: Props) {
   const { t } = useI18n();
   const b = model?.board;
   return (
@@ -34,6 +35,9 @@ export function StatusBar({ model, source, schematic, loading, settings }: Props
               {t("status.warnings", { n: b.warnings.length })}
             </span>
           )}
+          <button className="link status-report" onClick={onReport} title={t("quality.hint")}>
+            {t("quality.button")}
+          </button>
         </>
       )}
       {!loading && schematic && (

@@ -18,6 +18,9 @@ export interface MenuActions {
   search(): void;
   searchSchematic(): void;
   palette(): void;
+  /** Undo in the text field being edited, otherwise of the last change to readings and notes. */
+  undo(): void;
+  redo(): void;
   flip(): void;
   rotate(): void;
   rotateBack(): void;
@@ -112,8 +115,8 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
     {
       text: t("menu.edit"),
       items: [
-        { item: "Undo" },
-        { item: "Redo" },
+        item("undo", t("menu.undo"), (a) => a.undo(), "CmdOrCtrl+Z"),
+        item("redo", t("menu.redo"), (a) => a.redo(), "CmdOrCtrl+Shift+Z"),
         SEP,
         { item: "Cut" },
         { item: "Copy" },

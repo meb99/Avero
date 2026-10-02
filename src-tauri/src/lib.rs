@@ -1,6 +1,7 @@
 //! Desktop shell. Parsing runs natively through `avero-formats`; the web UI
 //! receives the finished board as JSON.
 
+mod backup;
 mod collection;
 mod conversion;
 mod duplicates;
@@ -327,6 +328,45 @@ fn data_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path().app_data_dir().map_err(|e| e.to_string())
 }
 
+/// Backs up the own library, the data folder and the given settings into one ZIP.
+#[tauri::command]
+async fn backup_create(
+    app: tauri::AppHandle,
+    path: String,
+    settings: String,
+    created: String,
+) -> Result<backup::Summary, String> {
+    let library = library_dir(&app)?;
+    let data = data_dir(&app)?;
+    let version = app.package_info().version.to_string();
+    backup::create(Path::new(&path), &library, &data, &settings, &version, &created)
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RestoreResult {
+    files: usize,
+    bytes: u64,
+    settings: Option<String>,
+    created: String,
+    app: String,
+}
+
+/// Restores a backup made with `backup_create`; returns the stored settings for the UI.
+#[tauri::command]
+async fn backup_restore(app: tauri::AppHandle, path: String, stamp: String) -> Result<RestoreResult, String> {
+    let library = library_dir(&app)?;
+    let data = data_dir(&app)?;
+    let r = backup::restore(Path::new(&path), &library, &data, &stamp)?;
+    Ok(RestoreResult {
+        files: r.summary.files,
+        bytes: r.summary.bytes,
+        settings: r.settings,
+        created: r.manifest.created,
+        app: r.manifest.app,
+    })
+}
+
 /// App-wide JSON stores in the data folder, by name: saved diagnosis flows,
 /// the datasheet register, the workspace to restore, key bindings.
 const STORES: &[&str] = &["flows", "datasheets", "workspace", "shortcuts"];
@@ -379,7 +419,22 @@ fn load_notes(app: tauri::AppHandle, key: String) -> Result<Option<String>, Stri
 
 #[tauri::command]
 fn save_notes(app: tauri::AppHandle, key: String, data: String) -> Result<(), String> {
-    notes::save(&notes_dir(&app)?, &key, &data)
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or_default();
+    notes::save_with_version(&notes_dir(&app)?, &key, &data, now)
+}
+
+/// Snapshot times (unix seconds) of a board's notes, newest first.
+#[tauri::command]
+fn note_versions(app: tauri::AppHandle, key: String) -> Result<Vec<u64>, String> {
+    Ok(notes::versions(&notes_dir(&app)?, &key))
+}
+
+#[tauri::command]
+fn load_note_version(app: tauri::AppHandle, key: String, stamp: u64) -> Result<String, String> {
+    notes::load_version(&notes_dir(&app)?, &key, stamp)
 }
 
 /// Decodes the percent-encoding the UI uses to pass paths in a header.
@@ -495,6 +550,10 @@ pub fn run() {
             load_text_index,
             load_knowledge,
             load_store,
+            note_versions,
+            load_note_version,
+            backup_create,
+            backup_restore,
             save_store,
             save_knowledge,
             save_text_index,

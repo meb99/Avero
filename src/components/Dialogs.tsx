@@ -1,4 +1,5 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { createBackup, formatBytes, pickAndRestoreBackup } from "../workbench/backup";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "../i18n";
 import type { Settings } from "../settings";
 import { CloseIcon } from "./Icons";
@@ -64,6 +65,7 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
     | "ratsnest"
     | "overview"
     | "autoSchematic"
+    | "restoreWorkspace"
     | "updateCheck";
   const check = (key: Toggle, label: string) => (
     <label className="check">
@@ -145,8 +147,14 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
       <p className="muted setting-hint">{t("settings.fzKeyHint", { n: fzWords(settings.fzKey) })}</p>
       <h3>{t("schematic.title")}</h3>
       <div className="checks">{check("autoSchematic", t("settings.autoSchematic"))}</div>
+      <h3>{t("backup.title")}</h3>
+      <p className="muted setting-hint">{t("backup.hint")}</p>
+      <BackupButtons />
       <h3>Avero</h3>
-      <div className="checks">{check("updateCheck", t("settings.updateCheck"))}</div>
+      <div className="checks">
+        {check("updateCheck", t("settings.updateCheck"))}
+        {check("restoreWorkspace", t("settings.restoreWorkspace"))}
+      </div>
       <div className="version-row">
         <span className="muted">{t("settings.version", { version: __APP_VERSION__ })}</span>
         <button className="small" onClick={onCheckUpdates}>
@@ -159,6 +167,59 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
         </button>
       </footer>
     </Dialog>
+  );
+}
+
+/** Full backup and restore of library, data and settings. */
+function BackupButtons() {
+  const { t, lang } = useI18n();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const run = async (task: () => Promise<string | null>) => {
+    setBusy(true);
+    setMessage(t("backup.working"));
+    try {
+      setMessage(await task());
+    } catch (e) {
+      setMessage(t("backup.failed", { message: String(e) }));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="backup-row">
+      <button
+        className="small"
+        disabled={busy}
+        onClick={() =>
+          void run(async () => {
+            const r = await createBackup(t("backup.create"));
+            return r ? t("backup.done", { n: r.files, size: formatBytes(r.bytes, lang) }) : null;
+          })
+        }
+      >
+        {t("backup.create")}
+      </button>
+      <button
+        className="small"
+        disabled={busy}
+        onClick={() =>
+          void run(async () => {
+            const { ask } = await import("@tauri-apps/plugin-dialog");
+            const r = await pickAndRestoreBackup(t("backup.restore"), (path) =>
+              ask(t("backup.restoreAsk", { path }), { title: t("backup.restore"), kind: "warning", okLabel: t("backup.restoreOk") }),
+            );
+            if (!r) return null;
+            // Everything in memory is stale now: start over with the restored data.
+            window.setTimeout(() => window.location.reload(), 1500);
+            return t("backup.restored", { n: r.files, created: new Date(r.created).toLocaleString(lang) });
+          })
+        }
+      >
+        {t("backup.restore")}
+      </button>
+      {message && <span className="muted backup-message">{message}</span>}
+    </div>
   );
 }
 

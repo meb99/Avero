@@ -25,6 +25,8 @@ export interface Settings {
   /** Look for a new release on GitHub once a day. */
   updateCheck: boolean;
   autoSchematic: boolean;
+  /** Reopen the boards, schematics and window of the last session on start. */
+  restoreWorkspace: boolean;
   showSidebar: boolean;
   /** Sidebar width in CSS pixels, dragged at its left edge. */
   sidebarWidth: number;
@@ -61,6 +63,7 @@ export const DEFAULT_SETTINGS: Settings = {
   overview: true,
   updateCheck: true,
   autoSchematic: true,
+  restoreWorkspace: true,
   showSidebar: true,
   sidebarWidth: 340,
   sidebarCollapsed: false,
