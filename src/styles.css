@@ -1522,9 +1522,68 @@ button.danger {
 
 /* Library */
 
+/* The library nearly fills the window: the list of boards gets the room. */
 .dialog.library-dialog {
-  width: min(900px, calc(100% - 48px));
-  height: min(720px, calc(100% - 48px));
+  width: min(1500px, calc(100% - 32px));
+  height: calc(100% - 32px);
+  max-width: none;
+  max-height: none;
+}
+
+.library-tools {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  flex-shrink: 0;
+}
+
+.library-tools > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.library-tools > summary::-webkit-details-marker {
+  display: none;
+}
+
+.library-tools > summary::before {
+  content: "▸";
+  color: var(--text-muted);
+}
+
+.library-tools[open] > summary::before {
+  content: "▾";
+}
+
+.library-tools-title {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.library-tools-note {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.library-tools[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 10px;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.library-tools[open] > :not(summary) {
+  margin: 0 10px;
 }
 
 .library-dialog[open] {
@@ -1541,7 +1600,7 @@ button.danger {
   overflow-y: auto;
 }
 
-.library-dialog .library-list { min-height: 180px; }
+.library-dialog .library-list { min-height: 260px; }
 
 .library-bar {
   display: flex;

@@ -55,6 +55,8 @@ interface Props {
   onClose(): void;
 }
 
+const TOOLS_KEY = "avero.library.tools";
+
 /** Rescan automatically when the last scan is older than this. */
 const STALE_MS = 10 * 60 * 1000;
 
@@ -95,6 +97,14 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
   const [autoSort, setAutoSort] = useState(loadAutoSort);
   const [sortedNote, setSortedNote] = useState<string | null>(null);
   const handledDrop = useRef(drop?.nonce ?? 0);
+  // Import and conversion tools: folded by default, remembered.
+  const [toolsOpen, setToolsOpen] = useState(() => {
+    try {
+      return localStorage.getItem(TOOLS_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
 
   const rescan = async (folders: string[], own = root) => {
     setScanning(true);
@@ -383,6 +393,14 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
             {t("library.modeText")}
           </button>
         </div>
+        <button
+          className="primary"
+          disabled={busy}
+          onClick={() => void pickImport(t("library.import"), BOARD_EXTENSIONS).then(runImport)}
+          title={t("library.importHint")}
+        >
+          {t("library.import")}
+        </button>
         <button onClick={() => void addFolder()}>
           {t("library.addFolder")}
         </button>
@@ -400,6 +418,27 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
         </button>
       </div>
 
+      {/* Import, XZZ conversion and the collection fold away so the list gets the room. */}
+      <details
+        className="library-tools"
+        open={toolsOpen || busy}
+        onToggle={(e) => {
+          const open = (e.currentTarget as HTMLDetailsElement).open;
+          if (open === (toolsOpen || busy)) return;
+          setToolsOpen(open);
+          try {
+            localStorage.setItem(TOOLS_KEY, open ? "1" : "0");
+          } catch {
+            // ignore
+          }
+        }}
+      >
+        <summary>
+          <span className="library-tools-title">{t("library.tools")}</span>
+          <span className="muted library-tools-note">
+            {converting ?? (collecting ? t("collection.title") : summary ?? t("library.toolsHint"))}
+          </span>
+        </summary>
       <div className="library-import">
         <CategoryFields
           value={importCategory}
@@ -489,6 +528,7 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
           {collection.errors.map((message, i) => <p className="library-warn" key={`${i}-${message}`}>{message}</p>)}
         </details> : null}
       </section>
+      </details>
 
       <div className="library-folders">
         {root && (

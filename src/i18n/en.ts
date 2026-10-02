@@ -325,6 +325,8 @@ export const en = {
   "library.empty": "Add the folders where you keep boardviews and schematics. Avero finds them and groups them by board number.",
   "library.noMatch": "No boards match.",
   "library.showAll": "Show all",
+  "library.tools": "Import & convert",
+  "library.toolsHint": "Set brand/device for imports, convert XZZ to GenCAD, import the console collection",
   "library.count": "{n} boards · {files} files",
   "library.truncated": "Stopped after {files} files.",
   "library.missing": "Folder not found: {path}",

@@ -327,6 +327,8 @@ export const de: Record<MessageKey, string> = {
   "library.empty": "Füge die Ordner hinzu, in denen deine Boardviews und Schaltpläne liegen. Avero findet sie und ordnet sie nach Boardnummer.",
   "library.noMatch": "Keine passenden Boards.",
   "library.showAll": "Alle anzeigen",
+  "library.tools": "Importieren & Konvertieren",
+  "library.toolsHint": "Marke/Gerät beim Import vorgeben, XZZ in GenCAD konvertieren, Konsolen-Sammlung importieren",
   "library.count": "{n} Boards · {files} Dateien",
   "library.truncated": "Nach {files} Dateien abgebrochen.",
   "library.missing": "Ordner nicht gefunden: {path}",
