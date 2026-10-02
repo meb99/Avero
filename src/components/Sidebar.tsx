@@ -13,6 +13,7 @@ import { VirtualList } from "./VirtualList";
 import { LayerList } from "./LayerList";
 import type { Palette, RGBA } from "../render/palette";
 import type { SchematicDocument } from "../schematic/document";
+import type { SchematicFacts } from "../schematic/partInfo";
 
 type Tab = "details" | "parts" | "nets" | "layers" | "knowledge" | "measure" | "diagnose";
 
@@ -39,6 +40,8 @@ interface Props {
   onShowMarker(id: string): void;
   /** Known-good values of OpenBoardData for this board, if any. */
   obdata: ObdData | null;
+  /** Values, part numbers and net voltages read from the schematic. */
+  schematicFacts: SchematicFacts | null;
   /** Contents of the "Knowledge" tab. */
   knowledge: ReactNode;
   knowledgeCount: number;
@@ -76,6 +79,7 @@ export function Sidebar({
   onShowMarker,
   knowledge,
   knowledgeCount,
+  schematicFacts,
   width,
   onWidth,
   collapsed,
@@ -206,13 +210,14 @@ export function Sidebar({
             pinnedNets={pinnedNets}
             onTogglePin={onTogglePin}
             obdata={obdata}
+            schematicFacts={schematicFacts}
           />
         </div>
       )}
 
       {tab === "diagnose" && (
         <div className="panel scroll">
-          <Diagnosis model={model} notes={notes} update={updateNotes} onSelect={onSelect} />
+          <Diagnosis model={model} notes={notes} update={updateNotes} onSelect={onSelect} schematicFacts={schematicFacts} />
         </div>
       )}
 

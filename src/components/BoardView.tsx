@@ -67,6 +67,8 @@ interface Props {
   initialView?: ViewState;
   /** Photo of the real board for the visible side. */
   photo?: PhotoLayer;
+  /** Values to print under part names (from the schematic), by part index. */
+  partValues?: ReadonlyMap<number, string>;
   /**
    * While set, clicks pick board points instead of selecting; the point
    * snaps to the pin or test point under the cursor.
@@ -125,6 +127,7 @@ export function BoardView({
   measured,
   initialView,
   photo,
+  partValues,
   onPointPick,
   onSelect,
   ref,
@@ -155,6 +158,7 @@ export function BoardView({
     measured,
     markers,
     activeMarker,
+    partValues,
     highlightedNet: undefined as number | undefined,
   });
   const [hover, setHover] = useState<Hover | null>(null);
@@ -307,6 +311,7 @@ export function BoardView({
         dprRef.current,
         s.measured,
         i === 0,
+        s.partValues,
       ),
     );
     for (const v of views)
@@ -568,6 +573,11 @@ export function BoardView({
     stateRef.current.measured = measured;
     requestDraw();
   }, [measured, requestDraw]);
+
+  useEffect(() => {
+    stateRef.current.partValues = partValues;
+    requestDraw();
+  }, [partValues, requestDraw]);
 
   useEffect(() => () => cancelAnimationFrame(animRef.current), []);
 

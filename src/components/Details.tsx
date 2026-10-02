@@ -5,6 +5,7 @@ import { checkPinout, type PinoutCheck } from "../knowledge/pinout";
 import { netReadings, partValues, type ObdData } from "../knowledge/obdata";
 import type { SchematicDocument } from "../schematic/document";
 import { SchematicHits } from "./SchematicHits";
+import type { SchematicFacts } from "../schematic/partInfo";
 import type { RGBA } from "../render/palette";
 import { visibleFrom, type BoardModel, type ViewSide } from "../core/board";
 import type { NetKind, Selection, Side } from "../core/types";
@@ -33,6 +34,8 @@ interface Props {
   onTogglePin?(net: number): void;
   /** Known-good values of OpenBoardData for this board. */
   obdata?: ObdData | null;
+  /** Values, part numbers and net voltages read from the schematic's text. */
+  schematicFacts?: SchematicFacts | null;
 }
 
 /** Datasheet name of a pin, its function and target value on hover. */
@@ -172,6 +175,7 @@ export function Details({
   pinnedNets,
   onTogglePin,
   obdata,
+  schematicFacts,
 }: Props) {
   const { t, lang } = useI18n();
   const u = settings.units;
@@ -372,6 +376,38 @@ export function Details({
             {part.device && <p className="details-device">{part.device}</p>}
           </header>
           {part.estimated && <p className="muted estimated-note">{t("details.estimated")}</p>}
+          {(() => {
+            const f = schematicFacts?.parts.get(part.name.toUpperCase());
+            if (!f) return null;
+            const rows: [MessageKey, string | undefined][] = [
+              ["sch.value", f.value],
+              ["sch.partNumber", f.partNumber],
+              ["sch.rating", f.rating],
+              ["sch.tolerance", f.tolerance],
+              ["sch.dielectric", f.dielectric],
+              ["sch.package", f.package],
+            ];
+            const notFitted = f.flags.some((x) => /STUFF|DNP|NOPOP|^NI$|DNI/.test(x));
+            return (
+              <section className="details-section sch-facts">
+                <h3>
+                  {t("sch.title")} <span className="muted">{t("sch.page", { n: f.page + 1 })}</span>
+                </h3>
+                <dl className="props">
+                  {rows.filter(([, v]) => v).map(([label, v]) => (
+                    <Row key={label} label={t(label)}>
+                      {v}
+                    </Row>
+                  ))}
+                </dl>
+                {f.flags.length > 0 && (
+                  <p className={notFitted ? "kb-note kb-warning" : "muted"}>
+                    {notFitted ? t("sch.notFitted") : ""} {f.flags.join(" · ")}
+                  </p>
+                )}
+              </section>
+            );
+          })()}
           {chip && <ChipCard chip={chip} check={pinCheck} />}
           {obdValues.length > 0 && (
             <section className="details-section obd">
@@ -527,6 +563,12 @@ export function Details({
           </header>
           <dl className="props">
             <Row label={t("details.kind")}>{t(kindKey[net.kind])}</Row>
+            {(() => {
+              const v =
+                schematicFacts?.netVoltages.get(net.name.toUpperCase()) ??
+                schematicFacts?.netVoltages.get(model.fileNetName(selection.net).toUpperCase());
+              return v ? <Row label={t("sch.voltage")}>{v.replace(".", lang === "de" ? "," : ".").replace(/V$/, " V")}</Row> : null;
+            })()}
             <Row label={t("details.pins")}>{net.pins.length}</Row>
             {(net.traces?.length ?? 0) > 0 && (
               <Row label={t("details.traces")}>

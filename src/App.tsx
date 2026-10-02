@@ -40,6 +40,7 @@ import { installMenu, nativeMenuActive, type MenuActions } from "./menu";
 import { closeSchematicWindow, LINK, openSchematicWindow, type LinkedDoc } from "./schematic/link";
 import { DARK, LIGHT } from "./render/palette";
 import type { SchematicDocument } from "./schematic/document";
+import { readSchematicFacts, type SchematicFacts } from "./schematic/partInfo";
 import { SchematicView, type SchematicFocus, type SchematicViewHandle, type WordTarget } from "./schematic/SchematicView";
 import type { Word } from "./schematic/textIndex";
 import { clearRecent, loadRecent, loadSettings, rememberRecent, saveSettings, type Settings } from "./settings";
@@ -248,6 +249,45 @@ export function App() {
     if (model && notesForModel && model.applyNetNames(netNames ?? {})) setNamesRevision((r) => r + 1);
     // notesForModel only matters as "the notes of this board have loaded".
   }, [model, netNames, notesForModel !== null]);
+
+  // --- facts from the schematic's text ---------------------------------------
+  // Values, part numbers and net voltages, read once the schematic is indexed.
+  const [schematicFacts, setSchematicFacts] = useState<SchematicFacts | null>(null);
+  useEffect(() => {
+    setSchematicFacts(null);
+    if (!schematic || !model) return;
+    let cancelled = false;
+    const run = () => {
+      if (cancelled) return;
+      const parts = new Set(model.parts.map((p) => p.name.toUpperCase()));
+      const nets = new Set<string>();
+      model.nets.forEach((n, i) => {
+        nets.add(n.name.toUpperCase());
+        nets.add(model.fileNetName(i).toUpperCase());
+      });
+      // After the current frame: a big schematic takes a moment.
+      window.setTimeout(() => !cancelled && setSchematicFacts(readSchematicFacts(schematic.index, parts, nets)), 0);
+    };
+    if (schematic.indexComplete) run();
+    const off = schematic.subscribe(() => {
+      if (schematic.indexComplete) run();
+    });
+    return () => {
+      cancelled = true;
+      off();
+    };
+  }, [schematic, model]);
+  /** Value shown under a part's name on the board: the schematic's when it has one. */
+  const partValues = useMemo(() => {
+    const out = new Map<number, string>();
+    if (!schematicFacts || !model) return out;
+    model.parts.forEach((p, i) => {
+      const f = schematicFacts.parts.get(p.name.toUpperCase());
+      const text = [f?.value ?? f?.partNumber, f?.value && f.rating].filter(Boolean).join(" ");
+      if (text) out.set(i, text);
+    });
+    return out;
+  }, [schematicFacts, model]);
 
   // --- board photos ----------------------------------------------------------
 
@@ -1347,6 +1387,7 @@ export function App() {
                     measured={measured}
                     initialView={initialView}
                     photo={bothSides ? undefined : photoLayer}
+                    partValues={partValues}
                     onPointPick={
                       placingMarker ? placeMarker : aligning && aligning.photoPoints.length >= 2 ? pickBoardPoint : undefined
                     }
@@ -1503,6 +1544,7 @@ export function App() {
                   onShowMarker={showMarker}
                   obdata={boardObdata?.obdata ?? null}
                   knowledgeCount={knowledgeForBoard}
+                  schematicFacts={schematicFacts}
                   width={sidebarWidth}
                   onWidth={(w, done) => {
                     setSidebarWidth(w);

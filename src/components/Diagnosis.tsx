@@ -5,20 +5,31 @@ import { useI18n } from "../i18n";
 import { judge, noPowerGuide, type DiagStep, type Expect } from "../workbench/diagnosis";
 import { activeCase, addCase, setValue, type BoardNotes } from "../workbench/notes";
 import { ValueInput } from "./MeasureBlock";
+import type { SchematicFacts } from "../schematic/partInfo";
 
 interface Props {
   model: BoardModel;
   notes: BoardNotes | null;
   update(change: (n: BoardNotes) => BoardNotes): void;
   onSelect(selection: Selection, zoom: boolean): void;
+  schematicFacts?: SchematicFacts | null;
 }
 
 type StepState = "ok" | "bad" | "open" | "empty";
 
 /** The fault-finding guide: steps from the adapter to the CPU, with the board's measuring points. */
-export function Diagnosis({ model, notes, update, onSelect }: Props) {
+export function Diagnosis({ model, notes, update, onSelect, schematicFacts }: Props) {
   const { t, lang } = useI18n();
-  const steps = useMemo(() => noPowerGuide(model), [model]);
+  const steps = useMemo(() => {
+    // Voltages the schematic draws nets with, by net index.
+    const volts = new Map<number, number>();
+    if (schematicFacts)
+      model.nets.forEach((n, i) => {
+        const v = schematicFacts.netVoltages.get(n.name.toUpperCase()) ?? schematicFacts.netVoltages.get(model.fileNetName(i).toUpperCase());
+        if (v) volts.set(i, Number.parseFloat(v));
+      });
+    return noPowerGuide(model, volts);
+  }, [model, schematicFacts]);
   const current = notes ? activeCase(notes) : undefined;
   const volts = (v: number) => v.toLocaleString(lang, { maximumFractionDigits: 2 });
   const expectText = (e: Expect) =>

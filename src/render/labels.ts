@@ -61,6 +61,8 @@ export function drawLabels(
   measured?: ReadonlyMap<number, NetStatus>,
   /** False when a second side is drawn onto the same canvas. */
   clear = true,
+  /** Values under part names from the schematic, by part index; else the board's device text. */
+  values?: ReadonlyMap<number, string>,
 ): void {
   const { width, height } = ctx.canvas;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -176,12 +178,13 @@ export function drawLabels(
       ctx.fillStyle = size >= 16 ? palette.labelChip : palette.label;
       ctx.fillText(part.name, c.x, y);
       // The value under the name once there is room, as FlexBV shows it ("1uF", "LT3957").
-      if (part.device && inside && y === spots[0] && size >= 10 && h >= size * 2.7) {
+      const valueText = (values?.get(i) ?? part.device)?.trim();
+      if (valueText && inside && y === spots[0] && size >= 10 && h >= size * 2.7) {
         const small = Math.max(8, size * 0.55);
         ctx.font = `500 ${small}px ${FONT}`;
-        let value = part.device.trim();
+        let value = valueText;
         while (value.length > 3 && ctx.measureText(value).width > w * 0.92) value = value.slice(0, -2);
-        if (value !== part.device.trim()) value = `${value}…`;
+        if (value !== valueText) value = `${value}…`;
         const vy = y + size * 0.62 + small * 0.6;
         ctx.strokeText(value, c.x, vy);
         ctx.fillStyle = palette.label;

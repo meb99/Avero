@@ -20,7 +20,7 @@ export type Expect =
   /** Any real voltage: the rail is there. */
   | { kind: "present" };
 
-export type PointSource = "datasheet" | "name" | "standard";
+export type PointSource = "datasheet" | "name" | "standard" | "schematic";
 
 export interface DiagPoint {
   net: number;
@@ -73,6 +73,8 @@ const UNNAMED = /^(N\d+|NET\d+|UNCONNECTED|NC)$/i;
 interface Ctx {
   model: BoardModel;
   used: Set<number>;
+  /** Voltages the schematic draws nets with (VOLTAGE=3.3V), by net index. */
+  schematicVolts?: ReadonlyMap<number, number>;
 }
 
 function point(ctx: Ctx, net: number | undefined, expect: Expect, label: string, source: PointSource): DiagPoint[] {
@@ -80,6 +82,10 @@ function point(ctx: Ctx, net: number | undefined, expect: Expect, label: string,
   const name = ctx.model.nets[net].name;
   if (UNNAMED.test(name) || ctx.model.nets[net].kind === "ground" || ctx.model.nets[net].kind === "unconnected") return [];
   ctx.used.add(net);
+  // A voltage the schematic states beats one guessed from the name.
+  const drawn = ctx.schematicVolts?.get(net);
+  if (drawn !== undefined && drawn > 0 && (expect.kind === "volts" || expect.kind === "present"))
+    return [{ net, name, expect: { kind: "volts", volts: drawn }, label, source: "schematic" }];
   return [{ net, name, expect, label, source }];
 }
 
@@ -156,8 +162,8 @@ const SEQUENCE: [RegExp, string][] = [
 ];
 
 /** The guide for the board in view. */
-export function noPowerGuide(model: BoardModel): DiagStep[] {
-  const ctx: Ctx = { model, used: new Set() };
+export function noPowerGuide(model: BoardModel, schematicVolts?: ReadonlyMap<number, number>): DiagStep[] {
+  const ctx: Ctx = { model, used: new Set(), schematicVolts };
   const chargers = chipsOf(model, "charger");
   const systems = chipsOf(model, "system");
   const ecs = chipsOf(model, "ec");

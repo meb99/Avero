@@ -130,6 +130,11 @@ export class WordIndex {
     return out.sort(readingOrder).slice(0, limit);
   }
 
+  /** Pages that have words, in order. */
+  pages(): number[] {
+    return [...this.byPage.keys()].sort((a, b) => a - b);
+  }
+
   onPage(page: number): Word[] {
     return this.byPage.get(page) ?? [];
   }
