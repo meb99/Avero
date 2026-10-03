@@ -368,6 +368,8 @@ export const de: Record<MessageKey, string> = {
   "help.copyLabel": "Namen des gewählten Bauteils, Pins oder Netzes kopieren",
   "help.pins": ". / ,",
   "help.pinsLabel": "Nächster / voriger Pin des gewählten Bauteils",
+  "help.ruler": "L",
+  "help.rulerLabel": "Lineal: Abstand zweier Punkte in mm und mil (Esc beendet)",
   "help.ownKeys": "Tasten lassen sich unter Einstellungen → Tasten frei belegen, auch für Fußpedale.",
   "ask.ok": "OK",
   "ask.cancel": "Abbrechen",

@@ -319,6 +319,7 @@ export function HelpDialog({ onClose }: { onClose(): void }) {
     ["help.bookmark", "help.bookmarkLabel"],
     ["help.copy", "help.copyLabel"],
     ["help.pins", "help.pinsLabel"],
+    ["help.ruler", "help.rulerLabel"],
     ["help.clear", "help.clearLabel"],
   ] as const;
   return (

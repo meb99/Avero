@@ -366,6 +366,8 @@ export const en = {
   "help.copyLabel": "Copy the selected part, pin or net name",
   "help.pins": ". / ,",
   "help.pinsLabel": "Next / previous pin of the selected part",
+  "help.ruler": "L",
+  "help.rulerLabel": "Ruler: distance between two points in mm and mil (Esc ends)",
   "help.ownKeys": "Keys can be changed under Settings → Keys, foot pedals included.",
   "ask.ok": "OK",
   "ask.cancel": "Cancel",
