@@ -1052,3 +1052,54 @@ fn altium_pcbdoc_is_named_not_unknown() {
     );
     assert_eq!(parse(&ole, Some("Main.PcbDoc")).unwrap_err(), ParseError::Unsupported("Altium PcbDoc"));
 }
+
+// --- Robustness ----------------------------------------------------------------
+
+/// Damaged files of every format: flipped bytes, cuts and repeats must give an
+/// error or a board, never a panic (a panic would end the open in the app).
+#[test]
+fn damaged_files_never_panic() {
+    let samples: Vec<(&str, Vec<u8>)> = vec![
+        ("board.brd", BRD.as_bytes().to_vec()),
+        ("board.gcd", GENCAD.as_bytes().to_vec()),
+        ("board.cst", cst_fixture()),
+        ("board.pcb", xzz_fixture(0x5a)),
+        ("board.fz", fz_fixture(FZ_CONTENT)),
+        ("board.kicad_pcb", KICAD.as_bytes().to_vec()),
+        ("board.brd", EAGLE.as_bytes().to_vec()),
+    ];
+    // A fixed pseudo-random sequence, so a failure can be repeated.
+    let mut seed: u64 = 0x2545_f491_4f6c_dd1d;
+    let mut rand = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed
+    };
+    for (name, data) in &samples {
+        for round in 0..400 {
+            let mut d = data.clone();
+            match round % 4 {
+                0 => {
+                    for _ in 0..1 + rand() % 8 {
+                        let i = (rand() as usize) % d.len();
+                        d[i] = rand() as u8;
+                    }
+                }
+                1 => d.truncate((rand() as usize) % d.len()),
+                2 => {
+                    let at = (rand() as usize) % d.len();
+                    let piece = d[at..(at + 64).min(d.len())].to_vec();
+                    d.splice(at..at, piece);
+                }
+                _ => {
+                    let i = (rand() as usize) % d.len();
+                    d[i..].iter_mut().for_each(|b| *b = b.wrapping_add(rand() as u8));
+                }
+            }
+            let options = avero_formats::ParseOptions { xzz_key: Some(XZZ_KEY), ..Default::default() };
+            let r = std::panic::catch_unwind(|| avero_formats::parse_with(&d, Some(name), options));
+            assert!(r.is_ok(), "{name} round {round} panicked");
+        }
+    }
+}
