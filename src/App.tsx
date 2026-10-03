@@ -600,10 +600,30 @@ export function App() {
     setPlacingMarker(false);
     setDrawing({ kind, side, points: [], ends: [] });
   };
+  // The ruler: two points, their distance; nothing is stored.
+  const [ruler, setRuler] = useState<{ side: ViewSide; points: Point[] } | null>(null);
+  const rulerRef = useRef(ruler);
+  rulerRef.current = ruler;
+  const pickRulerPoint = (point: Point, clicked: ViewSide) =>
+    setRuler((r) => (!r ? r : r.points.length >= 2 ? { side: clicked, points: [point] } : { side: r.points.length ? r.side : clicked, points: [...r.points, point] }));
+  const rulerText = useMemo(() => {
+    if (!ruler || ruler.points.length < 2) return null;
+    const [a, b] = ruler.points;
+    const mm = (v: number) => new Intl.NumberFormat(lang, { maximumFractionDigits: 2 }).format((v * 25.4) / 1000);
+    const d = Math.hypot(b.x - a.x, b.y - a.y);
+    return {
+      label: `${mm(d)} mm`,
+      detail: t("ruler.result", { mm: mm(d), mil: Math.round(d), dx: mm(Math.abs(b.x - a.x)), dy: mm(Math.abs(b.y - a.y)) }),
+    };
+  }, [ruler, lang, t]);
+  // The ruler's line with its length, beside the stored drawings.
+  const rulerMark =
+    ruler && ruler.points.length === 2 && rulerText ? { id: "ruler", kind: "line" as const, side: ruler.side, points: ruler.points, text: rulerText.label } : null;
   const drawingMarks = useMemo(
     () => (notesForModel?.drawings ?? []).map((d) => ({ id: d.id, kind: d.kind, side: d.side, points: d.points, text: d.text ?? (d.kind === "jumper" ? undefined : undefined) })),
     [notesForModel?.drawings],
   );
+  const boardDrawings = useMemo(() => (rulerMark ? [...drawingMarks, rulerMark] : drawingMarks), [drawingMarks, rulerMark?.text, rulerMark?.points]);
   const showDrawing = useCallback(
     (id: string) => {
       const d = notesForModel?.drawings?.find((x) => x.id === id);
@@ -1691,6 +1711,7 @@ export function App() {
       { id: "export", label: t("menu.exportImage"), shortcut: "⇧⌘E", enabled: board, run: a.exportImage },
       { id: "export-pdf", label: t("menu.exportPdf"), shortcut: "⌥⌘E", enabled: board, run: a.exportPdf },
       { id: "marker", label: t("marker.place"), shortcut: "M", enabled: board && notes !== null, run: () => setPlacingMarker(true) },
+      { id: "ruler", label: t("ruler.title"), shortcut: "L", enabled: board, run: () => setRuler({ side, points: [] }) },
       { id: "draw-line", label: t("draw.line"), enabled: board && notes !== null, run: () => startDrawing("line") },
       { id: "draw-area", label: t("draw.area"), enabled: board && notes !== null, run: () => startDrawing("area") },
       { id: "draw-jumper", label: t("draw.jumper"), enabled: board && notes !== null, run: () => startDrawing("jumper") },
@@ -1827,8 +1848,13 @@ export function App() {
           e.preventDefault();
           searchRef.current?.focus();
           break;
+        case "l":
+        case "L":
+          if (model) setRuler((r) => (r ? null : { side, points: [] }));
+          break;
         case "Escape":
-          if (drawingRef.current) setDrawing(null);
+          if (rulerRef.current) setRuler(null);
+          else if (drawingRef.current) setDrawing(null);
           else if (aligningRef.current) cancelAlignment();
           else if (placingMarkerRef.current) setPlacingMarker(false);
           else setSelection(NONE);
@@ -1920,8 +1946,12 @@ export function App() {
           searchRef={searchRef}
           placingMarker={placingMarker}
           onMarker={() => setPlacingMarker((v) => !v)}
-          drawing={drawing?.kind ?? null}
-          onDraw={(kind) => (kind ? startDrawing(kind) : setDrawing(null))}
+          drawing={ruler ? "ruler" : (drawing?.kind ?? null)}
+          onDraw={(kind) => {
+            setRuler(kind === "ruler" ? { side, points: [] } : null);
+            if (kind && kind !== "ruler") startDrawing(kind);
+            else setDrawing(null);
+          }}
         />
 
         {tabs.length > 1 && <TabBar tabs={tabInfos} active={activeTab} onSwitch={switchTab} onClose={closeTab} onNew={newTab} />}
@@ -1970,9 +2000,17 @@ export function App() {
                     photo={bothSides ? undefined : photoLayer}
                     partValues={partValues}
                     onPointPick={
-                      drawing ? pickDrawPoint : placingMarker ? placeMarker : aligning && aligning.photoPoints.length >= aligning.count ? pickBoardPoint : undefined
+                      drawing
+                        ? pickDrawPoint
+                        : ruler
+                          ? pickRulerPoint
+                          : placingMarker
+                            ? placeMarker
+                            : aligning && aligning.photoPoints.length >= aligning.count
+                              ? pickBoardPoint
+                              : undefined
                     }
-                    drawings={drawingMarks}
+                    drawings={boardDrawings}
                     draft={drawing && drawing.points.length ? { id: "draft", kind: drawing.kind, side: drawing.side, points: drawing.points } : null}
                     onSelect={(sel, zoom) => {
                       setMultiParts([]);
@@ -1982,6 +2020,14 @@ export function App() {
                     extraParts={multiSet}
                   >
                     {placingMarker && <div className="placing-hint">{t("marker.placing")}</div>}
+                    {ruler && (
+                      <div className="placing-hint drawing-hint ruler-hint">
+                        {rulerText ? <strong>{rulerText.detail}</strong> : t("ruler.hint")}
+                        <button className="small" onClick={() => setRuler(null)}>
+                          {t("ruler.done")}
+                        </button>
+                      </div>
+                    )}
                     {drawing && (
                       <div className="placing-hint drawing-hint">
                         {t(`draw.hint.${drawing.kind}`)}
@@ -2039,8 +2085,8 @@ export function App() {
                       onMarkerClick={openMarker}
                       measured={measured}
                       partValues={partValues}
-                      drawings={drawingMarks}
-                      onPointPick={drawing ? pickDrawPoint : placingMarker ? placeMarker : undefined}
+                      drawings={boardDrawings}
+                      onPointPick={drawing ? pickDrawPoint : ruler ? pickRulerPoint : placingMarker ? placeMarker : undefined}
                       onSelect={(sel, zoom) => {
                         setMultiParts([]);
                         select(sel, zoom);

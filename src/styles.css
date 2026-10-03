@@ -3756,9 +3756,9 @@ button.danger {
 
 .board-hide {
   position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
+  /* Bottom right: the top is for placing and drawing hints. */
+  bottom: 10px;
+  right: 10px;
   z-index: 4;
   opacity: 0.8;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
@@ -3955,4 +3955,14 @@ button.danger {
   display: flex;
   gap: 8px;
   align-items: baseline;
+}
+
+/* A measurement, not a warning. */
+.ruler-hint {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--accent);
+  white-space: nowrap;
+  left: 50%;
+  transform: translateX(-50%);
 }

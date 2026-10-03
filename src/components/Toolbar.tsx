@@ -47,8 +47,8 @@ interface Props {
   placingMarker: boolean;
   onMarker(): void;
   /** Drawing tool in use, and starting or stopping one. */
-  drawing: "line" | "area" | "jumper" | null;
-  onDraw(kind: "line" | "area" | "jumper" | null): void;
+  drawing: "line" | "area" | "jumper" | "ruler" | null;
+  onDraw(kind: "line" | "area" | "jumper" | "ruler" | null): void;
 }
 
 export function Toolbar(p: Props) {
@@ -128,12 +128,13 @@ export function Toolbar(p: Props) {
               value={p.drawing ?? ""}
               title={t("draw.title")}
               aria-label={t("draw.title")}
-              onChange={(e) => p.onDraw((e.target.value || null) as "line" | "area" | "jumper" | null)}
+              onChange={(e) => p.onDraw((e.target.value || null) as "line" | "area" | "jumper" | "ruler" | null)}
             >
               <option value="">✎ {t("draw.title")}</option>
               <option value="line">{t("draw.line")}</option>
               <option value="area">{t("draw.area")}</option>
               <option value="jumper">{t("draw.jumper")}</option>
+              <option value="ruler">{t("ruler.title")} (L)</option>
             </select>
           </div>
           <div className="toolbar-search">
