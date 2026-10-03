@@ -86,6 +86,10 @@ fn classify(name: &str, head: impl FnOnce() -> Vec<u8>) -> Option<Kind> {
         "asc" => (name == "pins.asc").then_some(Kind::Board),
         "pcb" => is_xzz_head(&head()).then_some(Kind::Board),
         "tvw" => Some(Kind::Unsupported),
+        // Altium saves text ("PCB ASCII") or an OLE compound file under the same name.
+        "pcbdoc" => {
+            Some(if head().starts_with(&[0xD0, 0xCF, 0x11, 0xE0]) { Kind::Unsupported } else { Kind::Board })
+        }
         _ if avero_formats::formats::extensions().contains(&ext) => Some(Kind::Board),
         _ => None,
     }
@@ -288,6 +292,14 @@ pub fn scan(roots: &[PathBuf]) -> LibraryScan {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn altium_text_boards_are_boards_and_binary_ones_are_named() {
+        let text = || b"|RECORD=Board|KIND=Protel_Advanced_PCB|".to_vec();
+        assert_eq!(classify("Main.PcbDoc", text), Some(Kind::Board));
+        let ole = || vec![0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1];
+        assert_eq!(classify("Main.PcbDoc", ole), Some(Kind::Unsupported));
+    }
 
     fn tree(files: &[&str]) -> PathBuf {
         let root = std::env::temp_dir().join(format!(

@@ -272,6 +272,7 @@ pub enum FormatId {
     Cae,
     KiCad,
     Eagle,
+    Altium,
     Demo,
 }
 
@@ -292,6 +293,7 @@ impl FormatId {
             FormatId::Cae => "CAE",
             FormatId::KiCad => "KiCad",
             FormatId::Eagle => "EAGLE / Fusion 360",
+            FormatId::Altium => "Altium PCB ASCII",
             FormatId::Demo => "Avero demo board",
         }
     }

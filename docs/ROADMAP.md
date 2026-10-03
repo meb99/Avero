@@ -60,7 +60,7 @@ Diese Punkte brauchen **echte Beispieldateien**, die Avero nicht mitliefern darf
 - Diodenwerte aus XZZ-Dateien (Abschnitt nach `v6v6555v6v6`) als Referenzwerte übernehmen – Aufbau des Abschnitts ist nicht öffentlich beschrieben
 - XZZ-Bauteile auf der Unterseite erkennen (bisher alles „Oben", wie bei OpenBoardView)
 - Teboview `.tvw` – keine freie Formatbeschreibung
-- Cadence Allegro `.brd` (binär), Altium `.PcbDoc` – werden erkannt, aber noch nicht gelesen
+- Cadence Allegro `.brd` (binär), binäre Altium-`.PcbDoc` – werden erkannt, aber noch nicht gelesen (Altium im Textformat „PCB ASCII“ liest Avero seit 0.9.23)
 - Boardviews, die nur als PDF vorliegen (Bauteilnamen und Pads als Zeichnung)
 - `.fz`-Dateien mit echtem Schlüssel gegenprüfen (bisher mit synthetischen Dateien nach OpenBoardView getestet)
 - Multimeter-Profile über Owon XDM hinaus mit echten Geräten prüfen (Antwort auf `*IDN?` und `MEAS?`)

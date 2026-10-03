@@ -142,6 +142,7 @@ pub fn parse_with(buf: &[u8], file_name: Option<&str>, options: ParseOptions) ->
             }
             FormatId::KiCad => formats::kicad::parse(buf),
             FormatId::Eagle => formats::eagle::parse(buf),
+            FormatId::Altium => formats::altium::parse(buf),
             FormatId::Asc | FormatId::Demo => Err(ParseError::Unrecognized),
         },
         Detected::AscBundle => Err(ParseError::NeedsAscFiles),

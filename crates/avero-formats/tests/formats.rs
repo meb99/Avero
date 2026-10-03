@@ -1057,6 +1057,60 @@ fn altium_pcbdoc_is_named_not_unknown() {
 
 /// Damaged files of every format: flipped bytes, cuts and repeats must give an
 /// error or a board, never a panic (a panic would end the open in the app).
+const ALTIUM: &str = "|RECORD=Board|KIND=Protel_Advanced_PCB|VERSION=5.01|VX0=0mil|VY0=0mil|KIND0=0|VX1=1000mil|VY1=0mil|KIND1=0|VX2=1000mil|VY2=500mil|KIND2=0|VX3=0mil|VY3=500mil|KIND3=0
+|RECORD=Net|ID=0|NAME=GND
+|RECORD=Net|ID=1|NAME=PP3V3 S5
+|RECORD=Component|ID=0|LAYER=TOP|X=100mil|Y=100mil|ROTATION=0|PATTERN=C0402|SOURCEDESIGNATOR=C1|SOURCELIBREFERENCE=CAP 100nF
+|RECORD=Component|ID=1|LAYER=BOTTOM|X=500mil|Y=200mil|ROTATION=90|PATTERN=HDR1X2|SOURCEDESIGNATOR=J1
+|RECORD=Pad|INDEXFORSAVE=0|LAYER=TOP|NET=1|COMPONENT=0|NAME=1|X=80mil|Y=100mil|XSIZE=20mil|YSIZE=24mil|SHAPE=RECTANGLE|ROTATION=90
+|RECORD=Pad|INDEXFORSAVE=1|LAYER=TOP|NET=0|COMPONENT=0|NAME=2|X=120mil|Y=100mil|XSIZE=20mil|YSIZE=24mil|SHAPE=RECTANGLE|ROTATION=90
+|RECORD=Pad|INDEXFORSAVE=2|LAYER=MULTILAYER|NET=0|COMPONENT=1|NAME=1|X=500mil|Y=150mil|XSIZE=60mil|YSIZE=60mil|SHAPE=ROUND
+|RECORD=Pad|INDEXFORSAVE=3|LAYER=MULTILAYER|COMPONENT=1|NAME=2|X=500mil|Y=250mil|XSIZE=60mil|YSIZE=60mil|SHAPE=ROUND
+|RECORD=Pad|INDEXFORSAVE=4|LAYER=BOTTOM|NET=1|NAME=TP7|X=2.54mm|Y=300mil|XSIZE=40mil|YSIZE=40mil|SHAPE=ROUND
+|RECORD=Via|X=300mil|Y=300mil|DIAMETER=20mil|HOLESIZE=10mil|NET=0
+|RECORD=Track|LAYER=TOP|NET=1|X1=80mil|Y1=100mil|X2=80mil|Y2=300mil|WIDTH=8mil
+|RECORD=Track|LAYER=TOPOVERLAY|COMPONENT=0|X1=0mil|Y1=0mil|X2=10mil|Y2=0mil|WIDTH=5mil
+|RECORD=Track|LAYER=KEEPOUT|X1=0mil|Y1=0mil|X2=10mil|Y2=10mil|WIDTH=5mil
+";
+
+#[test]
+fn altium_ascii_pcbdoc() {
+    let b = parse(ALTIUM.as_bytes(), Some("board.PcbDoc")).unwrap();
+    assert_eq!(b.format, FormatId::Altium);
+    assert_eq!(b.parts.len(), 2);
+    let c1 = part(&b, "C1");
+    assert_eq!(c1.side, Side::Top);
+    assert_eq!(c1.device.as_deref(), Some("CAP 100nF C0402"));
+    let pins = &b.pins[c1.first_pin as usize..(c1.first_pin + c1.pin_count) as usize];
+    assert_eq!(pins.len(), 2);
+    let pin1 = pins.iter().find(|p| p.number == "1").unwrap();
+    assert_close(pin1.x, 80.0);
+    assert_close(pin1.y, 100.0);
+    assert_eq!(net_name(&b, pin1), "PP3V3 S5");
+    let pad = pin1.pad.as_ref().unwrap();
+    assert_close(pad.w, 20.0);
+    assert_close(pad.angle, 90.0);
+    // Through-hole connector on the bottom; the pad without a net is unconnected.
+    let j1 = part(&b, "J1");
+    assert_eq!(j1.mount, Mount::ThroughHole);
+    let j1_pins = &b.pins[j1.first_pin as usize..(j1.first_pin + j1.pin_count) as usize];
+    assert!(j1_pins.iter().any(|p| net_name(&b, p) == "GND"));
+    // A free pad with a net is a test pad; millimetres are converted.
+    let tp = b.test_points.iter().find(|t| t.kind == TestPointKind::Nail).unwrap();
+    assert_close(tp.x, 100.0);
+    assert_eq!(b.nets[tp.net as usize].name, "PP3V3 S5");
+    assert_eq!(b.test_points.iter().filter(|t| t.kind == TestPointKind::Via).count(), 1);
+    // Copper tracks with a net become traces; overlay and keep-out do not.
+    assert_eq!(b.traces.len(), 1);
+    // The board shape wins over keep-out lines.
+    assert_close(b.outline.iter().flatten().map(|p| p.x).fold(0.0, f64::max), 1000.0);
+    // The binary format stays named.
+    assert!(matches!(
+        parse(&[0xD0, 0xCF, 0x11, 0xE0, 1, 2, 3], Some("x.PcbDoc")),
+        Err(ParseError::Unsupported(_))
+    ));
+}
+
 #[test]
 fn damaged_files_never_panic() {
     let samples: Vec<(&str, Vec<u8>)> = vec![
@@ -1067,6 +1121,7 @@ fn damaged_files_never_panic() {
         ("board.fz", fz_fixture(FZ_CONTENT)),
         ("board.kicad_pcb", KICAD.as_bytes().to_vec()),
         ("board.brd", EAGLE.as_bytes().to_vec()),
+        ("board.PcbDoc", ALTIUM.as_bytes().to_vec()),
     ];
     // A fixed pseudo-random sequence, so a failure can be repeated.
     let mut seed: u64 = 0x2545_f491_4f6c_dd1d;

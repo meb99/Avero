@@ -1,5 +1,6 @@
 //! One module per file format, plus detection.
 
+pub(crate) mod altium;
 pub(crate) mod asc;
 pub(crate) mod brd;
 pub(crate) mod brd2;
@@ -68,6 +69,9 @@ pub fn detect(buf: &[u8], file_name: Option<&str>) -> Detected {
         "asc" | "bom" => return Detected::AscBundle,
         _ => {}
     }
+    if altium::detect(buf) {
+        return Detected::Supported(FormatId::Altium);
+    }
     if kicad::detect(buf) {
         return Detected::Supported(FormatId::KiCad);
     }
@@ -134,6 +138,7 @@ pub const SUPPORTED: &[FormatInfo] = &[
     FormatInfo { id: "fz", name: "ASUS FZ", extensions: &["fz"] },
     FormatInfo { id: "cae", name: "CAE", extensions: &["cae"] },
     FormatInfo { id: "kicad", name: "KiCad", extensions: &["kicad_pcb"] },
+    FormatInfo { id: "altium", name: "Altium PCB ASCII", extensions: &["pcbdoc"] },
     FormatInfo { id: "eagle", name: "EAGLE / Fusion 360", extensions: &["brd"] },
 ];
 
