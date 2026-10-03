@@ -5,6 +5,7 @@ import { useI18n } from "../i18n";
 import type { Settings } from "../settings";
 import { CloseIcon } from "./Icons";
 import { MeterSettings } from "./MeterSettings";
+import { ColorEditor } from "./ColorEditor";
 
 export function Dialog({
   title,
@@ -149,6 +150,9 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
       <p className="muted setting-hint">{t("settings.fzKeyHint", { n: fzWords(settings.fzKey) })}</p>
       <h3>{t("schematic.title")}</h3>
       <div className="checks">{check("autoSchematic", t("settings.autoSchematic"))}</div>
+      <h3>{t("colors.title")}</h3>
+      <p className="muted setting-hint">{t("colors.hint")}</p>
+      <ColorEditor colors={settings.colors} onChange={(colors) => set("colors", colors)} />
       <h3>{t("keys.title")}</h3>
       <p className="muted setting-hint">{t("keys.hint")}</p>
       <ShortcutEditor value={settings.shortcuts} onChange={(shortcuts) => set("shortcuts", shortcuts)} />

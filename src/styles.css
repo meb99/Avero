@@ -3826,3 +3826,43 @@ button.danger {
 :root[data-theme="light"] .trace-diode { color: #7b2cbf; }
 :root[data-theme="light"] .trace-resistor { color: #0f7f74; }
 :root[data-theme="light"] .trace-coupling { color: #2d7a3a; }
+
+.color-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.color-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px 20px;
+}
+
+.color-column h4 {
+  margin: 4px 0 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.color-row input[type="color"] {
+  width: 30px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: none;
+}
+
+.color-row.changed span {
+  font-weight: 600;
+}

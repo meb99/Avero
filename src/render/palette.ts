@@ -179,3 +179,94 @@ export function layerColor(p: Palette, layers: readonly Layer[], index: number):
   for (let i = 0; i < index; i++) if (layers[i].side === "both") inner++;
   return p.layerInner[inner % p.layerInner.length];
 }
+
+/** The colours one may change in the settings, most visible first. */
+export const EDITABLE_COLORS = [
+  "background",
+  "boardFill",
+  "boardEdge",
+  "partFill",
+  "partOutline",
+  "partSelectedOutline",
+  "pinSignal",
+  "pinPower",
+  "pinGround",
+  "pinHighlight",
+  "partOnNetOutline",
+  "ratsnest",
+  "nail",
+  "via",
+  "trace",
+  "label",
+  "labelChip",
+] as const;
+
+export type EditableColor = (typeof EDITABLE_COLORS)[number];
+/** Own colours as #rrggbb, per key. */
+export type OwnColors = Partial<Record<EditableColor, string>>;
+
+const HEX = /^#[0-9a-f]{6}$/i;
+
+const hexOf = (c: RGBA | string): string => {
+  if (typeof c === "string") {
+    if (HEX.test(c)) return c.toLowerCase();
+    const m = /rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i.exec(c);
+    return m ? hexOf([+m[1], +m[2], +m[3], 255]) : "#ffffff";
+  }
+  return `#${[c[0], c[1], c[2]].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("")}`;
+};
+
+/** A palette colour as #rrggbb, for a colour field. */
+export function colorHex(p: Palette, key: EditableColor): string {
+  return hexOf(p[key] as RGBA | string);
+}
+
+/** The palette with own colours applied; RGBA keys keep their transparency. */
+export function withColors(base: Palette, colors: OwnColors | undefined): Palette {
+  if (!colors) return base;
+  const out: Record<string, unknown> = { ...base };
+  for (const key of EDITABLE_COLORS) {
+    const hex = colors[key];
+    if (!hex || !HEX.test(hex)) continue;
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const was = base[key] as RGBA | string;
+    out[key] = typeof was === "string" ? hex : ([r, g, b, was[3]] as RGBA);
+  }
+  return out as unknown as Palette;
+}
+
+/** Ready-made sets: high contrast for bright workshops and small screens. */
+export const COLOR_PRESETS: Record<"contrast", { dark: OwnColors; light: OwnColors }> = {
+  contrast: {
+    dark: {
+      background: "#000000",
+      boardFill: "#000000",
+      boardEdge: "#ffffff",
+      partOutline: "#e6e6e6",
+      pinSignal: "#3ddc84",
+      pinPower: "#ff3b30",
+      pinGround: "#8e8e93",
+      pinHighlight: "#ffff00",
+      partOnNetOutline: "#ffff00",
+      ratsnest: "#00e5ff",
+      label: "#ffffff",
+      labelChip: "#ff9cff",
+    },
+    light: {
+      background: "#ffffff",
+      boardFill: "#ffffff",
+      boardEdge: "#000000",
+      partOutline: "#000000",
+      pinSignal: "#007a3d",
+      pinPower: "#d70015",
+      pinGround: "#3a3a3c",
+      pinHighlight: "#c800c8",
+      partOnNetOutline: "#c800c8",
+      ratsnest: "#0040dd",
+      label: "#000000",
+      labelChip: "#5b00b5",
+    },
+  },
+};

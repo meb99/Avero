@@ -1,5 +1,6 @@
 import type { Language } from "./i18n";
 import type { MeterSettings } from "./workbench/meter";
+import type { OwnColors } from "./render/palette";
 import type { Shortcuts } from "./shortcuts";
 
 export interface Settings {
@@ -33,6 +34,8 @@ export interface Settings {
   restoreWorkspace: boolean;
   /** Points picked to align a board photo (2, 3 or 4; 4 for photos at an angle). */
   photoPoints: 2 | 3 | 4;
+  /** Own board colours per theme (the colour editor). */
+  colors?: { dark?: OwnColors; light?: OwnColors };
   /** Multimeter on a USB serial port; none until set up. */
   meter?: MeterSettings;
   /** Own key bindings over the defaults (see shortcuts.ts). */

@@ -48,7 +48,7 @@ import { emitTo, listen } from "@tauri-apps/api/event";
 import { I18nContext, systemLanguage, translator, type MessageKey } from "./i18n";
 import { installMenu, nativeMenuActive, type MenuActions } from "./menu";
 import { closeSchematicWindow, LINK, openSchematicWindow, type LinkedDoc } from "./schematic/link";
-import { DARK, LIGHT } from "./render/palette";
+import { DARK, LIGHT, withColors } from "./render/palette";
 import { setPdfPasswordPrompt, type SchematicDocument } from "./schematic/document";
 import { readSchematicFacts, type SchematicFacts } from "./schematic/partInfo";
 import { SchematicView, type SchematicFocus, type SchematicViewHandle, type WordTarget } from "./schematic/SchematicView";
@@ -298,7 +298,8 @@ export function App() {
   const i18n = useMemo(() => ({ t: translator(lang), lang }), [lang]);
   const { t } = i18n;
   const theme = useTheme(settings);
-  const palette = theme === "dark" ? DARK : LIGHT;
+  const ownColors = settings.colors?.[theme];
+  const palette = useMemo(() => withColors(theme === "dark" ? DARK : LIGHT, ownColors), [theme, ownColors]);
   const compared = compareTab !== null && compareTab !== activeTab ? tabs.find((t) => t.id === compareTab) : undefined;
   const compareModel = compared?.model ?? null;
   const showSchematic = schematic !== null && schematicVisible && !detached && !compareModel && !photoPane && !sheetPane && !cameraPane;
