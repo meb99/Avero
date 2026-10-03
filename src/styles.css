@@ -3775,3 +3775,25 @@ button.danger {
   z-index: 6;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
+
+.ask-dialog {
+  width: min(460px, 92vw);
+}
+
+.ask-message {
+  margin: 0 0 12px;
+  line-height: 1.45;
+  white-space: pre-line;
+}
+
+.ask-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 12px;
+}
+
+.ask-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

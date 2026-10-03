@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { askConfirm } from "./Ask";
 import { useState } from "react";
 import { useI18n } from "../i18n";
 import { parseNotes, type BoardNotes } from "../workbench/notes";
@@ -48,8 +49,8 @@ export function Versions({ notes, update }: { notes: BoardNotes; update(change: 
                 <span className="muted">{t("versions.summary", count(shown.notes))}</span>
                 <button
                   className="small"
-                  onClick={() => {
-                    if (!window.confirm(t("versions.restoreAsk", { when: when(s) }))) return;
+                  onClick={async () => {
+                    if (!(await askConfirm(t("versions.restoreAsk", { when: when(s) }), { ok: t("versions.restore") }))) return;
                     update(() => ({ ...shown.notes, key: notes.key, updated: new Date().toISOString() }));
                   }}
                 >

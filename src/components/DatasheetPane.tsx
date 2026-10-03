@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { askText } from "./Ask";
 import { useI18n } from "../i18n";
 import type { SchematicDocument } from "../schematic/document";
 import { SchematicView, type SchematicViewHandle } from "../schematic/SchematicView";
@@ -42,9 +43,9 @@ export function DatasheetPane({
         <button
           className="small"
           title={t("sheet.rememberHint")}
-          onClick={() => {
+          onClick={async () => {
             const at = view.current?.currentPage() ?? 0;
-            const label = window.prompt(t("sheet.rememberAsk", { n: at + 1 }), t("sheet.pinout"));
+            const label = await askText(t("sheet.rememberAsk", { n: at + 1 }), t("sheet.pinout"));
             if (label?.trim()) onRemember(at, label.trim());
           }}
         >

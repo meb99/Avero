@@ -356,6 +356,8 @@ export const de: Record<MessageKey, string> = {
   "help.undo": "⌘Z / ⇧⌘Z",
   "help.undoLabel": "Messwert oder Notiz rückgängig / wiederholen",
   "help.ownKeys": "Tasten lassen sich unter Einstellungen → Tasten frei belegen, auch für Fußpedale.",
+  "ask.ok": "OK",
+  "ask.cancel": "Abbrechen",
   "board.hide": "Boardview",
   "board.hideHint": "Boardview ausblenden – die Ansicht daneben bekommt die ganze Breite",
   "board.show": "Board zeigen",

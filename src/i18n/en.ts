@@ -354,6 +354,8 @@ export const en = {
   "help.undo": "⌘Z / ⇧⌘Z",
   "help.undoLabel": "Undo / redo a reading or note",
   "help.ownKeys": "Keys can be changed under Settings → Keys, foot pedals included.",
+  "ask.ok": "OK",
+  "ask.cancel": "Cancel",
   "board.hide": "Boardview",
   "board.hideHint": "Hide the boardview – the view beside it gets the whole width",
   "board.show": "Show board",

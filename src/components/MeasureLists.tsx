@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { askConfirm, askText } from "./Ask";
 import type { BoardModel } from "../core/board";
 import type { Selection } from "../core/types";
 import { useI18n } from "../i18n";
@@ -97,14 +98,14 @@ export function MeasureLists({ model, notes, update, selection, onSelect, focus 
             </select>
             <button
               className="small"
-              onClick={() => {
-                const title = window.prompt(t("lists.rename"), list.title);
+              onClick={async () => {
+                const title = await askText(t("lists.rename"), list.title);
                 if (title?.trim()) update((n) => updateList(n, list.id, (l) => ({ ...l, title: title.trim() })));
               }}
             >
               {t("measure.rename")}
             </button>
-            <button className="small danger" onClick={() => window.confirm(t("lists.deleteAsk", { title: list.title })) && update((n) => removeList(n, list.id))}>
+            <button className="small danger" onClick={async () => (await askConfirm(t("lists.deleteAsk", { title: list.title }), { danger: true, ok: t("lists.delete") })) && update((n) => removeList(n, list.id))}>
               {t("lists.delete")}
             </button>
           </div>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AskHost, askText } from "./components/Ask";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { invoke } from "@tauri-apps/api/core";
 import { BoardView, type BoardViewHandle, type PhotoLayer, type ViewState } from "./components/BoardView";
@@ -1162,7 +1163,7 @@ export function App() {
     const path = await pickPath(t("sheet.add"), "pdf");
     if (!path) return;
     const suggested = partNumbers(device)[0] ?? "";
-    const chips = window.prompt(t("sheet.chipsAsk"), suggested);
+    const chips = await askText(t("sheet.chipsAsk"), suggested, { title: t("sheet.add") });
     if (chips === null) return;
     try {
       const file = await invoke<string>("import_datasheet", { path });
@@ -2237,6 +2238,7 @@ export function App() {
           />
         )}
         {dialog === "help" && <HelpDialog onClose={() => setDialog(null)} />}
+        <AskHost />
         {aligning && aligning.photoPoints.length < aligning.count && (
           <PhotoPointDialog
             image={aligning.image}

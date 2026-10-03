@@ -138,9 +138,15 @@ export function Sidebar({
     return () => observer.disconnect();
   });
   // The chosen tab always in view.
+  // (Again once the arrows appear, as they take room from the bar.)
   useEffect(() => {
-    tabsRef.current?.querySelector<HTMLElement>(`[data-tab="${tab}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [tab]);
+    const nav = tabsRef.current;
+    const el = nav?.querySelector<HTMLElement>(`[data-tab="${tab}"]`);
+    if (!nav || !el) return;
+    const left = el.offsetLeft - nav.offsetLeft;
+    if (left < nav.scrollLeft) nav.scrollLeft = left - 4;
+    else if (left + el.offsetWidth > nav.scrollLeft + nav.clientWidth) nav.scrollLeft = left + el.offsetWidth - nav.clientWidth + 4;
+  }, [tab, scroll.left, scroll.right]);
   useEffect(() => {
     if (tabRequest) setTab(tabRequest.tab);
   }, [tabRequest?.n]);

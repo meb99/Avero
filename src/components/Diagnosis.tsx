@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { askConfirm, askText } from "./Ask";
 import type { BoardModel } from "../core/board";
 import type { Selection } from "../core/types";
 import { useI18n, type MessageKey } from "../i18n";
@@ -171,8 +172,8 @@ export function Diagnosis({ model, notes, update, onSelect, schematicFacts, sele
           <button
             className="small"
             title={t("flow.fromCaseHint")}
-            onClick={() => {
-              const title = window.prompt(t("flow.fromCaseTitle"), current.title);
+            onClick={async () => {
+              const title = await askText(t("flow.fromCaseTitle"), current.title);
               if (!title?.trim()) return;
               const flow = flowFromCase(notes, current.id, title.trim());
               if (!flow) return setMessage(t("flow.fromCaseEmpty"));
@@ -185,8 +186,8 @@ export function Diagnosis({ model, notes, update, onSelect, schematicFacts, sele
         )}
         <button
           className="small"
-          onClick={() => {
-            const title = window.prompt(t("flow.newTitle"), t("flow.newDefault"));
+          onClick={async () => {
+            const title = await askText(t("flow.newTitle"), t("flow.newDefault"));
             if (!title?.trim()) return;
             const flow = newFlow(title.trim(), notes?.key);
             saveFlows([...flows, flow]);
@@ -203,8 +204,8 @@ export function Diagnosis({ model, notes, update, onSelect, schematicFacts, sele
             </button>
             <button
               className="small danger"
-              onClick={() => {
-                if (!window.confirm(t("flow.deleteAsk", { title: guide.title }))) return;
+              onClick={async () => {
+                if (!(await askConfirm(t("flow.deleteAsk", { title: guide.title }), { danger: true, ok: t("flow.delete") }))) return;
                 saveFlows(flows.filter((f) => f.id !== guide.id));
                 setChosen("notebook");
               }}

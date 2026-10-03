@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { askConfirm } from "./Ask";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { chipFor, type ChipInfo, type ChipPin } from "../knowledge/chips";
 import { checkPinout, type PinoutCheck } from "../knowledge/pinout";
@@ -456,7 +457,7 @@ export function Details({
                     className="tool icon-only"
                     title={t("sheet.remove")}
                     aria-label={t("sheet.remove")}
-                    onClick={() => window.confirm(t("sheet.removeAsk", { title: s.title })) && onRemoveDatasheet?.(s)}
+                    onClick={async () => (await askConfirm(t("sheet.removeAsk", { title: s.title }), { danger: true, ok: t("sheet.remove") })) && onRemoveDatasheet?.(s)}
                   >
                     ×
                   </button>
