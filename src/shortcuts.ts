@@ -17,7 +17,9 @@ export type ShortcutAction =
   | "rotate"
   | "back"
   | "forward"
-  | "bookmark";
+  | "bookmark"
+  | "nextPin"
+  | "prevPin";
 
 export const SHORTCUT_ACTIONS: ShortcutAction[] = [
   "nextPoint",
@@ -33,6 +35,8 @@ export const SHORTCUT_ACTIONS: ShortcutAction[] = [
   "back",
   "forward",
   "bookmark",
+  "nextPin",
+  "prevPin",
 ];
 
 /** Key names as `keyName` gives them; several keys may share an action. */
@@ -52,6 +56,9 @@ export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string[]> = {
   back: ["Cmd+[", "Cmd+Alt+[", "Alt+ArrowLeft"],
   forward: ["Cmd+]", "Cmd+Alt+]", "Alt+ArrowRight"],
   bookmark: ["Cmd+d"],
+  // Probing a chip pin by pin.
+  nextPin: ["."],
+  prevPin: [","],
 };
 
 export type Shortcuts = Partial<Record<ShortcutAction, string[]>>;

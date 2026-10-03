@@ -3920,3 +3920,39 @@ button.danger {
 .search-results.empty {
   pointer-events: none;
 }
+
+.short-finder {
+  margin: 10px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.short-finder.shorted {
+  border-color: #e5484d;
+}
+
+.short-finder summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.short-hint {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.short-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.short-list li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}

@@ -939,9 +939,15 @@ export function App() {
   // Board comparison: the list of differences, and parts of A marked on the board.
   const [showDiff, setShowDiff] = useState(false);
   const [diffMarks, setDiffMarks] = useState<number[] | null>(null);
-  const multiSet = useMemo(() => new Set([...multiParts, ...(diffMarks ?? [])]), [multiParts, diffMarks]);
+  // Parts marked from the details: same type, short candidates.
+  const [markedParts, setMarkedParts] = useState<{ parts: number[]; label: string } | null>(null);
+  const multiSet = useMemo(
+    () => new Set([...multiParts, ...(diffMarks ?? []), ...(markedParts?.parts ?? [])]),
+    [multiParts, diffMarks, markedParts],
+  );
   useEffect(() => {
     setMultiParts([]);
+    setMarkedParts(null);
     setBgaPart(null);
     setDonorPart(null);
     setDiffMarks(null);
@@ -1282,6 +1288,22 @@ export function App() {
         return navigate(1);
       case "bookmark":
         return void addBookmarkHere();
+      case "nextPin":
+      case "prevPin": {
+        // Pin by pin through the selected part (from a part: its first or last pin).
+        if (!model) return;
+        const step = action === "nextPin" ? 1 : -1;
+        if (selection.kind === "pin") {
+          const p = model.parts[model.pins[selection.pin].part];
+          const at = selection.pin - p.firstPin;
+          return select({ kind: "pin", pin: p.firstPin + ((at + step + p.pinCount) % p.pinCount) }, true);
+        }
+        if (selection.kind === "part") {
+          const p = model.parts[selection.part];
+          if (p.pinCount > 0) select({ kind: "pin", pin: step > 0 ? p.firstPin : p.firstPin + p.pinCount - 1 }, true);
+        }
+        return;
+      }
     }
   };
   const shortcutRef = useRef(runShortcut);
@@ -2190,6 +2212,8 @@ export function App() {
                   namesRevision={namesRevision}
                   pinnedNets={pinnedNets}
                   onTogglePin={togglePinned}
+                  marked={markedParts}
+                  onMarkParts={(parts, label) => setMarkedParts(parts && parts.length ? { parts, label: label ?? "" } : null)}
                   onPinNets={(nets) => setPinChoice({ model, nets: [...new Set(nets)] })}
                   onShowMarker={showMarker}
                   onShowDrawing={showDrawing}

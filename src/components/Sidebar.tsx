@@ -41,6 +41,8 @@ interface Props {
   pinnedNets: ReadonlyMap<number, RGBA>;
   onTogglePin(net: number): void;
   onPinNets(nets: number[]): void;
+  marked: { parts: number[]; label: string } | null;
+  onMarkParts(parts: number[] | null, label?: string): void;
   onShowMarker(id: string): void;
   onShowDrawing(id: string): void;
   onShowBookmark(b: Bookmark): void;
@@ -96,6 +98,8 @@ export function Sidebar({
   pinnedNets,
   onTogglePin,
   onPinNets,
+  marked,
+  onMarkParts,
   onShowMarker,
   onShowDrawing,
   onShowBookmark,
@@ -314,6 +318,8 @@ export function Sidebar({
             pinnedNets={pinnedNets}
             onTogglePin={onTogglePin}
             onPinNets={onPinNets}
+            marked={marked}
+            onMarkParts={onMarkParts}
             obdata={obdata}
             schematicFacts={schematicFacts}
             onOpenBga={onOpenBga}

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { ShortFinder } from "./ShortFinder";
 import { traceNet } from "../core/trace";
 import { askConfirm } from "./Ask";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -39,6 +40,9 @@ interface Props {
   onTogglePin?(net: number): void;
   /** Pins a set of nets in their own colours (a traced signal path). */
   onPinNets?(nets: number[]): void;
+  /** Parts marked on the board from here (same type, short candidates), with what they are. */
+  marked?: { parts: number[]; label: string } | null;
+  onMarkParts?(parts: number[] | null, label?: string): void;
   /** Known-good values of OpenBoardData for this board. */
   obdata?: ObdData | null;
   /** Values, part numbers and net voltages read from the schematic's text. */
@@ -191,6 +195,8 @@ export function Details({
   pinnedNets,
   onTogglePin,
   onPinNets,
+  marked,
+  onMarkParts,
   obdata,
   schematicFacts,
   onOpenBga,
@@ -358,6 +364,7 @@ export function Details({
             </div>
           </>
         )}
+        {onMarkParts && n.kind !== "ground" && <ShortFinder model={model} net={net} notes={notes} marked={marked ?? null} onMarkParts={onMarkParts} onSelect={onSelect} />}
         {series.length > 0 && (
           <>
             <div className="trace-head">
@@ -422,6 +429,19 @@ export function Details({
                 {t("donor.find")}
               </button>
             )}
+            {onMarkParts &&
+              part.device &&
+              (() => {
+                const key = `same:${part.device}`;
+                const same = model.parts.flatMap((p, i) => (p.device === part.device ? [i] : []));
+                if (same.length < 2) return null;
+                const on = marked?.label === key;
+                return (
+                  <button className={`small${on ? " on" : ""}`} onClick={() => onMarkParts(on ? null : same, key)} title={t("same.hint")}>
+                    {t("same.mark", { n: same.length })}
+                  </button>
+                );
+              })()}
           </div>
           {(() => {
             const f = schematicFacts?.parts.get(part.name.toUpperCase());
