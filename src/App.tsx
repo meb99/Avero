@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AskHost, askText } from "./components/Ask";
+import { copyText } from "./core/clipboard";
 import { answerMcp, type McpContext } from "./workbench/mcpTools";
 import { MCP_DEFAULT_PORT } from "./workbench/mcp";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -1784,6 +1785,16 @@ export function App() {
         e.preventDefault();
         void toggleSchematic();
         return;
+      }
+      // ⌘C with no text marked: the selected part, pin or net name (the menu's
+      // Copy may be greyed out then, so the key is handled here as well).
+      if (mod && key === "c" && !isTyping(e.target) && !(window.getSelection()?.toString() ?? "")) {
+        const text = model ? selectionText(model, selection) : undefined;
+        if (text) {
+          e.preventDefault();
+          void copyText(text).then((ok) => ok && setToast(t("copy.done", { text })));
+          return;
+        }
       }
       if (mod && key === "l") {
         e.preventDefault();

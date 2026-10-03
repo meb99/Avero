@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
+import { copyText } from "../core/clipboard";
 import { useI18n } from "../i18n";
 import type { Settings } from "../settings";
 import { claudeCodeCommand, claudeDesktopConfig, MCP_DEFAULT_PORT, mcpUrl } from "../workbench/mcp";
@@ -24,7 +25,7 @@ export function McpSettings({ value, onChange }: { value: Settings["mcp"]; onCha
   }, [enabled, port]);
 
   const copy = (text: string, what: string) => {
-    void navigator.clipboard?.writeText(text).then(() => setCopied(what), () => {});
+    void copyText(text).then((ok) => ok && setCopied(what));
     window.setTimeout(() => setCopied(null), 1500);
   };
 
