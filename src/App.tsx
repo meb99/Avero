@@ -28,7 +28,7 @@ import { StatusBar } from "./components/StatusBar";
 import { TabBar, type TabInfo } from "./components/TabBar";
 import { Toolbar } from "./components/Toolbar";
 import { Welcome } from "./components/Welcome";
-import { BoardModel, netSides, type ViewSide } from "./core/board";
+import { BoardModel, netSides, visibleFrom, type ViewSide } from "./core/board";
 import type { Command } from "./core/commands";
 import { mapSelection } from "./core/compare";
 import { search } from "./core/search";
@@ -963,6 +963,15 @@ export function App() {
   const [diffMarks, setDiffMarks] = useState<number[] | null>(null);
   // Parts marked from the details: same type, short candidates.
   const [markedParts, setMarkedParts] = useState<{ parts: number[]; label: string } | null>(null);
+  /** Marks parts on the board and says so when they are on the side out of view. */
+  const markParts = (parts: number[] | null, label?: string) => {
+    setMarkedParts(parts && parts.length ? { parts, label: label ?? "" } : null);
+    if (!model || !parts?.length || bothSides) return;
+    const hidden = parts.filter((p) => !visibleFrom(model.parts[p].side, side)).length;
+    const other = t(side === "top" ? "side.bottom" : "side.top");
+    if (hidden === parts.length) setToast(t("mark.allHidden", { n: parts.length, side: other }));
+    else if (hidden > 0) setToast(t("mark.someHidden", { n: parts.length, hidden, side: other }));
+  };
   const multiSet = useMemo(
     () => new Set([...multiParts, ...(diffMarks ?? []), ...(markedParts?.parts ?? [])]),
     [multiParts, diffMarks, markedParts],
@@ -2293,7 +2302,7 @@ export function App() {
                   pinnedNets={pinnedNets}
                   onTogglePin={togglePinned}
                   marked={markedParts}
-                  onMarkParts={(parts, label) => setMarkedParts(parts && parts.length ? { parts, label: label ?? "" } : null)}
+                  onMarkParts={markParts}
                   onPinNets={(nets) => setPinChoice({ model, nets: [...new Set(nets)] })}
                   onShowMarker={showMarker}
                   onShowDrawing={showDrawing}

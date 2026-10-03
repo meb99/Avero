@@ -6,6 +6,7 @@ import { matchesQuery, parsePartQuery, partSpecs } from "../core/partSearch";
 import type { ObdData } from "../knowledge/obdata";
 import type { BoardModel, ViewSide } from "../core/board";
 import type { Net, Selection } from "../core/types";
+import { partRole, type PartRole } from "../core/partRole";
 import { useI18n } from "../i18n";
 import type { Settings } from "../settings";
 import type { BoardNotes, Bookmark } from "../workbench/notes";
@@ -19,6 +20,8 @@ import type { SchematicFacts } from "../schematic/partInfo";
 import type { Datasheet } from "../workbench/datasheets";
 import { NOT_A_RAIL } from "../workbench/consoleGuides";
 import { railVolts } from "../workbench/diagnosis";
+
+const PART_FILTER_ROLES: PartRole[] = ["capacitor", "resistor", "inductor", "ferrite", "fuse", "jumper", "diode", "transistor", "ic", "connector", "crystal", "testpoint", "other"];
 
 const NET_FILTER_KINDS = ["all", "power", "ground", "signal"] as const;
 type NetFilterKind = (typeof NET_FILTER_KINDS)[number];
@@ -173,6 +176,7 @@ export function Sidebar({
     if (tabRequest) setTab(tabRequest.tab);
   }, [tabRequest?.n]);
   const [partFilter, setPartFilter] = useState("");
+  const [partKind, setPartKind] = useState<PartRole | "all">("all");
   const [netFilter, setNetFilter] = useState("");
   const [netKind, setNetKind] = useState<NetFilterKind>("all");
 
@@ -180,7 +184,7 @@ export function Sidebar({
   const specQuery = useMemo(() => parsePartQuery(partFilter), [partFilter]);
   const parts = useMemo(() => {
     const q = partFilter.trim().toUpperCase();
-    const all = model.sortedParts;
+    const all = partKind === "all" ? model.sortedParts : model.sortedParts.filter((i) => partRole(model.parts[i].name, model.parts[i].device, model.parts[i].pinCount) === partKind);
     if (!q) return all;
     if (specQuery)
       return all.filter((i) => {
@@ -192,7 +196,9 @@ export function Sidebar({
       const p = model.parts[i];
       return p.name.toUpperCase().includes(q) || (p.device?.toUpperCase().includes(q) ?? false);
     });
-  }, [model, partFilter, specQuery, schematicFacts]);
+  }, [model, partFilter, partKind, specQuery, schematicFacts]);
+
+  const partMarkLabel = `list:${partKind}:${partFilter.trim().toUpperCase()}`;
 
   const nets = useMemo(() => {
     const q = netFilter.trim().toUpperCase();
@@ -389,6 +395,24 @@ export function Sidebar({
             value={partFilter}
             onChange={(e) => setPartFilter(e.target.value)}
           />
+          <div className="part-kinds">
+            <select value={partKind} aria-label={t("list.partKinds")} onChange={(e) => setPartKind(e.target.value as PartRole | "all")}>
+              <option value="all">{t("list.partKind.all")}</option>
+              {PART_FILTER_ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {t(`list.partKind.${r}`)}
+                </option>
+              ))}
+            </select>
+            {(partKind !== "all" || partFilter.trim()) && parts.length > 0 && (
+              <button
+                className={`small${marked?.label === partMarkLabel ? " on" : ""}`}
+                onClick={() => onMarkParts(marked?.label === partMarkLabel ? null : parts, partMarkLabel)}
+              >
+                {marked?.label === partMarkLabel ? t("list.unmarkParts") : t("list.markParts", { n: parts.length })}
+              </button>
+            )}
+          </div>
           <div className="list-count">
             {t("list.count", { n: parts.length, total: model.parts.length })}
             {specQuery && <span className="muted"> · {t("list.specSearch")}</span>}
