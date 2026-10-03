@@ -96,9 +96,17 @@ export function SchematicWindow() {
     const onKey = (e: KeyboardEvent) => {
       const view = viewRef.current;
       const el = e.target as HTMLElement | null;
-      if ((e.metaKey || e.ctrlKey) && e.altKey && e.code === "KeyF") {
+      const mod = e.metaKey || e.ctrlKey;
+      // ⌘F and ⌥⌘F search this schematic; ⌘W closes this window. Taken
+      // before the menu bar, whose items act on the main window.
+      if (mod && !e.shiftKey && (e.code === "KeyF" || e.key.toLowerCase() === "f")) {
         e.preventDefault();
         view?.focusSearch();
+        return;
+      }
+      if (mod && !e.shiftKey && !e.altKey && (e.code === "KeyW" || e.key.toLowerCase() === "w")) {
+        e.preventDefault();
+        void closeSchematicWindow();
         return;
       }
       if (el?.tagName === "INPUT" || e.metaKey || e.ctrlKey || e.altKey) return;
