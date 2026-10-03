@@ -1,10 +1,25 @@
 import { ask } from "@tauri-apps/plugin-dialog";
+import { askText } from "./Ask";
 import { useEffect, useMemo, useState } from "react";
 import type { BoardModel } from "../core/board";
 import type { Selection } from "../core/types";
 import { useI18n } from "../i18n";
 import { formatValue, QUANTITIES, type Reading } from "../workbench/measure";
-import { activeCase, addCase, netStatuses, removeCase, removeDrawing, setConditions, updateCase, updateDrawing, type BoardNotes, type NetStatus } from "../workbench/notes";
+import {
+  activeCase,
+  addCase,
+  netStatuses,
+  removeBookmark,
+  removeCase,
+  removeDrawing,
+  renameBookmark,
+  setConditions,
+  updateCase,
+  updateDrawing,
+  type BoardNotes,
+  type Bookmark,
+  type NetStatus,
+} from "../workbench/notes";
 import { formatLength } from "../format";
 import { exportNotes, importNotes } from "../workbench/store";
 import { CaseEditor, CaseHistory } from "./CaseEditor";
@@ -21,6 +36,8 @@ interface Props {
   onSelect(selection: Selection, zoom: boolean): void;
   onShowMarker(id: string): void;
   onShowDrawing(id: string): void;
+  onShowBookmark(b: Bookmark): void;
+  onAddBookmark(): void;
   error: string | null;
   selection: Selection;
   units: "mm" | "mil";
@@ -53,7 +70,7 @@ function NotesField({ value, onSave, placeholder }: { value: string; onSave(v: s
 }
 
 /** The "Measure" tab: repair cases, all measured nets, notes, import/export. */
-export function Workbench({ model, notes, update, tolerance, onTolerance, onSelect, onShowMarker, onShowDrawing, error, selection, units, listFocus }: Props) {
+export function Workbench({ model, notes, update, tolerance, onTolerance, onSelect, onShowMarker, onShowDrawing, onShowBookmark, onAddBookmark, error, selection, units, listFocus }: Props) {
   const { t, lang } = useI18n();
   const [onlyDeviations, setOnlyDeviations] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -211,6 +228,45 @@ export function Workbench({ model, notes, update, tolerance, onTolerance, onSele
             ))}
           </select>
         </div>
+      </section>
+
+      <section className="wb-section">
+        <div className="wb-row wb-head">
+          <h3>
+            {t("bookmark.title")} <span className="muted">{notes.bookmarks?.length ?? 0}</span>
+          </h3>
+          <button className="small" onClick={onAddBookmark} title="⌘D">
+            + {t("bookmark.add")}
+          </button>
+        </div>
+        {(notes.bookmarks?.length ?? 0) === 0 ? (
+          <p className="muted">{t("bookmark.empty")}</p>
+        ) : (
+          <ul className="marker-list bookmark-list">
+            {notes.bookmarks!.map((b) => (
+              <li key={b.id}>
+                <button className="link" onClick={() => onShowBookmark(b)} title={b.target}>
+                  {b.name}
+                </button>
+                <span className="muted">{t(b.side === "top" ? "side.top" : "side.bottom")}</span>
+                <button
+                  className="tool icon-only"
+                  title={t("measure.rename")}
+                  aria-label={t("measure.rename")}
+                  onClick={async () => {
+                    const name = await askText(t("bookmark.rename"), b.name);
+                    if (name?.trim()) update((n) => renameBookmark(n, b.id, name.trim()));
+                  }}
+                >
+                  ✎
+                </button>
+                <button className="tool icon-only" title={t("bookmark.remove")} aria-label={t("bookmark.remove")} onClick={() => update((n) => removeBookmark(n, b.id))}>
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       {(notes.markers?.length ?? 0) > 0 && (

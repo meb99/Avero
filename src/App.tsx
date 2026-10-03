@@ -59,6 +59,7 @@ import { dailyCheck, fetchUpdate, type Update } from "./updates";
 import { pickImport, type LibraryEntry, type LibraryFile } from "./workbench/library";
 import {
   activeCase,
+  addBookmark,
   addCase,
   addDrawing,
   addMarker,
@@ -71,6 +72,7 @@ import {
   setPhoto,
   updateCase,
   updateMarker,
+  type Bookmark,
   type DrawingKind,
   type NetStatus,
 } from "./workbench/notes";
@@ -155,6 +157,34 @@ function isTyping(target: EventTarget | null): boolean {
 
 const isPdf = (path: string) => /\.pdf$/i.test(path);
 const fileName = (path: string) => path.split("/").pop() ?? path;
+
+const sameSelection = (a: Selection, b: Selection) => JSON.stringify(a) === JSON.stringify(b);
+
+/** A selection as text the search understands ("U3000", "U3000.21", "PP3V3"), for bookmarks and copying. */
+function selectionText(model: BoardModel, sel: Selection): string | undefined {
+  switch (sel.kind) {
+    case "part":
+      return model.parts[sel.part].name;
+    case "pin": {
+      const pin = model.pins[sel.pin];
+      return `${model.parts[pin.part].name}.${pin.number}`;
+    }
+    case "net":
+      return model.nets[sel.net].name;
+    case "testPoint": {
+      const tp = model.testPoints[sel.testPoint];
+      return tp.name ?? model.nets[tp.net]?.name;
+    }
+    default:
+      return undefined;
+  }
+}
+
+/** Back and forward through what was selected, per board. */
+interface NavHistory {
+  items: Selection[];
+  at: number;
+}
 
 /** The text the schematic should find for a board selection. */
 function focusText(model: BoardModel, sel: Selection): string | undefined {
@@ -941,6 +971,79 @@ export function App() {
     [model],
   );
 
+  // --- back / forward through the selections ------------------------------------
+  const histories = useRef(new WeakMap<BoardModel, NavHistory>());
+  const navigating = useRef(false);
+  useEffect(() => {
+    if (!model || selection.kind === "none") return;
+    let h = histories.current.get(model);
+    if (!h) histories.current.set(model, (h = { items: [], at: -1 }));
+    if (navigating.current) {
+      navigating.current = false;
+      return;
+    }
+    if (h.items[h.at] && sameSelection(h.items[h.at], selection)) return;
+    h.items = [...h.items.slice(0, h.at + 1), selection].slice(-200);
+    h.at = h.items.length - 1;
+  }, [model, selection]);
+  const navigate = (step: -1 | 1) => {
+    const h = model && histories.current.get(model);
+    if (!h) return;
+    const at = h.at + step;
+    if (at < 0 || at >= h.items.length) return setToast(t(step < 0 ? "nav.noBack" : "nav.noForward"));
+    h.at = at;
+    navigating.current = true;
+    select(h.items[at], true);
+  };
+
+  // --- bookmarks -------------------------------------------------------------------
+  const addBookmarkHere = async () => {
+    const view = viewRef.current;
+    if (!model || !notes || !view) return;
+    const target = selectionText(model, selection);
+    const name = await askText(t("bookmark.ask"), target ?? t("bookmark.default", { n: (notes.bookmarks?.length ?? 0) + 1 }), { title: t("bookmark.add") });
+    if (!name?.trim()) return;
+    const s = side === "bottom" ? "bottom" : "top";
+    updateNotes((n) => addBookmark(n, { name: name.trim(), side: s, view: view.viewState(), ...(target && { target }) }));
+    setToast(t("bookmark.added", { name: name.trim() }));
+  };
+  const goToBookmark = (b: Bookmark) => {
+    if (!model) return;
+    setSide(b.side);
+    const hit = b.target ? search(model, b.target, 1)[0] : undefined;
+    if (hit) select(hit.selection, false);
+    // After the side switch has reached the view.
+    requestAnimationFrame(() => viewRef.current?.setViewState(b.view));
+  };
+
+  // The back/forward buttons of a mouse.
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  useEffect(() => {
+    const onUp = (e: MouseEvent) => {
+      if (e.button === 3 || e.button === 4) {
+        e.preventDefault();
+        navigateRef.current(e.button === 3 ? -1 : 1);
+      }
+    };
+    window.addEventListener("mouseup", onUp);
+    return () => window.removeEventListener("mouseup", onUp);
+  }, []);
+
+  // ⌘C with nothing marked as text copies the selected part, pin or net name.
+  useEffect(() => {
+    const onCopy = (e: ClipboardEvent) => {
+      if (isTyping(document.activeElement) || (window.getSelection()?.toString() ?? "") !== "") return;
+      const text = model ? selectionText(model, selection) : undefined;
+      if (!text || !e.clipboardData) return;
+      e.clipboardData.setData("text/plain", text);
+      e.preventDefault();
+      setToast(t("copy.done", { text }));
+    };
+    document.addEventListener("copy", onCopy);
+    return () => document.removeEventListener("copy", onCopy);
+  }, [model, selection, t]);
+
   // A pending hit from the library search, once its board is shown.
   useEffect(() => {
     const q = pendingBoardSearch.current;
@@ -1129,6 +1232,12 @@ export function App() {
         return;
       case "rotate":
         return setRotation((r) => (r + 1) & 3);
+      case "back":
+        return navigate(-1);
+      case "forward":
+        return navigate(1);
+      case "bookmark":
+        return void addBookmarkHere();
     }
   };
   const shortcutRef = useRef(runShortcut);
@@ -1524,6 +1633,10 @@ export function App() {
           setPhotoPane((v) => !v);
           setCameraPane(false);
         } },
+      { id: "nav-back", label: t("nav.back"), shortcut: "⌘[", enabled: board, run: () => navigate(-1) },
+      { id: "nav-forward", label: t("nav.forward"), shortcut: "⌘]", enabled: board, run: () => navigate(1) },
+      { id: "bookmark-add", label: t("bookmark.add"), shortcut: "⌘D", enabled: board && notes !== null, run: () => void addBookmarkHere() },
+      ...(notesForModel?.bookmarks ?? []).map((b) => ({ id: `bookmark-${b.id}`, label: `${t("bookmark.title")}: ${b.name}`, run: () => goToBookmark(b) })),
       { id: "board-hide", label: t("board.toggle"), enabled: secondView, run: () => setBoardHidden((v) => !v) },
       { id: "camera", label: t("camera.command"), enabled: board, run: () => (cameraPane ? setCameraPane(false) : openCamera()) },
       { id: "photo-pdf", label: t("photo.pdfCommand"), enabled: !!model && notes !== null && !!schematic, run: () => void photoFromPdf() },
@@ -2036,6 +2149,8 @@ export function App() {
                   onPinNets={(nets) => setPinChoice({ model, nets: [...new Set(nets)] })}
                   onShowMarker={showMarker}
                   onShowDrawing={showDrawing}
+                  onShowBookmark={goToBookmark}
+                  onAddBookmark={() => void addBookmarkHere()}
                   obdata={boardObdata?.obdata ?? null}
                   knowledgeCount={knowledgeForBoard}
                   schematicFacts={schematicFacts}

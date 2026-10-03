@@ -8,7 +8,7 @@ import type { BoardModel, ViewSide } from "../core/board";
 import type { Selection } from "../core/types";
 import { useI18n } from "../i18n";
 import type { Settings } from "../settings";
-import type { BoardNotes } from "../workbench/notes";
+import type { BoardNotes, Bookmark } from "../workbench/notes";
 import { Workbench } from "./Workbench";
 import { Details } from "./Details";
 import { VirtualList } from "./VirtualList";
@@ -43,6 +43,8 @@ interface Props {
   onPinNets(nets: number[]): void;
   onShowMarker(id: string): void;
   onShowDrawing(id: string): void;
+  onShowBookmark(b: Bookmark): void;
+  onAddBookmark(): void;
   /** Known-good values of OpenBoardData for this board, if any. */
   obdata: ObdData | null;
   /** Values, part numbers and net voltages read from the schematic. */
@@ -96,6 +98,8 @@ export function Sidebar({
   onPinNets,
   onShowMarker,
   onShowDrawing,
+  onShowBookmark,
+  onAddBookmark,
   knowledge,
   knowledgeCount,
   schematicFacts,
@@ -339,6 +343,8 @@ export function Sidebar({
             onSelect={onSelect}
             onShowMarker={onShowMarker}
             onShowDrawing={onShowDrawing}
+            onShowBookmark={onShowBookmark}
+            onAddBookmark={onAddBookmark}
             error={notesError}
             selection={selection}
             units={settings.units}

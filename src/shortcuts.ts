@@ -4,9 +4,36 @@
  * shows up on the Mac as a keyboard, so its key is bound here like any other.
  */
 
-export type ShortcutAction = "nextPoint" | "commitNext" | "flip" | "bothSides" | "fit" | "zoomIn" | "zoomOut" | "pinNet" | "marker" | "rotate";
+export type ShortcutAction =
+  | "nextPoint"
+  | "commitNext"
+  | "flip"
+  | "bothSides"
+  | "fit"
+  | "zoomIn"
+  | "zoomOut"
+  | "pinNet"
+  | "marker"
+  | "rotate"
+  | "back"
+  | "forward"
+  | "bookmark";
 
-export const SHORTCUT_ACTIONS: ShortcutAction[] = ["nextPoint", "commitNext", "flip", "bothSides", "fit", "zoomIn", "zoomOut", "pinNet", "marker", "rotate"];
+export const SHORTCUT_ACTIONS: ShortcutAction[] = [
+  "nextPoint",
+  "commitNext",
+  "flip",
+  "bothSides",
+  "fit",
+  "zoomIn",
+  "zoomOut",
+  "pinNet",
+  "marker",
+  "rotate",
+  "back",
+  "forward",
+  "bookmark",
+];
 
 /** Key names as `keyName` gives them; several keys may share an action. */
 export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string[]> = {
@@ -20,6 +47,11 @@ export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string[]> = {
   pinNet: ["p"],
   marker: ["m"],
   rotate: ["r"],
+  // ⌘[ / ⌘] as in Finder and browsers; ⌥← / ⌥→ for keyboards where [ needs ⌥.
+  // (On a German layout [ is ⌥5, so ⌘⌥5 arrives as Cmd+Alt+[.)
+  back: ["Cmd+[", "Cmd+Alt+[", "Alt+ArrowLeft"],
+  forward: ["Cmd+]", "Cmd+Alt+]", "Alt+ArrowRight"],
+  bookmark: ["Cmd+d"],
 };
 
 export type Shortcuts = Partial<Record<ShortcutAction, string[]>>;

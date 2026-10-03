@@ -56,6 +56,17 @@ export interface Drawing {
   created: string;
 }
 
+/** A saved place on the board: the view, the side, and what was selected. */
+export interface Bookmark {
+  id: string;
+  name: string;
+  side: "top" | "bottom";
+  view: { centerX: number; centerY: number; scale: number };
+  /** The selection as searchable text ("U3000", "U3000.21", "PP3V3"), so it survives a re-export of the file. */
+  target?: string;
+  created: string;
+}
+
 /**
  * Everything Avero remembers about a board: reference readings from a known
  * good board, repair cases and free notes. Stored per board key.
@@ -76,6 +87,8 @@ export interface BoardNotes {
   markers?: BoardMarker[];
   /** Lines, areas and jumpers drawn on the board. */
   drawings?: Drawing[];
+  /** Saved places on the board (⌘D). */
+  bookmarks?: Bookmark[];
   /** OpenBoardData board (its ID, e.g. 820-00165) chosen for this board by hand. */
   obdata?: string;
   /** Conditions new reference readings are taken under. */
@@ -379,6 +392,38 @@ function parseDrawings(value: unknown): Drawing[] | undefined {
   return out.length ? out : undefined;
 }
 
+export function addBookmark(notes: BoardNotes, b: Omit<Bookmark, "id" | "created">): BoardNotes {
+  return { ...notes, bookmarks: [...(notes.bookmarks ?? []), { ...b, id: newId(), created: now() }], updated: now() };
+}
+
+export function renameBookmark(notes: BoardNotes, id: string, name: string): BoardNotes {
+  return { ...notes, bookmarks: (notes.bookmarks ?? []).map((b) => (b.id === id ? { ...b, name } : b)), updated: now() };
+}
+
+export function removeBookmark(notes: BoardNotes, id: string): BoardNotes {
+  return { ...notes, bookmarks: (notes.bookmarks ?? []).filter((b) => b.id !== id), updated: now() };
+}
+
+function parseBookmarks(value: unknown): Bookmark[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out = value.flatMap((b): Bookmark[] => {
+    const v = b?.view;
+    if (!b || typeof b.id !== "string" || typeof b.name !== "string" || (b.side !== "top" && b.side !== "bottom")) return [];
+    if (!v || ![v.centerX, v.centerY, v.scale].every(Number.isFinite) || v.scale <= 0) return [];
+    return [
+      {
+        id: b.id,
+        name: b.name,
+        side: b.side,
+        view: { centerX: v.centerX, centerY: v.centerY, scale: v.scale },
+        ...(typeof b.target === "string" && b.target && { target: b.target }),
+        created: typeof b.created === "string" ? b.created : new Date(0).toISOString(),
+      },
+    ];
+  });
+  return out.length ? out : undefined;
+}
+
 export function removeMarker(notes: BoardNotes, id: string): BoardNotes {
   return { ...notes, markers: (notes.markers ?? []).filter((m) => m.id !== id), updated: now() };
 }
@@ -465,6 +510,7 @@ export function parseNotes(json: string): BoardNotes | null {
       netNames: parseNetNames(d.netNames),
       markers: parseMarkers(d.markers),
       drawings: parseDrawings(d.drawings),
+      bookmarks: parseBookmarks(d.bookmarks),
       obdata: typeof d.obdata === "string" && d.obdata ? d.obdata : undefined,
       referenceConditions: parseConditions(d.referenceConditions),
       lists: parseLists(d.lists),
@@ -525,6 +571,7 @@ export function mergeNotes(mine: BoardNotes, theirs: BoardNotes): BoardNotes {
     netNames: theirs.netNames || mine.netNames ? { ...theirs.netNames, ...mine.netNames } : undefined,
     markers: mergeMarkers(mine.markers, theirs.markers),
     drawings: mergeById(mine.drawings, theirs.drawings),
+    bookmarks: mergeById(mine.bookmarks, theirs.bookmarks),
     obdata: mine.obdata ?? theirs.obdata,
     referenceConditions: mine.referenceConditions ?? theirs.referenceConditions,
     lists: mergeLists(mine.lists, theirs.lists),
