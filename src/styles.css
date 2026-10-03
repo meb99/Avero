@@ -515,6 +515,12 @@ kbd {
   min-width: 0;
 }
 
+.tabs-arrow {
+  flex-shrink: 0;
+  align-self: center;
+  margin: 0 1px;
+}
+
 .sidebar-fold {
   flex-shrink: 0;
   align-self: center;
@@ -1204,11 +1210,6 @@ body.resizing .schematic-canvas {
   }
 }
 
-@container (max-width: 480px) {
-  .schematic-tools {
-    display: none;
-  }
-}
 
 .schematic-bar {
   display: flex;
@@ -1232,8 +1233,26 @@ body.resizing .schematic-canvas {
   flex-shrink: 1;
 }
 
-.schematic-bar > :not(.schematic-name, .schematic-spacer, .hits-none) {
+.schematic-bar-main > :not(.schematic-name, .schematic-spacer, .hits-none) {
   flex-shrink: 0;
+}
+
+/* Everything but close and pop-out wraps onto further rows when narrow. */
+.schematic-bar-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.schematic-bar-end {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  align-self: flex-start;
 }
 
 .schematic-name span {
@@ -3715,4 +3734,44 @@ button.danger {
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 6px;
   margin-bottom: 8px;
+}
+
+/* The board put away: the view beside it takes the whole width. The board
+   stays mounted (its WebGL state and camera), only out of sight. */
+.work-area {
+  position: relative;
+}
+
+.work-area.board-hidden > .board-view,
+.work-area.board-hidden > .splitter {
+  display: none;
+}
+
+.work-area.board-hidden > .schematic-pane,
+.work-area.board-hidden > .compare-pane {
+  flex: 1;
+  width: auto !important;
+  border-left: 0;
+}
+
+.board-hide {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  opacity: 0.8;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+.board-hide:hover {
+  opacity: 1;
+}
+
+.board-show {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 6;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }

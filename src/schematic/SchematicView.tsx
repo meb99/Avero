@@ -56,6 +56,8 @@ interface Props {
   onClose(): void;
   /** Moves the schematic into its own window; no button without it. */
   onPopOut?: () => void;
+  /** Shown while the board is hidden: brings it back. */
+  onShowBoard?: () => void;
   ref?: Ref<SchematicViewHandle>;
 }
 
@@ -83,7 +85,7 @@ function isCancel(e: unknown): boolean {
   return !!e && typeof e === "object" && "name" in e && (e as { name: string }).name === "RenderingCancelledException";
 }
 
-export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, onPopOut, ref }: Props) {
+export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, onPopOut, onShowBoard, ref }: Props) {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -547,6 +549,7 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
   return (
     <section className="schematic" aria-label={t("schematic.title")}>
       <header className="schematic-bar">
+        <div className="schematic-bar-main">
         <span className="schematic-name" title={doc.path ?? doc.name}>
           <SchematicIcon />
           <span>{doc.name}</span>
@@ -675,14 +678,23 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
           )
         )}
         {ocr.error && <span className="wb-error">{t("ocr.failed", { message: ocr.error })}</span>}
-        {onPopOut && (
-          <button className="tool icon-only" onClick={onPopOut} aria-label={t("schematic.popOut")} title={t("schematic.popOut")}>
-            <PopOutIcon />
+        </div>
+        {/* Always in view, however narrow the panel: the rest wraps. */}
+        <div className="schematic-bar-end">
+          {onShowBoard && (
+            <button className="small" onClick={onShowBoard} title={t("board.showHint")}>
+              {t("board.show")}
+            </button>
+          )}
+          {onPopOut && (
+            <button className="tool icon-only" onClick={onPopOut} aria-label={t("schematic.popOut")} title={t("schematic.popOut")}>
+              <PopOutIcon />
+            </button>
+          )}
+          <button className="tool icon-only" onClick={onClose} aria-label={t("schematic.close")} title={t("schematic.close")}>
+            <CloseIcon />
           </button>
-        )}
-        <button className="tool icon-only" onClick={onClose} aria-label={t("schematic.close")} title={t("schematic.close")}>
-          <CloseIcon />
-        </button>
+        </div>
       </header>
       <div
         ref={containerRef}

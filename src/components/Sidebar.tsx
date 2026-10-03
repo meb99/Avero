@@ -115,6 +115,32 @@ export function Sidebar({
   const asideRef = useRef<HTMLElement>(null);
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("details");
+  // Tabs that do not fit scroll sideways, with arrows where more are hidden.
+  const tabsRef = useRef<HTMLElement>(null);
+  const [scroll, setScroll] = useState({ left: false, right: false });
+  const updateScroll = () => {
+    const el = tabsRef.current;
+    if (!el) return;
+    const left = el.scrollLeft > 2;
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+    setScroll((old) => (old.left === left && old.right === right ? old : { left, right }));
+  };
+  const scrollTabs = (dir: number) => {
+    const el = tabsRef.current;
+    if (el) el.scrollBy({ left: dir * Math.max(120, el.clientWidth * 0.6), behavior: "smooth" });
+  };
+  useEffect(() => {
+    const el = tabsRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(updateScroll);
+    observer.observe(el);
+    updateScroll();
+    return () => observer.disconnect();
+  });
+  // The chosen tab always in view.
+  useEffect(() => {
+    tabsRef.current?.querySelector<HTMLElement>(`[data-tab="${tab}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [tab]);
   useEffect(() => {
     if (tabRequest) setTab(tabRequest.tab);
   }, [tabRequest?.n]);
@@ -211,9 +237,23 @@ export function Sidebar({
         <button className="tool icon-only sidebar-fold" onClick={() => onCollapsed(true)} title={t("sidebar.collapse")} aria-label={t("sidebar.collapse")}>
           <ChevronRightIcon />
         </button>
-        <nav className="tabs" role="tablist">
+        {scroll.left && (
+          <button className="tool icon-only tabs-arrow" onClick={() => scrollTabs(-1)} title={t("sidebar.moreTabs")} aria-label={t("sidebar.moreTabs")}>
+            <ChevronLeftIcon />
+          </button>
+        )}
+        <nav
+          className="tabs"
+          role="tablist"
+          ref={tabsRef}
+          onScroll={updateScroll}
+          onWheel={(e) => {
+            // A mouse wheel scrolls the tabs sideways.
+            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY;
+          }}
+        >
           {tabs.map((id) => (
-            <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? "on" : ""} onClick={() => setTab(id)}>
+            <button key={id} role="tab" data-tab={id} aria-selected={tab === id} className={tab === id ? "on" : ""} onClick={() => setTab(id)}>
               {t(`tab.${id}`)}
               {id === "parts" && <span className="count">{model.parts.length}</span>}
               {id === "nets" && <span className="count">{model.nets.length}</span>}
@@ -222,6 +262,11 @@ export function Sidebar({
             </button>
           ))}
         </nav>
+        {scroll.right && (
+          <button className="tool icon-only tabs-arrow" onClick={() => scrollTabs(1)} title={t("sidebar.moreTabs")} aria-label={t("sidebar.moreTabs")}>
+            <ChevronRightIcon />
+          </button>
+        )}
       </div>
 
       {tab === "knowledge" && <div className="panel scroll">{knowledge}</div>}

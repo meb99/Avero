@@ -229,6 +229,9 @@ export function App() {
   const [sheetPane, setSheetPane] = useState<{ doc: SchematicDocument; sheet: Datasheet; page: number } | null>(null);
   // Live picture of a USB microscope or camera, in the same place.
   const [cameraPane, setCameraPane] = useState(false);
+  // The board view put away while a second view (schematic, photo, other
+  // board, datasheet, camera) takes the whole width.
+  const [boardHidden, setBoardHidden] = useState(false);
   // The schematic is shown in its own window instead of the split view.
   const [detached, setDetached] = useState(false);
   const [focus, setFocus] = useState<SchematicFocus | null>(null);
@@ -330,6 +333,13 @@ export function App() {
   aligningRef.current = aligning;
   const [showPhoto, setShowPhoto] = useState(true);
   const storedPhoto = notes?.photos?.[side];
+  // Something next to the board that can have the whole width.
+  const secondView = model !== null && (showSchematic || !!compareModel || sheetPane !== null || cameraPane || (photoPane && !aligning));
+  const boardAway = boardHidden && secondView;
+  // Back to normal once nothing is beside the board any more.
+  useEffect(() => {
+    if (boardHidden && !secondView) setBoardHidden(false);
+  }, [boardHidden, secondView]);
   const [photoImage, setPhotoImage] = useState<{ file: string; image: HTMLCanvasElement } | null>(null);
   const photoFile = storedPhoto?.file;
   useEffect(() => {
@@ -1513,6 +1523,7 @@ export function App() {
           setPhotoPane((v) => !v);
           setCameraPane(false);
         } },
+      { id: "board-hide", label: t("board.toggle"), enabled: secondView, run: () => setBoardHidden((v) => !v) },
       { id: "camera", label: t("camera.command"), enabled: board, run: () => (cameraPane ? setCameraPane(false) : openCamera()) },
       { id: "photo-pdf", label: t("photo.pdfCommand"), enabled: !!model && notes !== null && !!schematic, run: () => void photoFromPdf() },
       { id: "photo-realign", label: `${t("photo.title")}: ${t("photo.realign")}`, enabled: !!storedPhoto, run: () => storedPhoto && void startAlignment(storedPhoto.file, false) },
@@ -1739,7 +1750,12 @@ export function App() {
             />
           ) : (
             <>
-              <div className="work-area" ref={workAreaRef}>
+              <div className={`work-area${boardAway ? " board-hidden" : ""}`} ref={workAreaRef}>
+                {boardAway && !showSchematic && (
+                  <button className="small primary board-show" onClick={() => setBoardHidden(false)} title={t("board.showHint")}>
+                    {t("board.show")}
+                  </button>
+                )}
                 {model ? (
                   <>
                   <BoardView
@@ -1787,6 +1803,11 @@ export function App() {
                           {t("photo.cancel")}
                         </button>
                       </div>
+                    )}
+                    {secondView && !boardAway && (
+                      <button className="small board-hide" onClick={() => setBoardHidden(true)} title={t("board.hideHint")}>
+                        ✕ {t("board.hide")}
+                      </button>
                     )}
                     <PinnedLegend
                       model={model}
@@ -1985,6 +2006,7 @@ export function App() {
                         onPick={pickWord}
                         onClose={closeSchematic}
                         onPopOut={() => void popOutSchematic()}
+                        onShowBoard={boardAway ? () => setBoardHidden(false) : undefined}
                       />
                     </div>
                   </>

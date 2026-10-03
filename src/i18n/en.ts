@@ -354,6 +354,12 @@ export const en = {
   "help.undo": "⌘Z / ⇧⌘Z",
   "help.undoLabel": "Undo / redo a reading or note",
   "help.ownKeys": "Keys can be changed under Settings → Keys, foot pedals included.",
+  "board.hide": "Boardview",
+  "board.hideHint": "Hide the boardview – the view beside it gets the whole width",
+  "board.show": "Show board",
+  "board.showHint": "Show the boardview beside this view again",
+  "board.toggle": "Hide/show the boardview (when something is open beside it)",
+  "sidebar.moreTabs": "More tabs",
   "help.clearLabel": "Clear selection",
   "help.close": "Close",
 
