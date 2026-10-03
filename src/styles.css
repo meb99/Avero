@@ -3915,3 +3915,8 @@ button.danger {
   padding-left: 18px;
   font-size: 12px;
 }
+
+/* "Nothing found" covers the sidebar tabs: let clicks through to them. */
+.search-results.empty {
+  pointer-events: none;
+}

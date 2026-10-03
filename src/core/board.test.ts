@@ -91,3 +91,11 @@ describe("own net names", () => {
     expect(model.nets[i].name).toBe("PP3V3");
   });
 });
+
+describe("search for a pin that is not there", () => {
+  it("offers the part", () => {
+    const part = model.parts[0].name;
+    const [hit] = search(model, `${part}.ZZ9`);
+    expect(hit).toMatchObject({ kind: "part", label: part });
+  });
+});

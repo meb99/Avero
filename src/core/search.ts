@@ -32,6 +32,9 @@ export function search(model: BoardModel, query: string, limit = 50): SearchResu
           detail: model.nets[model.pins[pin].net].name,
           kind: "pin",
         });
+      } else {
+        // No such pin (a BGA names its balls A1, B2 …): offer the part.
+        results.push({ selection: { kind: "part", part }, label: model.parts[part].name, detail: model.parts[part].device ?? "", kind: "part" });
       }
     }
   }

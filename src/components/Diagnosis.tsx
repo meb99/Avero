@@ -119,7 +119,11 @@ export function Diagnosis({ model, notes, update, onSelect, schematicFacts, sele
     const own = flows
       .filter((f) => f.boardKey === notes?.key || netShare(model, f) >= 0.5)
       .map((f) => ({ id: f.id, title: f.title, steps: f.steps, own: f }));
-    return [{ id: "notebook", title: t("diag.title"), intro: t("diag.intro"), steps: notebook }, ...consoleGuides(model, t), ...own];
+    const nb = { id: "notebook", title: t("diag.title"), intro: t("diag.intro"), steps: notebook };
+    // A notebook guide without a single point here (a console board) goes last.
+    const nbUseful = notebook.some((step) => step.points.length > 0);
+    const builtin = nbUseful ? [nb, ...consoleGuides(model, t)] : [...consoleGuides(model, t), nb];
+    return [...builtin, ...own];
   }, [flows, notebook, model, notes?.key, t]);
   const guide = guides.find((g) => g.id === chosen) ?? guides[0];
   const current = notes ? activeCase(notes) : undefined;

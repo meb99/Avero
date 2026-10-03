@@ -60,7 +60,8 @@ export function SearchBox({ model, onPick, inputRef }: Props) {
             setActive((a) => Math.max(a - 1, 0));
           } else if (e.key === "Enter") {
             e.preventDefault();
-            pick(results[active]);
+            if (results.length === 0) setOpen(false);
+            else pick(results[active]);
           } else if (e.key === "Escape") {
             setOpen(false);
             (e.target as HTMLInputElement).blur();
@@ -69,7 +70,7 @@ export function SearchBox({ model, onPick, inputRef }: Props) {
         aria-label={t("search.placeholder")}
       />
       {open && query.trim() && (
-        <ul className="search-results" ref={listRef} role="listbox">
+        <ul className={`search-results${results.length === 0 ? " empty" : ""}`} ref={listRef} role="listbox">
           {results.length === 0 && <li className="search-empty">{t("search.none")}</li>}
           {results.map((r, i) => (
             <li
