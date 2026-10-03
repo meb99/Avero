@@ -19,8 +19,8 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 ## Stand (0.5)
 
 **Boardview**
-- Liest Test_Link `.brd` (auch verschleierte Dateien), BRD2, Honhan `.bdv`, ASUS `.asc` und `.fz`, BoardViewer `.bvr` / BVR3, GenCAD, Panel-CAD, IBM `.cst`, XinZhiZao `.pcb`, KiCad `.kicad_pcb` und EAGLE / Fusion 360 `.brd` (XML).
-- Die meisten ASUS-`.fz`-Dateien sind verschlüsselt: Den Schlüssel trägst du einmal in den Einstellungen ein (Avero liefert ihn nicht mit, genau wie OpenBoardView); unverschlüsselte `.fz`-Dateien öffnen sich direkt. XinZhiZao-`.pcb`-Dateien öffnen sich vollständig: Bleiben Bauteile beim direkten Lesen gesperrt, übernimmt der XZZ-Konverter der Bibliothek und liefert alle Bauteile samt Pad-Formen und Leiterbahnen. Ein eigener XZZ-Schlüssel aus den Einstellungen hat Vorrang.
+- Liest Test_Link `.brd` (auch verschleierte Dateien), BRD2, Honhan `.bdv`, ASUS `.asc` und `.fz`, `.cae`, BoardViewer `.bvr` / BVR3, GenCAD, Panel-CAD, IBM `.cst`, XinZhiZao `.pcb`, KiCad `.kicad_pcb` und EAGLE / Fusion 360 `.brd` (XML).
+- Die meisten ASUS-`.fz`- und `.cae`-Dateien sind verschlüsselt: Die Schlüssel trägst du einmal in den Einstellungen ein (Avero liefert sie nicht mit, genau wie OpenBoardView); unverschlüsselte Dateien öffnen sich direkt. XinZhiZao-`.pcb`-Dateien öffnen sich vollständig: Bleiben Bauteile beim direkten Lesen gesperrt, übernimmt der XZZ-Konverter der Bibliothek und liefert alle Bauteile samt Pad-Formen und Leiterbahnen. Ein eigener XZZ-Schlüssel aus den Einstellungen hat Vorrang.
 - Flüssige Darstellung per GPU (WebGL 2), auch bei zehntausenden Pins.
 - Oberseite / Unterseite (gespiegelt wie ein umgedrehtes Board), Drehen in 90°-Schritten. „Oben“ und „Unten“ schalten sich einzeln: beide an zeigt **beide Seiten zugleich** wie in FlexBV – die Unterseite gespiegelt neben (bei breiten Boards unter) der Oberseite, Verbindungslinien eines Netzes laufen über beide Seiten, Klicks wählen auf der Seite, auf die man klickt.
 - Klick auf einen Pin hebt das ganze Netz hervor. Pins desselben Netzes auf der anderen Seite bleiben schwach sichtbar, damit man sieht, wohin das Signal geht.
@@ -63,6 +63,16 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - **Notizen** pro Board und pro Fall, Export/Import als JSON (z. B. Referenzwerte weitergeben).
 - **Foto des echten Boards** unter der Boardview (Darstellung → „Foto dieser Seite hinzufügen…"): zwei markante Punkte im Foto anklicken, dann dieselben Punkte auf dem Board (Pins rasten ein) – das Foto liegt danach deckungsgleich darunter, mit einstellbarer Deckkraft, getrennt für Ober- und Unterseite. Liegt neben dem Board ein PDF mit einem Bild der Platine (wie bei manchen Boardview-Paketen), übernimmt Avero die angezeigte Seite mit einem Klick als Foto und legt es selbst auf den Board-Umriss – ohne Datei auswählen, ohne Punkte klicken. Mit „Daneben“ steht das Foto unverändert neben dem Board: ein Klick auf ein Bauteil im Foto wählt es auf dem Board aus und springt hin, das Bauteil unter dem Mauszeiger wird mit Namen angezeigt, und was auf dem Board ausgewählt ist (Bauteil, Pin, alle Pins eines Netzes), wird im Foto markiert.
 - **Inhaltssuche über die ganze Bibliothek** (Bibliothek → „Inhalt“): Schaltpläne werden nach Text durchsucht, Boardviews nach Bauteilen und Netzen. Alles wird einmal indiziert; ein Klick auf einen Treffer öffnet Board und Schaltplan und springt zur Fundstelle.
+
+**Neu in 0.9.22**
+- **KI-Anbindung (MCP):** Claude (Claude Code oder Claude Desktop) liest auf Wunsch das offene Board – Bauteile, Netze, Signalwege, Messwerte, Fehlersuch-Schritte, Schaltplan-Fundstellen – und zeigt Dinge direkt in Avero. Einschalten unter Einstellungen → KI-Anbindung; nur Programme auf diesem Mac erreichen die Schnittstelle.
+- **Signalweg:** Netze werden über Spulen, Sicherungen, Jumper, 0-Ω-Widerstände, MOSFET-Schalter, Dioden, Serienwiderstände und Koppelkondensatoren verfolgt, jede Art in eigener Farbe; „Auf dem Board zeigen“ färbt den ganzen Weg ein. Bauteile werden über alle gängigen Namensschemata erkannt (PL/PJ/PQ im Stromteil, EL/ED, Abschnittsbuchstaben wie CG, LA).
+- **Kurzschluss suchen:** Zu jedem Netz die Bauteile, die es gegen Masse kurzschließen können – große Keramikkondensatoren zuerst –, auf dem Board markierbar; öffnet sich von selbst, wenn der Messwert nach Kurzschluss aussieht.
+- **Zurück/Vor** durch die Auswahl (⌘[ ⌘], ⌥← ⌥→, Maustasten), **Lesezeichen** mit Ansicht und Auswahl (⌘D), **⌘C** kopiert Bauteil-, Pin- oder Netznamen, **Pins durchschalten** mit `.` und `,`, **gleiche Bauteile markieren**.
+- **Schaltplan:** dunkle Seiten mit erhaltenen Farben, passwortgeschützte PDFs, letzte Suchen als Vorschläge.
+- **Farbeditor** für die Board-Darstellung (hell und dunkel getrennt, Vorlage „Hoher Kontrast“).
+- **CAE-Boardviews** (FZ-Format mit eigenem Schlüssel; beide Schlüssel in einem Feld).
+- **Fehler behoben:** Fragen wie „Datenblatt hinzufügen“, Messliste umbenennen/löschen, Ablauf speichern oder Version wiederherstellen taten in der Mac-App nichts (die Mac-Webansicht zeigt keine Browser-Dialoge) – jetzt mit eigenen Dialogen. Kondensatoren mit Abschnittsnamen (CG, CC, PCV …) bekamen keine Schaltplanwerte und fehlten in der Wertesuche. Ein leeres Suchergebnis verdeckte die Reiter.
 
 **Neu in 0.9.20**
 - **Messen:** Messbedingungen je Wert (Netzteil, Akku, eingeschaltet, Standby …), Verlauf jeder Messung, Messlisten mit Fortschritt und „Nächster Punkt“, eigene Fehlersuch-Abläufe mit Verzweigungen („in Ordnung“ → weiter, „abweichend“ → anderer Schritt), ein Reparaturfall lässt sich als Ablauf speichern.
@@ -186,7 +196,7 @@ Boardviews und Schaltpläne sind fast immer Eigentum der Hersteller. **Sie gehö
 
 ## Weiter geht's
 
-Was noch offen ist, steht in [docs/ROADMAP.md](docs/ROADMAP.md) – vor allem Formate, die echte Beispieldateien brauchen: Cadence Allegro `.brd`, Teboview `.tvw`, Altium `.PcbDoc`, `.cae` und Boardviews als PDF. Avero erkennt sie bereits und sagt, dass sie noch nicht lesbar sind.
+Was noch offen ist, steht in [docs/ROADMAP.md](docs/ROADMAP.md) – vor allem Formate, die echte Beispieldateien brauchen: Cadence Allegro `.brd`, Teboview `.tvw`, Altium `.PcbDoc` und Boardviews als PDF. Avero erkennt sie bereits und sagt, dass sie noch nicht lesbar sind.
 
 ## Dank
 
