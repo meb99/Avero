@@ -2033,6 +2033,7 @@ export function App() {
                   namesRevision={namesRevision}
                   pinnedNets={pinnedNets}
                   onTogglePin={togglePinned}
+                  onPinNets={(nets) => setPinChoice({ model, nets: [...new Set(nets)] })}
                   onShowMarker={showMarker}
                   onShowDrawing={showDrawing}
                   obdata={boardObdata?.obdata ?? null}

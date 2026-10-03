@@ -1,4 +1,5 @@
 import { GridIndex } from "./spatial";
+import { passesThrough } from "./partRole";
 import type { Board, Bounds, Net, Part, Pin, Point, Selection, Side, TestPoint, Trace, Layer } from "./types";
 
 export type ViewSide = "top" | "bottom";
@@ -29,9 +30,6 @@ export interface SeriesLink {
   from: number;
 }
 
-/** Parts that pass a signal through, by designator prefix. */
-const SERIES_PREFIX = /^(L|FB|FL|F|FU|XW|JP|SJ)\d/i;
-const ZERO_OHM = /^(0|0R|0R0|0\.0|0Ω|0 ?OHMS?)\b/i;
 
 export type Hit =
   | { kind: "pin"; pin: number }
@@ -198,9 +196,7 @@ export class BoardModel {
    */
   isSeriesPart(part: number): boolean {
     const p = this.parts[part];
-    if (p.pinCount !== 2) return false;
-    if (SERIES_PREFIX.test(p.name)) return true;
-    return /^R\d/i.test(p.name) && !!p.device && ZERO_OHM.test(p.device.trim());
+    return passesThrough(p.name, p.device, p.pinCount);
   }
 
   /**

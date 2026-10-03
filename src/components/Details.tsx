@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { traceNet } from "../core/trace";
 import { askConfirm } from "./Ask";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { chipFor, type ChipInfo, type ChipPin } from "../knowledge/chips";
@@ -36,6 +37,8 @@ interface Props {
   /** Nets pinned in their own colors on the board. */
   pinnedNets?: ReadonlyMap<number, RGBA>;
   onTogglePin?(net: number): void;
+  /** Pins a set of nets in their own colours (a traced signal path). */
+  onPinNets?(nets: number[]): void;
   /** Known-good values of OpenBoardData for this board. */
   obdata?: ObdData | null;
   /** Values, part numbers and net voltages read from the schematic's text. */
@@ -187,6 +190,7 @@ export function Details({
   onRenameNet,
   pinnedNets,
   onTogglePin,
+  onPinNets,
   obdata,
   schematicFacts,
   onOpenBga,
@@ -307,7 +311,7 @@ export function Details({
     const n = model.nets[net];
     if (n.kind === "unconnected") return null;
     const members = model.netMembers(net);
-    const series = model.seriesLinks(net);
+    const series = traceNet(model, net);
     return (
       <section className="details-section">
         <h3>
@@ -356,10 +360,22 @@ export function Details({
         )}
         {series.length > 0 && (
           <>
-            <h3 title={t("details.seriesHint")}>{t("details.series")}</h3>
-            <ul className="series-list">
-              {series.slice(0, 60).map(({ net: other, via }) => (
-                <li key={other}>
+            <div className="trace-head">
+              <h3 title={t("trace.hint")}>
+                {t("trace.title")} <span className="muted">{series.length}</span>
+              </h3>
+              {onPinNets && (
+                <button className="small" title={t("trace.showHint")} onClick={() => onPinNets([net, ...series.slice(0, 15).map((l) => l.net)])}>
+                  {t("trace.show")}
+                </button>
+              )}
+            </div>
+            <ul className="series-list trace-list">
+              {series.slice(0, 80).map(({ net: other, via, kind, depth }) => (
+                <li key={other} style={{ paddingLeft: `${(depth - 1) * 14}px` }}>
+                  <span className={`trace-kind trace-${kind}`} title={t(`trace.kindHint.${kind}`)}>
+                    {t(`trace.kind.${kind}`)}
+                  </span>
                   {netLink(other)}
                   <span className="muted">{t("details.through")}</span>
                   <button className="link part-name" onClick={() => onSelect({ kind: "part", part: via }, true)}>

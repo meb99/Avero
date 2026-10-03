@@ -40,6 +40,7 @@ interface Props {
   namesRevision: number;
   pinnedNets: ReadonlyMap<number, RGBA>;
   onTogglePin(net: number): void;
+  onPinNets(nets: number[]): void;
   onShowMarker(id: string): void;
   onShowDrawing(id: string): void;
   /** Known-good values of OpenBoardData for this board, if any. */
@@ -92,6 +93,7 @@ export function Sidebar({
   namesRevision,
   pinnedNets,
   onTogglePin,
+  onPinNets,
   onShowMarker,
   onShowDrawing,
   knowledge,
@@ -307,6 +309,7 @@ export function Sidebar({
             onRenameNet={onRenameNet}
             pinnedNets={pinnedNets}
             onTogglePin={onTogglePin}
+            onPinNets={onPinNets}
             obdata={obdata}
             schematicFacts={schematicFacts}
             onOpenBga={onOpenBga}

@@ -3797,3 +3797,32 @@ button.danger {
   justify-content: flex-end;
   gap: 8px;
 }
+
+.trace-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.trace-kind {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.trace-through { color: #4fa3ff; }
+.trace-switch { color: #ff9f40; }
+.trace-diode { color: #c77dff; }
+.trace-resistor { color: #2ec4b6; }
+.trace-coupling { color: #7bd389; }
+
+:root[data-theme="light"] .trace-through { color: #0b62c4; }
+:root[data-theme="light"] .trace-switch { color: #b85c00; }
+:root[data-theme="light"] .trace-diode { color: #7b2cbf; }
+:root[data-theme="light"] .trace-resistor { color: #0f7f74; }
+:root[data-theme="light"] .trace-coupling { color: #2d7a3a; }
