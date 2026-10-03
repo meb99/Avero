@@ -5,7 +5,7 @@ import { MultiSelection } from "./MultiSelection";
 import { matchesQuery, parsePartQuery, partSpecs } from "../core/partSearch";
 import type { ObdData } from "../knowledge/obdata";
 import type { BoardModel, ViewSide } from "../core/board";
-import type { Selection } from "../core/types";
+import type { Net, Selection } from "../core/types";
 import { useI18n } from "../i18n";
 import type { Settings } from "../settings";
 import type { BoardNotes, Bookmark } from "../workbench/notes";
@@ -17,6 +17,18 @@ import type { Palette, RGBA } from "../render/palette";
 import type { SchematicDocument } from "../schematic/document";
 import type { SchematicFacts } from "../schematic/partInfo";
 import type { Datasheet } from "../workbench/datasheets";
+import { NOT_A_RAIL } from "../workbench/consoleGuides";
+import { railVolts } from "../workbench/diagnosis";
+
+const NET_FILTER_KINDS = ["all", "power", "ground", "signal"] as const;
+type NetFilterKind = (typeof NET_FILTER_KINDS)[number];
+
+/** A supply rail: a power net, or one named like a voltage, but no enable or power-good line. */
+function isRail(n: Net): boolean {
+  return n.kind !== "ground" && n.kind !== "unconnected" && (n.kind === "power" || railVolts(n.name) !== undefined) && !NOT_A_RAIL.test(n.name);
+}
+
+const formatVolts = (v: number, lang: string) => `${v.toLocaleString(lang, { maximumFractionDigits: 3 })} V`;
 
 type Tab = "details" | "parts" | "nets" | "layers" | "knowledge" | "measure" | "diagnose";
 
@@ -123,7 +135,7 @@ export function Sidebar({
   onCollapsed,
 }: Props) {
   const asideRef = useRef<HTMLElement>(null);
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [tab, setTab] = useState<Tab>("details");
   // Tabs that do not fit scroll sideways, with arrows where more are hidden.
   const tabsRef = useRef<HTMLElement>(null);
@@ -162,6 +174,7 @@ export function Sidebar({
   }, [tabRequest?.n]);
   const [partFilter, setPartFilter] = useState("");
   const [netFilter, setNetFilter] = useState("");
+  const [netKind, setNetKind] = useState<NetFilterKind>("all");
 
   // A search by value, rating, package or type ("10 µF 16V 0603") or a plain name search.
   const specQuery = useMemo(() => parsePartQuery(partFilter), [partFilter]);
@@ -183,10 +196,17 @@ export function Sidebar({
 
   const nets = useMemo(() => {
     const q = netFilter.trim().toUpperCase();
-    const all = model.sortedNets;
-    return q ? all.filter((i) => model.nets[i].name.toUpperCase().includes(q)) : all;
+    let list = model.sortedNets;
+    if (q) list = list.filter((i) => model.nets[i].name.toUpperCase().includes(q));
+    if (netKind === "power") {
+      // Rails, highest voltage first; enable and power-good signals are no rails.
+      list = list
+        .filter((i) => isRail(model.nets[i]))
+        .sort((a, b) => (railVolts(model.nets[b].name) ?? -1) - (railVolts(model.nets[a].name) ?? -1) || model.nets[b].pins.length - model.nets[a].pins.length);
+    } else if (netKind !== "all") list = list.filter((i) => model.nets[i].kind === netKind && !(netKind === "signal" && isRail(model.nets[i])));
+    return list;
     // namesRevision: own net names change the model's names in place.
-  }, [model, netFilter, namesRevision]);
+  }, [model, netFilter, netKind, namesRevision]);
 
   const pinless = model.pins.length === 0 && model.traces.length > 0;
   const selectedPart = model.selectedPart(selection);
@@ -395,6 +415,13 @@ export function Sidebar({
       {tab === "nets" && (
         <div className="panel list-panel">
           <input className="filter" type="search" placeholder={t("list.filter")} value={netFilter} onChange={(e) => setNetFilter(e.target.value)} />
+          <div className="segmented net-kinds" role="radiogroup" aria-label={t("list.netKinds")}>
+            {NET_FILTER_KINDS.map((k) => (
+              <button key={k} role="radio" aria-checked={netKind === k} className={netKind === k ? "on" : ""} onClick={() => setNetKind(k)}>
+                {t(`list.netKind.${k}`)}
+              </button>
+            ))}
+          </div>
           <div className="list-count">{t("list.count", { n: nets.length, total: model.nets.length })}</div>
           <VirtualList
             items={nets}
@@ -406,6 +433,7 @@ export function Sidebar({
                 <button className={`list-row${i === selectedNet ? " selected" : ""}`} onClick={() => onSelect({ kind: "net", net: i }, true)}>
                   <span className={`kind-bar kind-${n.kind}`} />
                   <span className="list-name">{n.name}</span>
+                  {netKind === "power" && railVolts(n.name) !== undefined && <span className="list-volts">{formatVolts(railVolts(n.name)!, lang)}</span>}
                   {n.assumedGround && <span className="muted">{t("list.assumedGround")}</span>}
                   {/* Boards without pins connect through tracks: count those instead. */}
                   {pinless ? (

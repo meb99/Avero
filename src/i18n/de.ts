@@ -146,6 +146,11 @@ export const de: Record<MessageKey, string> = {
   "tab.nets": "Netze",
   "list.filter": "Filtern…",
   "list.count": "{n} von {total}",
+  "list.netKinds": "Netzart",
+  "list.netKind.all": "Alle",
+  "list.netKind.power": "Spannungen",
+  "list.netKind.ground": "Masse",
+  "list.netKind.signal": "Signale",
   "list.netTraces": "Leiterbahn-Stücke (dieses Board hat keine Pins)",
 
   "details.empty": "Klicke auf ein Bauteil, einen Pin oder ein Netz, um Details zu sehen. Doppelklick zoomt hin.",

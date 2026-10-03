@@ -3966,3 +3966,21 @@ button.danger {
   left: 50%;
   transform: translateX(-50%);
 }
+
+.net-kinds {
+  display: flex;
+  margin-right: 0;
+}
+
+.net-kinds button {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.list-volts {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--power, var(--text-muted));
+  white-space: nowrap;
+}

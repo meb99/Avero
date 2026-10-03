@@ -144,6 +144,11 @@ export const en = {
   "tab.nets": "Nets",
   "list.filter": "Filter…",
   "list.count": "{n} of {total}",
+  "list.netKinds": "Net kind",
+  "list.netKind.all": "All",
+  "list.netKind.power": "Rails",
+  "list.netKind.ground": "Ground",
+  "list.netKind.signal": "Signals",
   "list.netTraces": "Track segments (this board has no pins)",
 
   "details.empty": "Click a part, pin or net to see details. Double-click zooms to it.",
