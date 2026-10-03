@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AskHost, askText } from "./components/Ask";
 import { copyText } from "./core/clipboard";
+import { netsCsv, partsCsv, readingsCsv } from "./workbench/csvExport";
 import { answerMcp, type McpContext } from "./workbench/mcpTools";
 import { MCP_DEFAULT_PORT } from "./workbench/mcp";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -1067,6 +1068,20 @@ export function App() {
     select(h.items[at], true);
   };
 
+  // --- CSV lists for spreadsheets ---------------------------------------------------
+  const exportCsv = async (what: "parts" | "nets" | "readings") => {
+    if (!model) return;
+    const base = (source?.name ?? "board").replace(/\.[^.]+$/, "");
+    const bytes = what === "parts" ? partsCsv(model, schematicFacts) : what === "nets" ? netsCsv(model) : notesForModel ? readingsCsv(notesForModel) : null;
+    if (!bytes) return;
+    try {
+      const path = await saveBytes(bytes, t(`csv.${what}`), `${base} ${t(`csv.file.${what}`)}.csv`, { name: "CSV", extensions: ["csv"] });
+      if (path) setToast(t("csv.saved", { name: fileName(path) }));
+    } catch (e) {
+      setToast(String(e));
+    }
+  };
+
   // --- bookmarks -------------------------------------------------------------------
   const addBookmarkHere = async () => {
     const view = viewRef.current;
@@ -1633,6 +1648,7 @@ export function App() {
     prevTab: () => cycleTab(-1),
     exportImage: () => void exportImage(),
     exportPdf: () => void exportPdf(),
+    exportCsv: (what) => void exportCsv(what),
     settings: () => setDialog("settings"),
     search: () => {
       searchRef.current?.focus();
@@ -1721,6 +1737,9 @@ export function App() {
           setPhotoPane((v) => !v);
           setCameraPane(false);
         } },
+      { id: "csv-parts", label: t("csv.parts"), enabled: board, run: () => void exportCsv("parts") },
+      { id: "csv-nets", label: t("csv.nets"), enabled: board, run: () => void exportCsv("nets") },
+      { id: "csv-readings", label: t("csv.readings"), enabled: board && notes !== null, run: () => void exportCsv("readings") },
       { id: "nav-back", label: t("nav.back"), shortcut: "⌘[", enabled: board, run: () => navigate(-1) },
       { id: "nav-forward", label: t("nav.forward"), shortcut: "⌘]", enabled: board, run: () => navigate(1) },
       { id: "bookmark-add", label: t("bookmark.add"), shortcut: "⌘D", enabled: board && notes !== null, run: () => void addBookmarkHere() },
