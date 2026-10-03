@@ -3866,3 +3866,52 @@ button.danger {
 .color-row.changed span {
   font-weight: 600;
 }
+
+.mcp-settings .settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.mcp-port input {
+  width: 80px;
+  margin-left: 6px;
+}
+
+.mcp-on {
+  color: var(--ok, #3ddc84);
+  font-weight: 600;
+}
+
+.mcp-settings h4 {
+  margin: 10px 0 4px;
+  font-size: 12px;
+}
+
+.mcp-snippet {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.mcp-snippet code,
+.mcp-snippet pre {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 6px 8px;
+  font: 12px var(--mono);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.mcp-tools ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+}

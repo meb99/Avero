@@ -8,6 +8,7 @@ mod donors;
 mod duplicates;
 mod import;
 mod library;
+mod mcp;
 mod meter;
 mod notes;
 mod updater;
@@ -434,6 +435,50 @@ fn datasheets_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(data_dir(app)?.join("datasheets"))
 }
 
+/// Port the AI connection listens on unless the settings say otherwise.
+pub const MCP_DEFAULT_PORT: u16 = 47321;
+
+/// `Avero --mcp [port]`: MCP over stdin/stdout for Claude Desktop.
+pub fn mcp_bridge(port: u16) {
+    mcp::bridge(port)
+}
+
+/// Switches the AI connection (MCP server on 127.0.0.1) on.
+#[tauri::command]
+fn mcp_start(app: tauri::AppHandle, port: u16) -> Result<(), String> {
+    use tauri::{Emitter, Manager};
+    if port < 1024 {
+        return Err(format!("port {port}: choose 1024 or above"));
+    }
+    let emitter = app.clone();
+    let forward: mcp::Forward = std::sync::Arc::new(move |id, message| {
+        let _ = emitter.emit_to("main", "mcp:call", serde_json::json!({ "id": id, "message": message }));
+    });
+    app.state::<mcp::Mcp>().start(port, forward)
+}
+
+/// Path of Avero's own program, for the Claude Desktop configuration.
+#[tauri::command]
+fn app_executable() -> Result<String, String> {
+    std::env::current_exe().map(|p| p.to_string_lossy().into_owned()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn mcp_stop(state: tauri::State<'_, mcp::Mcp>) {
+    state.stop();
+}
+
+#[tauri::command]
+fn mcp_status(state: tauri::State<'_, mcp::Mcp>) -> Option<u16> {
+    state.port()
+}
+
+/// The window's answer to a forwarded MCP request.
+#[tauri::command]
+fn mcp_reply(state: tauri::State<'_, mcp::Mcp>, id: u64, answer: serde_json::Value) {
+    state.reply(id, answer);
+}
+
 /// Serial ports a multimeter may be on.
 #[tauri::command]
 fn meter_ports() -> Result<Vec<meter::PortInfo>, String> {
@@ -695,6 +740,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(PendingPaths::default())
         .manage(meter::Meter::default())
+        .manage(mcp::Mcp::default())
         .invoke_handler(tauri::generate_handler![
             open_board,
             open_demo,
@@ -729,6 +775,11 @@ pub fn run() {
             import_knowledge_images,
             load_ocr,
             meter_ports,
+            mcp_start,
+            app_executable,
+            mcp_stop,
+            mcp_status,
+            mcp_reply,
             meter_connect,
             meter_disconnect,
             meter_send,

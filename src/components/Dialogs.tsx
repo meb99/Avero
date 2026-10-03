@@ -6,6 +6,7 @@ import type { Settings } from "../settings";
 import { CloseIcon } from "./Icons";
 import { MeterSettings } from "./MeterSettings";
 import { ColorEditor } from "./ColorEditor";
+import { McpSettings } from "./McpSettings";
 
 export function Dialog({
   title,
@@ -156,6 +157,8 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
       <h3>{t("keys.title")}</h3>
       <p className="muted setting-hint">{t("keys.hint")}</p>
       <ShortcutEditor value={settings.shortcuts} onChange={(shortcuts) => set("shortcuts", shortcuts)} />
+      <h3>{t("mcp.title")}</h3>
+      <McpSettings value={settings.mcp} onChange={(mcp) => set("mcp", mcp)} />
       <h3>{t("meter.title")}</h3>
       <MeterSettings value={settings.meter} onChange={(meter) => set("meter", meter)} />
       <h3>{t("backup.title")}</h3>

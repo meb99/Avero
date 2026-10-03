@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AskHost, askText } from "./components/Ask";
+import { answerMcp, type McpContext } from "./workbench/mcpTools";
+import { MCP_DEFAULT_PORT } from "./workbench/mcp";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { invoke } from "@tauri-apps/api/core";
 import { BoardView, type BoardViewHandle, type PhotoLayer, type ViewState } from "./components/BoardView";
@@ -971,6 +973,39 @@ export function App() {
     },
     [model],
   );
+
+  // --- AI connection (MCP): requests answered from the current state ---------------
+  const mcpContext = useRef<McpContext | null>(null);
+  mcpContext.current = {
+    model,
+    fileName: source?.name,
+    side,
+    selection,
+    notes: notesForModel,
+    facts: schematicFacts,
+    schematic,
+    t,
+    select: (sel) => select(sel, true),
+  };
+  const mcpEnabled = !!settings.mcp?.enabled;
+  const mcpPort = settings.mcp?.port ?? MCP_DEFAULT_PORT;
+  useEffect(() => {
+    if (!mcpEnabled) {
+      void invoke("mcp_stop").catch(() => {});
+      return;
+    }
+    invoke("mcp_start", { port: mcpPort }).catch((e) => setToast(t("mcp.failed", { message: String(e) })));
+  }, [mcpEnabled, mcpPort]);
+  useEffect(() => {
+    const off = listen<{ id: number; message: Parameters<typeof answerMcp>[0] }>("mcp:call", (e) => {
+      const ctx = mcpContext.current;
+      const answer = ctx ? answerMcp(e.payload.message, ctx) : { error: { code: -32000, message: "Avero is starting" } };
+      void invoke("mcp_reply", { id: e.payload.id, answer });
+    });
+    return () => {
+      void off.then((f) => f());
+    };
+  }, []);
 
   // Protected PDFs ask for their password in Avero's own dialog.
   useEffect(() => {

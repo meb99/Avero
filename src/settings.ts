@@ -36,6 +36,8 @@ export interface Settings {
   photoPoints: 2 | 3 | 4;
   /** Own board colours per theme (the colour editor). */
   colors?: { dark?: OwnColors; light?: OwnColors };
+  /** AI connection (MCP server on 127.0.0.1), off by default. */
+  mcp?: { enabled: boolean; port: number };
   /** Multimeter on a USB serial port; none until set up. */
   meter?: MeterSettings;
   /** Own key bindings over the defaults (see shortcuts.ts). */
