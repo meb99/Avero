@@ -14,6 +14,9 @@
 //!   `UNIT:millimeters` line says otherwise; some files use decimal commas.
 //! - The description table is tab-separated: part number, description,
 //!   quantity, locations (part names), second part number.
+//!
+//! `.cae` files are the same format with a key of their own (another
+//! parity pattern, as in OpenBoardView's `CAEFile`).
 
 use std::collections::HashMap;
 use std::io::Read;
@@ -34,13 +37,72 @@ const KEY_PARITY: [u8; KEY_WORDS] = [
     0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0,
     0, 0, 1, 0, 0, 1, 1, 0, 1,
 ];
+/// The same check for `.cae` keys.
+const CAE_KEY_PARITY: [u8; KEY_WORDS] = [
+    1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1,
+    0, 1, 1, 0, 1, 1, 1, 0, 0,
+];
+
+/// `.fz` (ASUS) or `.cae`: one format, two keys.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Variant {
+    Fz,
+    Cae,
+}
+
+impl Variant {
+    fn format(self) -> FormatId {
+        match self {
+            Variant::Fz => FormatId::Fz,
+            Variant::Cae => FormatId::Cae,
+        }
+    }
+    fn parity(self) -> &'static [u8; KEY_WORDS] {
+        match self {
+            Variant::Fz => &KEY_PARITY,
+            Variant::Cae => &CAE_KEY_PARITY,
+        }
+    }
+    fn needs_key(self) -> ParseError {
+        match self {
+            Variant::Fz => ParseError::NeedsFzKey,
+            Variant::Cae => ParseError::NeedsCaeKey,
+        }
+    }
+    fn invalid_key(self) -> ParseError {
+        match self {
+            Variant::Fz => ParseError::InvalidFzKey,
+            Variant::Cae => ParseError::InvalidCaeKey,
+        }
+    }
+}
+
 const ROUNDS: usize = 20;
 /// Largest inflated section accepted, against archive bombs.
 const MAX_SECTION: u64 = 512 * 1024 * 1024;
 const OUTLINE_MARGIN: f64 = 20.0;
 
 pub fn key_is_plausible(key: &FzKey) -> bool {
-    key.iter().zip(KEY_PARITY).all(|(w, p)| u8::from(w.count_ones().is_multiple_of(2)) == p)
+    key_fits(key, Variant::Fz)
+}
+
+/// Whether a key has the parity pattern of `.fz` or of `.cae` keys.
+pub fn key_fits(key: &FzKey, variant: Variant) -> bool {
+    key.iter().zip(variant.parity()).all(|(w, &p)| u8::from(w.count_ones().is_multiple_of(2)) == p)
+}
+
+/// Keys in a text: every 44 words one key, so the `.fz` and the `.cae` key
+/// can share one settings field. None when the word count is no multiple of 44.
+pub fn parse_keys(text: &str) -> Option<Vec<FzKey>> {
+    let words: Vec<u32> = text
+        .split(|c: char| c.is_whitespace() || c == ',' || c == ';')
+        .filter(|t| !t.is_empty())
+        .map(|t| u32::from_str_radix(t.trim_start_matches("0x").trim_start_matches("0X"), 16).ok())
+        .collect::<Option<_>>()?;
+    if words.is_empty() || !words.len().is_multiple_of(KEY_WORDS) {
+        return None;
+    }
+    Some(words.chunks(KEY_WORDS).map(|c| c.try_into().expect("44 words")).collect())
 }
 
 /// Parses 44 hexadecimal words (with or without `0x`), separated by spaces,
@@ -52,6 +114,16 @@ pub fn parse_key(text: &str) -> Option<FzKey> {
         .map(|t| u32::from_str_radix(t.trim_start_matches("0x").trim_start_matches("0X"), 16).ok())
         .collect::<Option<_>>()?;
     words.try_into().ok()
+}
+
+/// Which of the entered keys is for `.fz` and which for `.cae`, by their
+/// parity. A key that fits neither (a typo) goes to both, so opening a file
+/// says the key is wrong rather than missing.
+pub fn assign_keys(keys: &[FzKey]) -> (Option<FzKey>, Option<FzKey>) {
+    let pick = |v: Variant, other: Variant| {
+        keys.iter().find(|k| key_fits(k, v)).or_else(|| keys.iter().find(|k| !key_fits(k, other))).copied()
+    };
+    (pick(Variant::Fz, Variant::Cae), pick(Variant::Cae, Variant::Fz))
 }
 
 /// True when the file carries no encryption (a zlib header at byte 4).
@@ -115,14 +187,19 @@ enum Block {
 }
 
 pub fn parse(input: &[u8], key: Option<&FzKey>) -> Result<RawBoard, ParseError> {
+    parse_variant(input, key, Variant::Fz)
+}
+
+pub fn parse_variant(input: &[u8], key: Option<&FzKey>, variant: Variant) -> Result<RawBoard, ParseError> {
+    let format = variant.format();
     if input.len() < 12 {
-        return Err(ParseError::invalid(FormatId::Fz, "file is too short"));
+        return Err(ParseError::invalid(format, "file is too short"));
     }
     let mut buf = input.to_vec();
     if !is_plain(&buf) {
-        let key = key.ok_or(ParseError::NeedsFzKey)?;
-        if !key_is_plausible(key) {
-            return Err(ParseError::InvalidFzKey);
+        let key = key.ok_or(variant.needs_key())?;
+        if !key_fits(key, variant) {
+            return Err(variant.invalid_key());
         }
         crypt(&mut buf, key, false);
     }
@@ -133,17 +210,16 @@ pub fn parse(input: &[u8], key: Option<&FzKey>) -> Result<RawBoard, ParseError> 
     // A wrong key yields noise here, so say so rather than "damaged".
     let Some(descr_start) = descr_start else {
         return Err(if is_plain(input) {
-            ParseError::invalid(FormatId::Fz, "no content")
+            ParseError::invalid(format, "no content")
         } else {
-            ParseError::InvalidFzKey
+            variant.invalid_key()
         });
     };
     let content =
-        inflate(&buf[4..], "content")
-            .map_err(|e| if is_plain(input) { e } else { ParseError::InvalidFzKey })?;
+        inflate(&buf[4..], "content").map_err(|e| if is_plain(input) { e } else { variant.invalid_key() })?;
     let descr = inflate(&buf[descr_start..], "part list").unwrap_or_default();
 
-    let mut board = RawBoard::new(FormatId::Fz);
+    let mut board = RawBoard::new(format);
     let mut parts: Vec<RawPart> = Vec::new();
     let mut part_index: HashMap<String, usize> = HashMap::new();
     let mut scale = 1.0;

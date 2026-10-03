@@ -150,13 +150,19 @@ async fn open_board(
     xzz_key: Option<String>,
     fz_key: Option<String>,
 ) -> Result<Board, LoadError> {
-    use avero_formats::formats::{parse_fz_key, parse_xzz_key};
+    use avero_formats::formats::{assign_fz_keys, parse_fz_keys, parse_xzz_key};
     let given = |k: &Option<String>| k.as_deref().map(str::trim).filter(|k| !k.is_empty()).map(str::to_owned);
     // A malformed key becomes one that fails the parity check, so only the
     // files that need that key report it (and not every other file too).
     let xzz_key = given(&xzz_key).map(|text| parse_xzz_key(&text).unwrap_or(0));
-    let fz_key = given(&fz_key).map(|text| parse_fz_key(&text).unwrap_or([0; 44]));
-    load(Path::new(&path), ParseOptions { xzz_key, fz_key })
+    // The field may hold the .fz and the .cae key (44 words each).
+    let (fz_key, cae_key) = match given(&fz_key) {
+        None => (None, None),
+        Some(text) => {
+            parse_fz_keys(&text).map_or((Some([0; 44]), Some([0; 44])), |keys| assign_fz_keys(&keys))
+        }
+    };
+    load(Path::new(&path), ParseOptions { xzz_key, fz_key, cae_key })
 }
 
 /// A part on other boards of the library (donor boards), best fits first.

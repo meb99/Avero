@@ -845,6 +845,55 @@ fn fz_encrypted() {
     check_fz(&avero_formats::parse_with(&file, Some("board.fz"), with(key)).unwrap(), 1.0);
 }
 
+/// A made-up key with the parity pattern of CAE keys.
+fn cae_test_key(seed: u32) -> avero_formats::formats::FzKey {
+    const CAE_PARITY: [u32; 44] = [
+        1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0,
+        1, 0, 1, 1, 0, 1, 1, 1, 0, 0,
+    ];
+    std::array::from_fn(|i| {
+        let v = (i as u32 ^ seed).wrapping_mul(0x85eb_ca6b) ^ 0xc2b2_ae35;
+        if u32::from(v.count_ones().is_multiple_of(2)) == CAE_PARITY[i] {
+            v
+        } else {
+            v ^ 1
+        }
+    })
+}
+
+#[test]
+fn cae_is_fz_with_its_own_key() {
+    use avero_formats::formats::{assign_fz_keys, fz_encrypt, fz_key_fits, FzVariant};
+    let key = cae_test_key(7);
+    assert!(fz_key_fits(&key, FzVariant::Cae));
+    assert!(!fz_key_fits(&key, FzVariant::Fz));
+    let file = fz_encrypt(&fz_fixture(FZ_CONTENT), &key);
+    let with = |cae| avero_formats::ParseOptions { cae_key: cae, ..Default::default() };
+
+    assert_eq!(parse(&file, Some("board.cae")).unwrap_err(), ParseError::NeedsCaeKey);
+    let mut typo = key;
+    typo[5] ^= 1;
+    assert_eq!(
+        avero_formats::parse_with(&file, Some("b.cae"), with(Some(typo))).unwrap_err(),
+        ParseError::InvalidCaeKey
+    );
+    let b = avero_formats::parse_with(&file, Some("board.cae"), with(Some(key))).unwrap();
+    assert_eq!(b.format, FormatId::Cae);
+    assert_eq!(b.parts.len(), 3);
+    // Plain (unencrypted) .cae files open without a key.
+    assert_eq!(parse(&fz_fixture(FZ_CONTENT), Some("board.cae")).unwrap().format, FormatId::Cae);
+
+    // Both keys in one settings field, in either order, sorted by parity.
+    let fz = fz_test_key(1);
+    assert_eq!(assign_fz_keys(&[key, fz]), (Some(fz), Some(key)));
+    assert_eq!(assign_fz_keys(&[fz, key]), (Some(fz), Some(key)));
+    assert_eq!(assign_fz_keys(&[fz]), (Some(fz), None));
+    // A typo fits neither: both get it, so the file says "key wrong".
+    let mut bad = fz;
+    bad[0] ^= 1;
+    assert_eq!(assign_fz_keys(&[bad]), (Some(bad), Some(bad)));
+}
+
 // --- KiCad and EAGLE ---------------------------------------------------------
 
 const KICAD: &str = r#"(kicad_pcb (version 20240108) (generator "pcbnew")

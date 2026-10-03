@@ -142,6 +142,8 @@ export type LoadErrorCode =
   | "invalid-key"
   | "needs-fz-key"
   | "invalid-fz-key"
+  | "needs-cae-key"
+  | "invalid-cae-key"
   | "xzz-all-locked"
   | "internal";
 

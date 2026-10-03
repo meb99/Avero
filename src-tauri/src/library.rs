@@ -85,7 +85,7 @@ fn classify(name: &str, head: impl FnOnce() -> Vec<u8>) -> Option<Kind> {
         // An ASC board is three files; pins.asc stands for the set.
         "asc" => (name == "pins.asc").then_some(Kind::Board),
         "pcb" => is_xzz_head(&head()).then_some(Kind::Board),
-        "tvw" | "cae" => Some(Kind::Unsupported),
+        "tvw" => Some(Kind::Unsupported),
         _ if avero_formats::formats::extensions().contains(&ext) => Some(Kind::Board),
         _ => None,
     }

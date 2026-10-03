@@ -143,7 +143,7 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
           placeholder="0x… 0x… (44)"
           value={settings.fzKey}
           onChange={(e) => set("fzKey", e.target.value)}
-          aria-invalid={settings.fzKey.trim() !== "" && fzWords(settings.fzKey) !== 44}
+          aria-invalid={settings.fzKey.trim() !== "" && fzWords(settings.fzKey) !== 44 && fzWords(settings.fzKey) !== 88}
         />
       </div>
       <p className="muted setting-hint">{t("settings.fzKeyHint", { n: fzWords(settings.fzKey) })}</p>

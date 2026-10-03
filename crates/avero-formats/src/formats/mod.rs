@@ -18,7 +18,9 @@ pub use asc::{decode_bdv, encode_bdv};
 pub use brd::{decode as decode_brd, encode as encode_brd};
 /// FZ key handling; `fz_encrypt` builds test files.
 pub use fz::{
-    encrypt as fz_encrypt, key_is_plausible as fz_key_is_plausible, parse_key as parse_fz_key, FzKey,
+    assign_keys as assign_fz_keys, encrypt as fz_encrypt, key_fits as fz_key_fits,
+    key_is_plausible as fz_key_is_plausible, parse_key as parse_fz_key, parse_keys as parse_fz_keys, FzKey,
+    Variant as FzVariant,
 };
 /// XZZ key handling; `des_encrypt` builds test files.
 pub use xzz::{
@@ -57,7 +59,7 @@ pub fn detect(buf: &[u8], file_name: Option<&str>) -> Detected {
     }
     match ext.as_str() {
         "fz" => return Detected::Supported(FormatId::Fz),
-        "cae" => return Detected::Unsupported("CAE"),
+        "cae" => return Detected::Supported(FormatId::Cae),
         "tvw" => return Detected::Unsupported("Teboview TVW"),
         // Altium's binary design files (an OLE compound document).
         "pcbdoc" if buf.starts_with(&[0xD0, 0xCF, 0x11, 0xE0]) => {
@@ -130,6 +132,7 @@ pub const SUPPORTED: &[FormatInfo] = &[
     FormatInfo { id: "cst", name: "IBM CST", extensions: &["cst"] },
     FormatInfo { id: "xzz", name: "XinZhiZao PCB", extensions: &["pcb"] },
     FormatInfo { id: "fz", name: "ASUS FZ", extensions: &["fz"] },
+    FormatInfo { id: "cae", name: "CAE", extensions: &["cae"] },
     FormatInfo { id: "kicad", name: "KiCad", extensions: &["kicad_pcb"] },
     FormatInfo { id: "eagle", name: "EAGLE / Fusion 360", extensions: &["brd"] },
 ];

@@ -37,15 +37,16 @@ fn main() -> ExitCode {
         },
         None => std::env::var("AVERO_FZ_KEY").ok(),
     };
-    let fz_key = match fz_text.as_deref().map(avero_formats::formats::parse_fz_key) {
-        None => None,
-        Some(Some(k)) => Some(k),
+    // One or two keys (.fz and .cae), told apart by their parity.
+    let (fz_key, cae_key) = match fz_text.as_deref().map(avero_formats::formats::parse_fz_keys) {
+        None => (None, None),
+        Some(Some(keys)) => avero_formats::formats::assign_fz_keys(&keys),
         Some(None) => {
-            eprintln!("FZ key: expected 44 hexadecimal words");
+            eprintln!("FZ/CAE key: expected 44 (or 88) hexadecimal words");
             return ExitCode::from(2);
         }
     };
-    let options = avero_formats::ParseOptions { xzz_key, fz_key };
+    let options = avero_formats::ParseOptions { xzz_key, fz_key, cae_key };
     let path = args
         .iter()
         .filter(|a| Some(*a) != key_arg.as_ref() && Some(*a) != fz_file.as_ref())

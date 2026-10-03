@@ -55,8 +55,12 @@ pub enum ParseError {
     InvalidKey,
     #[error("This FZ file is encrypted. Enter the FZ key in the settings.")]
     NeedsFzKey,
+    #[error("This CAE file is encrypted. Enter the CAE key in the settings.")]
+    NeedsCaeKey,
     #[error("The FZ key is not valid for this file.")]
     InvalidFzKey,
+    #[error("The CAE key is not valid for this file.")]
+    InvalidCaeKey,
     #[error("All {0} parts of this XZZ file are encrypted and it has no test pads; it needs the XZZ key.")]
     XzzAllLocked(u32),
 }
@@ -81,6 +85,8 @@ impl ParseError {
             ParseError::InvalidKey => "invalid-key",
             ParseError::NeedsFzKey => "needs-fz-key",
             ParseError::InvalidFzKey => "invalid-fz-key",
+            ParseError::NeedsCaeKey => "needs-cae-key",
+            ParseError::InvalidCaeKey => "invalid-cae-key",
             ParseError::XzzAllLocked(_) => "xzz-all-locked",
         }
     }
@@ -102,6 +108,7 @@ pub struct ParseOptions {
     pub xzz_key: Option<u64>,
     /// RC6 key schedule for ASUS `.fz` files. Avero does not ship one.
     pub fz_key: Option<formats::FzKey>,
+    pub cae_key: Option<formats::FzKey>,
 }
 
 /// Reads a boardview file. `file_name` is used to resolve formats that can
@@ -130,6 +137,9 @@ pub fn parse_with(buf: &[u8], file_name: Option<&str>, options: ParseOptions) ->
             FormatId::Cst => formats::cst::parse(buf),
             FormatId::Xzz => formats::xzz::parse(buf, options.xzz_key),
             FormatId::Fz => formats::fz::parse(buf, options.fz_key.as_ref()),
+            FormatId::Cae => {
+                formats::fz::parse_variant(buf, options.cae_key.as_ref(), formats::fz::Variant::Cae)
+            }
             FormatId::KiCad => formats::kicad::parse(buf),
             FormatId::Eagle => formats::eagle::parse(buf),
             FormatId::Asc | FormatId::Demo => Err(ParseError::Unrecognized),
