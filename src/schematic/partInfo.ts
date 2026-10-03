@@ -10,6 +10,7 @@
  * print values below or beside the name.
  */
 import type { Box, Word, WordIndex } from "./textIndex";
+import { partRole } from "../core/partRole";
 
 export interface SchematicPart {
   /** Schematic page (0-based) the facts come from. */
@@ -34,15 +35,24 @@ export interface SchematicFacts {
 
 type Kind = "C" | "R" | "L" | "chip" | "other";
 
-/** Kind of part by its name: C12, PC301 (Compal's power parts start with P), FB3, U7, PQ12 … */
+/** Kind of part by its name: C12, PC301 (Compal's power parts start with P), CG12 (GPU section), FB3, U7, PQ12 … */
 export function partKind(name: string): Kind {
-  const letters = /^[A-Z]+/.exec(name.toUpperCase())?.[0] ?? "";
-  const base = letters.length > 1 && letters.startsWith("P") && /^(C|R|L|U|Q|D|J)$/.test(letters.slice(1)) ? letters.slice(1) : letters;
-  if (/^(C|CE|CB|EC)$/.test(base)) return "C";
-  if (/^(R|RN|RP)$/.test(base)) return "R";
-  if (/^(L|FB|FL|BEAD)$/.test(base)) return "L";
-  if (/^(U|IC|Q|D|ZD|Y|X|LED|VR)$/.test(base)) return "chip";
-  return "other";
+  switch (partRole(name)) {
+    case "capacitor":
+      return "C";
+    case "resistor":
+      return "R";
+    case "inductor":
+    case "ferrite":
+      return "L";
+    case "ic":
+    case "transistor":
+    case "diode":
+    case "crystal":
+      return "chip";
+    default:
+      return "other";
+  }
 }
 
 const NUM = String.raw`(\d+(?:\.\d+)?|\.\d+)`;
