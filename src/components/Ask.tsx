@@ -17,6 +17,8 @@ interface Question {
   initial?: string;
   ok?: string;
   danger?: boolean;
+  /** A password: typed text is hidden. */
+  secret?: boolean;
   resolve(answer: string | boolean | null): void;
 }
 
@@ -35,7 +37,7 @@ function ask(q: Omit<Question, "id" | "resolve">): Promise<string | boolean | nu
 }
 
 /** A line of text, or null when cancelled. */
-export function askText(message: string, initial = "", options: { title?: string; ok?: string } = {}): Promise<string | null> {
+export function askText(message: string, initial = "", options: { title?: string; ok?: string; secret?: boolean } = {}): Promise<string | null> {
   return ask({ kind: "text", message, initial, ...options }) as Promise<string | null>;
 }
 
@@ -86,7 +88,7 @@ function AskDialog({ question: q }: { question: Question }) {
         }}
       >
         <p className="ask-message">{q.message}</p>
-        {q.kind === "text" && <input ref={inputRef} className="ask-input" value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />}
+        {q.kind === "text" && <input ref={inputRef} className="ask-input" type={q.secret ? "password" : "text"} value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />}
         <div className="ask-buttons">
           <button type="button" className="small" onClick={cancel}>
             {t("ask.cancel")}

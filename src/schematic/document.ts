@@ -10,15 +10,46 @@ GlobalWorkerOptions.workerSrc = workerUrl;
 
 const ASSETS = `${import.meta.env.BASE_URL}pdfjs/`;
 
-function openPdf(bytes: Uint8Array): Promise<PDFDocumentProxy> {
-  return getDocument({
+/**
+ * Asks for the password of a protected PDF (`retry`: the last one was
+ * wrong); null cancels. Set by each window that can show a question.
+ */
+export type PasswordPrompt = (name: string, retry: boolean) => Promise<string | null>;
+let passwordPrompt: PasswordPrompt | null = null;
+export function setPdfPasswordPrompt(prompt: PasswordPrompt | null): void {
+  passwordPrompt = prompt;
+}
+// Passwords given in this session, so a reopened PDF does not ask again.
+const knownPasswords = new Map<string, string>();
+
+function openPdf(bytes: Uint8Array, name = "", ask = false): Promise<PDFDocumentProxy> {
+  const key = `${name}|${bytes.length}`;
+  const known = knownPasswords.get(key);
+  const task = getDocument({
     data: bytes,
     cMapUrl: `${ASSETS}cmaps/`,
     cMapPacked: true,
     standardFontDataUrl: `${ASSETS}standard_fonts/`,
     wasmUrl: `${ASSETS}wasm/`,
     iccUrl: `${ASSETS}iccs/`,
-  }).promise;
+    ...(known && { password: known }),
+  });
+  if (ask && passwordPrompt) {
+    const prompt = passwordPrompt;
+    let tried = false;
+    task.onPassword = (update: (password: string) => void) => {
+      void prompt(name, tried).then((password) => {
+        if (password === null) {
+          void task.destroy();
+          return;
+        }
+        tried = true;
+        knownPasswords.set(key, password);
+        update(password);
+      });
+    };
+  }
+  return task.promise;
 }
 
 /**
@@ -84,7 +115,7 @@ export class SchematicDocument {
   }
 
   static async open(bytes: Uint8Array, name: string, path?: string): Promise<SchematicDocument> {
-    const pdf = await openPdf(bytes);
+    const pdf = await openPdf(bytes, name, true);
     const doc = new SchematicDocument(pdf, name, path);
     void doc.buildIndex();
     return doc;

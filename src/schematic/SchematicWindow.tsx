@@ -4,7 +4,8 @@ import { readFileBytes, setWindowTitle } from "../core/loader";
 import { I18nContext, systemLanguage, translator } from "../i18n";
 import { loadSettings } from "../settings";
 import { useTheme } from "../theme";
-import type { SchematicDocument } from "./document";
+import { setPdfPasswordPrompt, type SchematicDocument } from "./document";
+import { AskHost, askText } from "../components/Ask";
 import { closeSchematicWindow, LINK, type LinkedDoc } from "./link";
 import { SchematicView, type SchematicFocus, type SchematicViewHandle } from "./SchematicView";
 
@@ -22,6 +23,14 @@ export function SchematicWindow() {
   const viewRef = useRef<SchematicViewHandle>(null);
   const linkedRef = useRef(linked);
   linkedRef.current = linked;
+
+  // This window asks for a protected PDF's password itself.
+  useEffect(() => {
+    setPdfPasswordPrompt((name, retry) =>
+      askText(retry ? t("pdf.passwordWrong") : t("pdf.password", { name }), "", { title: t("pdf.passwordTitle"), secret: true }),
+    );
+    return () => setPdfPasswordPrompt(null);
+  }, [t]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -120,6 +129,7 @@ export function SchematicWindow() {
         ) : (
           <div className="board-placeholder">{error ?? t(linked ? "schematic.loading" : "schematic.none")}</div>
         )}
+        <AskHost />
       </div>
     </I18nContext.Provider>
   );

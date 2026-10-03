@@ -181,3 +181,11 @@ export const TagIcon = () => (
     <circle cx="7" cy="7" r="1.2" />
   </Icon>
 );
+
+/** Half-dark page: dark schematic pages. */
+export const DarkPageIcon = () => (
+  <Icon>
+    <circle cx="10" cy="10" r="6.5" />
+    <path d="M10 3.5a6.5 6.5 0 0 1 0 13z" fill="currentColor" />
+  </Icon>
+);

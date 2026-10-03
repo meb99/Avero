@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
+import { useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
 import type { RenderTask } from "pdfjs-dist/legacy/build/pdf.mjs";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CloseIcon,
+  DarkPageIcon,
   FitIcon,
   PopOutIcon,
   SchematicIcon,
@@ -73,6 +74,47 @@ const DETAIL_DELAY_MS = 140;
 const DRAG_THRESHOLD = 4;
 /** Target on-screen height of a word we jump to. */
 const JUMP_TEXT_PX = 14;
+const DARK_KEY = "avero.schematic.dark";
+const RECENT_KEY = "avero.schematic.recent";
+
+function loadRecent(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]") as unknown;
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, 12) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Dark page in place: each pixel's lightness turned around, its hue and
+ * saturation kept, so white paper turns dark grey, black lines light, and
+ * a red net stays red (a plain invert would make it cyan).
+ */
+export function invertLightness(canvas: HTMLCanvasElement): void {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx || canvas.width === 0 || canvas.height === 0) return;
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  darkPixels(image.data);
+  ctx.putImageData(image, 0, 0);
+}
+
+/** The pixel work of `invertLightness`; white becomes #1b1d22 rather than black. */
+export function darkPixels(d: Uint8ClampedArray): void {
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i];
+    const g = d[i + 1];
+    const b = d[i + 2];
+    const max = r > g ? (r > b ? r : b) : g > b ? g : b;
+    const min = r < g ? (r < b ? r : b) : g < b ? g : b;
+    // HSL lightness L → 1 − L: shift every channel by 255 − max − min.
+    const shift = 255 - max - min;
+    // Squeeze into 27…235 so paper is a soft dark and ink not glaring.
+    d[i] = 27 + ((r + shift) * 208) / 255;
+    d[i + 1] = 29 + ((g + shift) * 206) / 255;
+    d[i + 2] = 34 + ((b + shift) * 201) / 255;
+  }
+}
 
 function flattenOutline(entries: OutlineEntry[], depth = 0): { title: string; page: number; depth: number }[] {
   return entries.flatMap((e) => [
@@ -111,6 +153,30 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
   const [page, setPage] = useState(0);
   const [pageInput, setPageInput] = useState("1");
   const [indexed, setIndexed] = useState(doc.indexedPages);
+  // Dark pages: lightness turned around, colours kept (a viewer preference).
+  const [dark, setDark] = useState(() => {
+    try {
+      return localStorage.getItem(DARK_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const darkRef = useRef(dark);
+  darkRef.current = dark;
+  // Recent searches, offered as the field's suggestions.
+  const recentId = useId();
+  const [recent, setRecent] = useState(loadRecent);
+  const rememberSearch = (text: string) => {
+    const q = text.trim();
+    if (q.length < 2) return;
+    const next = [q, ...recent.filter((r) => r.toUpperCase() !== q.toUpperCase())].slice(0, 12);
+    setRecent(next);
+    try {
+      localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+    } catch {
+      // Only a convenience.
+    }
+  };
   // Recognised text of scanned pages arrives after indexing.
   const [revision, setRevision] = useState(doc.revision);
   const ocr = useOcr(doc, indexed >= doc.pageCount, (key) => classify({ key, text: key, page: 0, box: { x0: 0, y0: 0, x1: 0, y1: 0 } }) !== null);
@@ -136,7 +202,7 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
     ctx.setTransform(dpr * cam.scale, 0, 0, dpr * cam.scale, -cam.x * cam.scale * dpr, -cam.y * cam.scale * dpr);
 
     const { width, height } = sizeRef.current;
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = darkRef.current ? "#1b1d22" : "#ffffff";
     ctx.shadowColor = "rgba(0, 0, 0, 0.35)";
     ctx.shadowBlur = 12 * dpr;
     ctx.fillRect(0, 0, width, height);
@@ -226,6 +292,7 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
         if (isCancel(e)) return null;
         throw e;
       }
+      if (darkRef.current) invertLightness(canvas);
       return { page: index, canvas, box };
     },
     [doc],
@@ -266,6 +333,22 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
     requestDraw();
     scheduleDetail();
   }, [requestDraw, scheduleDetail]);
+
+  /** Renders the page on screen again where it is (after switching dark pages). */
+  const rerender = useCallback(() => {
+    const index = pageRef.current;
+    if (index < 0) return;
+    detailRef.current = null;
+    const { width, height } = sizeRef.current;
+    renderRegion("base", index, { x0: 0, y0: 0, x1: width, y1: height }, baseScale())
+      .then((layer) => {
+        if (layer && layer.page === pageRef.current) {
+          baseRef.current = layer;
+          viewChanged();
+        }
+      })
+      .catch((e) => console.warn("Avero: rendering schematic page failed", e));
+  }, [renderRegion, baseScale, viewChanged]);
 
   // --- pages ---------------------------------------------------------------
 
@@ -621,6 +704,25 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
           <button className="tool icon-only" onClick={() => zoomBy(1.4)} aria-label={t("toolbar.zoomIn")} title={t("toolbar.zoomIn")}>
             <ZoomInIcon />
           </button>
+          <button
+            className={`tool icon-only${dark ? " on" : ""}`}
+            aria-pressed={dark}
+            onClick={() => {
+              const next = !dark;
+              try {
+                localStorage.setItem(DARK_KEY, next ? "1" : "0");
+              } catch {
+                // Only a preference.
+              }
+              darkRef.current = next;
+              setDark(next);
+              rerender();
+            }}
+            aria-label={t("schematic.dark")}
+            title={t("schematic.dark")}
+          >
+            <DarkPageIcon />
+          </button>
         </div>
         <label className="schematic-search">
           <SearchIcon />
@@ -632,10 +734,12 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
             placeholder={t("schematic.search")}
             aria-label={t("schematic.search")}
             value={query}
+            list={recentId}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
+                rememberSearch(query);
                 jumpTo(hitRef.current + (e.shiftKey ? -1 : 1));
               } else if (e.key === "Escape") {
                 setQuery("");
@@ -643,6 +747,11 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
               }
             }}
           />
+          <datalist id={recentId}>
+            {recent.map((r) => (
+              <option key={r} value={r} />
+            ))}
+          </datalist>
         </label>
         <span className="schematic-spacer" />
         {(typed || focus) && hits.length > 0 && (

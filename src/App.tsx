@@ -49,7 +49,7 @@ import { I18nContext, systemLanguage, translator, type MessageKey } from "./i18n
 import { installMenu, nativeMenuActive, type MenuActions } from "./menu";
 import { closeSchematicWindow, LINK, openSchematicWindow, type LinkedDoc } from "./schematic/link";
 import { DARK, LIGHT } from "./render/palette";
-import type { SchematicDocument } from "./schematic/document";
+import { setPdfPasswordPrompt, type SchematicDocument } from "./schematic/document";
 import { readSchematicFacts, type SchematicFacts } from "./schematic/partInfo";
 import { SchematicView, type SchematicFocus, type SchematicViewHandle, type WordTarget } from "./schematic/SchematicView";
 import type { Word } from "./schematic/textIndex";
@@ -970,6 +970,14 @@ export function App() {
     },
     [model],
   );
+
+  // Protected PDFs ask for their password in Avero's own dialog.
+  useEffect(() => {
+    setPdfPasswordPrompt((name, retry) =>
+      askText(retry ? t("pdf.passwordWrong") : t("pdf.password", { name }), "", { title: t("pdf.passwordTitle"), secret: true }),
+    );
+    return () => setPdfPasswordPrompt(null);
+  }, [t]);
 
   // --- back / forward through the selections ------------------------------------
   const histories = useRef(new WeakMap<BoardModel, NavHistory>());
