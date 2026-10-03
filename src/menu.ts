@@ -35,6 +35,10 @@ export interface MenuActions {
   addPhoto(): void;
   togglePhoto(): void;
   compare(): void;
+  back(): void;
+  forward(): void;
+  bookmark(): void;
+  ruler(): void;
   shortcuts(): void;
   checkUpdates(): void;
   website(): void;
@@ -46,21 +50,53 @@ const SEP: PredefinedMenuItemOptions = { item: "Separator" };
 
 /**
  * True once the native menu is installed. Its key equivalents then handle
- * ⌘ shortcuts, so the web view must not handle them a second time.
+ * their ⌘ shortcuts, so the web view must not handle those a second time.
  */
 export let nativeMenuActive = false;
+
+/**
+ * Key equivalents of the native menu, as "shift alt ctrl:key". Each is kept
+ * by physical key and by character: macOS matches the typed character, so
+ * on a German keyboard ⌘Z is the key labelled Z. Owning a key too many only
+ * leaves it to the menu; owning one too few would run it twice.
+ */
+const menuKeys = new Set<string>();
+
+const ACCEL_CODES: Record<string, string> = { ",": "Comma", "-": "Minus", "/": "Slash", "=": "Equal" };
+
+const keyId = (shift: boolean, alt: boolean, ctrl: boolean, key: string) => `${shift ? 1 : 0}${alt ? 1 : 0}${ctrl ? 1 : 0}:${key}`;
+
+function remember(accelerator: string) {
+  const parts = accelerator.split(/\+(?=.)/);
+  const key = parts[parts.length - 1];
+  const code = ACCEL_CODES[key] ?? (/^[0-9]$/.test(key) ? `Digit${key}` : `Key${key.toUpperCase()}`);
+  const [shift, alt, ctrl] = ["Shift", "Alt", "Ctrl"].map((m) => parts.includes(m));
+  menuKeys.add(keyId(shift, alt, ctrl, code));
+  menuKeys.add(keyId(shift, alt, ctrl, key.toLowerCase()));
+}
+
+// Key equivalents of the predefined items (Edit, Window, app menu).
+for (const a of ["X", "C", "V", "A", "Q", "H", "Alt+H", "M", "Ctrl+F"]) remember(a);
+
+/**
+ * A ⌘ key the native menu handles itself. Every other ⌘ key (⌘[, ⌘D, a
+ * custom bench key …) reaches only the web view, which must then act on it.
+ */
+export function menuOwnsKey(e: { key: string; code: string; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }): boolean {
+  if (!nativeMenuActive || !e.metaKey) return false;
+  return menuKeys.has(keyId(e.shiftKey, e.altKey, e.ctrlKey, e.code)) || menuKeys.has(keyId(e.shiftKey, e.altKey, e.ctrlKey, e.key.toLowerCase()));
+}
+
 
 /**
  * Builds the macOS menu bar. Actions go through `actions()` so the menu
  * always calls the current handlers without being rebuilt on every render.
  */
 export async function installMenu(t: Translate, actions: () => MenuActions, recent: string[], version: string): Promise<void> {
-  const item = (id: string, text: string, run: (a: MenuActions) => void, accelerator?: string): MenuItemOptions => ({
-    id,
-    text,
-    accelerator,
-    action: () => run(actions()),
-  });
+  const item = (id: string, text: string, run: (a: MenuActions) => void, accelerator?: string): MenuItemOptions => {
+    if (accelerator) remember(accelerator.replace("CmdOrCtrl+", ""));
+    return { id, text, accelerator, action: () => run(actions()) };
+  };
 
   const recentItems: Item[] = recent.length
     ? [
@@ -158,6 +194,13 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
         item("photo-add", t("photo.add"), (a) => a.addPhoto()),
         item("photo-toggle", t("photo.toggle"), (a) => a.togglePhoto()),
         item("compare", t("compare.menu"), (a) => a.compare()),
+        SEP,
+        // Handled by the web view: menu shortcuts name physical US keys, and
+        // [ ] are ⌥5 ⌥6 on a German keyboard.
+        item("nav-back", `${t("nav.back")}  ⌘[`, (a) => a.back()),
+        item("nav-forward", `${t("nav.forward")}  ⌘]`, (a) => a.forward()),
+        item("bookmark-add", `${t("bookmark.add")}  ⌘D`, (a) => a.bookmark()),
+        item("ruler", `${t("ruler.title")}  L`, (a) => a.ruler()),
         SEP,
         { item: "Fullscreen" },
       ],

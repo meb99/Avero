@@ -50,7 +50,7 @@ import {
 import type { LoadError, Point, Selection, Side } from "./core/types";
 import { emitTo, listen } from "@tauri-apps/api/event";
 import { I18nContext, systemLanguage, translator, type MessageKey } from "./i18n";
-import { installMenu, nativeMenuActive, type MenuActions } from "./menu";
+import { installMenu, menuOwnsKey, type MenuActions } from "./menu";
 import { closeSchematicWindow, LINK, openSchematicWindow, type LinkedDoc } from "./schematic/link";
 import { DARK, LIGHT, withColors } from "./render/palette";
 import { setPdfPasswordPrompt, type SchematicDocument } from "./schematic/document";
@@ -1682,6 +1682,10 @@ export function App() {
     addPhoto: () => void addPhoto(),
     togglePhoto: () => setShowPhoto((v) => !v),
     compare: toggleCompare,
+    back: () => navigate(-1),
+    forward: () => navigate(1),
+    bookmark: () => void addBookmarkHere(),
+    ruler: () => model && setRuler((r) => (r ? null : { side, points: [] })),
     shortcuts: () => setDialog("help"),
     checkUpdates: () => void checkUpdates(true),
     website: () => openExternal(WEBSITE),
@@ -1792,8 +1796,18 @@ export function App() {
         viewRef.current?.zoomBy(1.5);
         return;
       }
-      // With the native menu bar, its key equivalents handle ⌘ shortcuts.
-      if (mod && nativeMenuActive) return;
+      // ⌘C with no text marked: the selected part, pin or net name (the menu's
+      // Copy may be greyed out then, so the key is handled here as well).
+      if (mod && key === "c" && !isTyping(e.target) && !(window.getSelection()?.toString() ?? "")) {
+        const text = model ? selectionText(model, selection) : undefined;
+        if (text) {
+          e.preventDefault();
+          void copyText(text).then((ok) => ok && setToast(t("copy.done", { text })));
+          return;
+        }
+      }
+      // With the native menu bar, its key equivalents handle their ⌘ shortcuts.
+      if (menuOwnsKey(e)) return;
       if (mod && key === "k") {
         e.preventDefault();
         actionsRef.current.palette();
@@ -1825,16 +1839,6 @@ export function App() {
         e.preventDefault();
         void toggleSchematic();
         return;
-      }
-      // ⌘C with no text marked: the selected part, pin or net name (the menu's
-      // Copy may be greyed out then, so the key is handled here as well).
-      if (mod && key === "c" && !isTyping(e.target) && !(window.getSelection()?.toString() ?? "")) {
-        const text = model ? selectionText(model, selection) : undefined;
-        if (text) {
-          e.preventDefault();
-          void copyText(text).then((ok) => ok && setToast(t("copy.done", { text })));
-          return;
-        }
       }
       if (mod && key === "l") {
         e.preventDefault();
