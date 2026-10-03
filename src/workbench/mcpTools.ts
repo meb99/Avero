@@ -11,7 +11,7 @@ import type { Selection } from "../core/types";
 import type { Translate } from "../i18n";
 import type { SchematicDocument } from "../schematic/document";
 import type { SchematicFacts } from "../schematic/partInfo";
-import { consoleGuides } from "./consoleGuides";
+import { consoleGuides, NOT_A_RAIL } from "./consoleGuides";
 import { judge, noPowerGuide, railVolts, type Expect } from "./diagnosis";
 import { judgeFlow, type FlowExpect } from "./flows";
 import { QUANTITIES, type Reading, type Value } from "./measure";
@@ -195,6 +195,24 @@ export const MCP_TOOLS: Tool[] = [
           .map((l) => ({ net: m.nets[l.net].name, via: m.parts[l.via].name, kind: l.kind, steps: l.depth })),
         readings: readingsFor(ctx, n.name),
       };
+    },
+  },
+  {
+    name: "list_rails",
+    title: "Power rails",
+    description:
+      "Every power rail on the board, highest voltage first: the voltage its name or the schematic states, how many pins it reaches, and its readings (reference and repair case). Good for an overview before fault finding.",
+    inputSchema: { type: "object", properties: {} },
+    run(ctx) {
+      const m = needBoard(ctx);
+      const rails = m.nets
+        .map((n) => {
+          const stated = ctx.facts?.netVoltages.get(n.name.toUpperCase());
+          return { n, volts: railVolts(n.name) ?? (stated ? railVolts(stated) : undefined) };
+        })
+        .filter(({ n, volts }) => (n.kind === "power" || volts !== undefined) && n.kind !== "ground" && n.kind !== "unconnected" && !NOT_A_RAIL.test(n.name));
+      rails.sort((a, b) => (b.volts ?? -1) - (a.volts ?? -1) || b.n.pins.length - a.n.pins.length || a.n.name.localeCompare(b.n.name));
+      return rails.slice(0, 400).map(({ n, volts }) => ({ net: n.name, volts: volts ?? null, pins: n.pins.length, readings: readingsFor(ctx, n.name) }));
     },
   },
   {

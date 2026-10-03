@@ -38,6 +38,15 @@ describe("MCP tools", () => {
     expect(net.signal_path.length).toBeGreaterThan(0);
   });
 
+  it("lists the power rails, highest first", () => {
+    const rails = call("list_rails").structuredContent as { items: { net: string; volts: number | null }[] };
+    const pp3v3 = rails.items.find((r) => r.net === "PP3V3");
+    expect(pp3v3).toMatchObject({ volts: 3.3 });
+    const volts = rails.items.map((r) => r.volts ?? -1);
+    expect(volts).toEqual([...volts].sort((a, b) => b - a));
+    expect(rails.items.some((r) => /GND/i.test(r.net))).toBe(false);
+  });
+
   it("reports unknown names as tool errors, not crashes", () => {
     const r = call("get_part", { name: "NOPE99" });
     expect(r.isError).toBe(true);

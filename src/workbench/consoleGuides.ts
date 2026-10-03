@@ -121,7 +121,7 @@ const MAIN_RAILS = /^(\+|PP_?|P(?=\d))?\d+(\.\d+)?V\d*|^(PP_?)?V(DD|CC)_?\w+$/i;
 const NOTEBOOK = /SLP_S[345]|^\+?(19|20)V/i;
 
 /** Signals named after a rail ("PP3V3_EN", "3V3_PGOOD") are no rails. */
-const NOT_A_RAIL = /_(EN|PG|PGOOD|OK|SEN|SNS|FB)$/i;
+export const NOT_A_RAIL = /_(EN|PG|PGOOD|OK|SEN|SNS|FB)$/i;
 
 /**
  * The guides for the board in view. Notebooks get the HDMI and "goes off"
