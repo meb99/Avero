@@ -2,6 +2,16 @@
 
 Alle Parser liegen in `crates/avero-formats/src/formats`. Erkannt wird zuerst am Inhalt, dann an der Endung, in derselben Reihenfolge wie OpenBoardView. Koordinaten werden nach mil (1/1000 Zoll) umgerechnet, die Y-Achse zeigt nach oben.
 
+**Prüfstand:** „Echt geprüft“ heißt: mit echten Dateien aus der Praxis abgeglichen (Bauteil-/Pinzahl, Pin-Netz-Zuordnung, Unterseite). „Nur nachgebaut geprüft“ heißt: Der Leser folgt der Formatbeschreibung und ist mit selbst erzeugten Dateien getestet, aber noch nicht mit echten Exporten – Abweichungen einzelner Programmversionen sind dort möglich. Wer eine echte Datei eines solchen Formats hat, hilft mit einem Testlauf.
+
+| Format | Prüfstand |
+| --- | --- |
+| GenCAD (Lenovo LA-G132P), BRD2/GR (Dell), BVR3 (Switch), XZZ (Switch OLED, direkt und über die GenCAD-Umwandlung) | echt geprüft |
+| Test_Link BRD (PS5) | mit echten Dateien geöffnet, ohne Referenzabgleich |
+| BDV, ASC, BVR, Panel-CAD, CST, FZ, CAE | nachgebaut geprüft nach der Vorlage von OpenBoardView |
+| KiCad, EAGLE, Altium PCB ASCII, Allegro ASCII / Fabmaster | nur nachgebaut geprüft |
+| Teboview TVW, Allegro binär, Altium binär | erkannt, nicht gelesen – Leser erst mit echten Dateien |
+
 | Format | Endung | Erkennung | Einheit | Hinweise |
 | --- | --- | --- | --- | --- |
 | Test_Link BRD | `.brd` | `str_length:` + `var_data:`, oder verschleierter Kopf `23 E2 63 28` | mil | Verschleierung: jedes Byte um 2 Bit nach links rotiert und invertiert. Pins ohne Netznamen bekommen das Netz des Nagels mit gleicher Prüfnummer (Lenovo). |
@@ -15,6 +25,7 @@ Alle Parser liegen in `crates/avero-formats/src/formats`. Erkannt wird zuerst am
 | IBM CST | `.cst` | Endung | unbekannt | Binär. Nur Bauteile, Netze und Pins; Umriss wird aus den Pins erzeugt. |
 | XinZhiZao PCB | `.pcb` | Kopf `XZZPCB`, auch XOR-verschleiert (Schlüsselbyte bei `0x10`, bis zur Marke `v6v6555v6v6`) | 1/10000 mil | Blöcke: Bögen (1) und Linien (5) auf Lage 28 = Umriss, Bauteile (7) DES-verschlüsselt, Testpads (9). Der DES-Schlüssel wird vom Nutzer eingetragen und über ein Paritätsmuster auf Tippfehler geprüft. Alle Bauteile liegen auf „Oben", wie bei OpenBoardView. Ohne Schlüssel öffnet Avero die Datei trotzdem mit allem Unverschlüsselten: Umriss, Netze und Testpads mit Namen; die Bauteile werden als verschlüsselt gemeldet. |
 | KiCad | `.kicad_pcb` | beginnt mit `(kicad_pcb` | mm, Y nach unten | S-Ausdrücke (KiCad 5 bis heute): Netze, Footprints (`footprint`/`module`) mit Referenz, Wert, Seite, Lage und Drehung, Pads (Nummer, Größe, SMD oder durchkontaktiert, Netz), Vias, Umriss aus den `Edge.Cuts`-Grafiken (Linien, Bögen, Rechtecke, Kreise, Polygone). Bohrlöcher ohne Nummer und Netz sind keine Pins. |
+| Allegro ASCII / Fabmaster | `.txt`, `.fab`, beliebig | `A!`-Kopfzeile mit `REFDES`, `NET_NAME` oder `CLASS!SUBCLASS` und `S!`-Zeilen | laut `J!`-Zeile (mils, mm, inch, micron) | Tabellen werden an ihren Spalten erkannt: Bauteile (`REFDES`, `SYM_X/Y`, `SYM_MIRROR` = Unterseite, Typ und Wert), Pins (`PIN_X/Y`, `PIN_NUMBER`, `PIN_NAME`, `NET_NAME`, `PAD_STACK_NAME`, `PIN_ROTATION`), Netzliste ohne Koordinaten, Vias und Testpunkte (`VIA_X/Y`, `TEST_POINT`), Padstacks (`PAD_NAME`, `LAYER`, `PADSHAPE1`, `PADWIDTH`, `PADHGHT`; ein Stack auf beiden Außenlagen = durchkontaktiert), Grafik (`BOARD GEOMETRY`/`OUTLINE` mit Linien, Bögen und Rechtecken als Umriss, `ETCH` mit Netz als Leiterbahnen). |
 | Altium PCB ASCII | `.PcbDoc` | enthält `KIND=Protel_Advanced_PCB`, keine OLE-Datei | mil, Y nach oben | Zeilen aus `\|SCHLÜSSEL=WERT`-Feldern: Netze, Bauteile (Bezeichner, Seite, Bibliotheksteil, Footprint), Pads mit absoluter Lage, Größe, Form und Drehung, freie Pads mit Netz als Testpunkte, Vias, Kupferbahnen und -bögen als Leiterbahnen, Umriss aus der Board-Form (`VX0`/`VY0` …) oder der Keep-out-Lage. Werte tragen ihre Einheit (`mil`, `mm`). Die binäre `.PcbDoc` (OLE) wird erkannt, aber nicht gelesen. |
 | EAGLE / Fusion 360 | `.brd` | XML mit `<eagle` | mm | Pakete der eingebetteten Bibliotheken (SMD- und THT-Pads), platzierte Elemente (Drehung `R90`, gespiegelt = Unterseite `MR90`), Signale (Pad → Netz, Vias), Umriss von Lage 20 (Dimension) samt Bögen. Binäre EAGLE-Dateien vor Version 6 werden nicht gelesen. |
 | ASUS FZ | `.fz` | Endung; unverschlüsselt, wenn ab Byte 4 ein zlib-Kopf (`78 9C`/`78 DA`) steht | mil (oder mm bei `UNIT:millimeters`) | Verschlüsselt mit einer Stromchiffre aus RC6-Runden (jedes Byte XOR dem niedrigsten Byte einer RC6-Verschlüsselung der 16 vorherigen Chiffratbytes). Der Schlüssel (44 Wörter) wird vom Nutzer eingetragen und per Wortparität geprüft. Danach zwei zlib-Ströme: Inhalt (`A!`-Blöcke `REFDES`, `NET_NAME`, `TESTVIA`, Felder mit `!` getrennt, auch Dezimalkommas) und Stückliste (Tab-getrennt, liefert die Bauteilwerte). Kein Umriss in der Datei, er wird aus den Pins erzeugt. Nachgebaut nach OpenBoardView, geprüft mit synthetischen Testdateien. |
