@@ -82,6 +82,8 @@ import {
   type DrawingKind,
   type NetStatus,
   setNetKind,
+  hideParts,
+  showParts,
 } from "./workbench/notes";
 import { MarkerEditor, PinnedLegend } from "./components/Markers";
 import { KnowledgePanel } from "./components/KnowledgePanel";
@@ -327,12 +329,26 @@ export function App() {
   const notesForModel = notes && source && notes.key === boardKey(source) ? notes : null;
   const netNames = notesForModel?.netNames;
   const netKinds = notesForModel?.netKinds;
+  const hiddenParts = notesForModel?.hidden;
   useEffect(() => {
     if (!model || !notesForModel) return;
     const kinds = model.applyNetKinds(netKinds ?? {});
-    if (model.applyNetNames(netNames ?? {}) || kinds) setNamesRevision((r) => r + 1);
+    const hidden = model.setHiddenParts(hiddenParts?.parts ?? [], hiddenParts?.mode ?? "body");
+    if (model.applyNetNames(netNames ?? {}) || kinds || hidden) setNamesRevision((r) => r + 1);
     // notesForModel only matters as "the notes of this board have loaded".
-  }, [model, netNames, netKinds, notesForModel !== null]);
+  }, [model, netNames, netKinds, hiddenParts, notesForModel !== null]);
+  /** Hides the selected part(s) (key H); a selected pin's part. */
+  const hideSelected = () => {
+    if (!model || !notesForModel) return;
+    const part = model.selectedPart(selection);
+    const parts = [...new Set([...(part !== undefined ? [part] : []), ...multiParts])];
+    if (parts.length === 0) return setToast(t("hide.nothing"));
+    const names = parts.map((i) => model.parts[i].name);
+    updateNotes((n) => hideParts(n, names));
+    setSelection(NONE);
+    setMultiParts([]);
+    setToast(t("hide.done", { names: names.slice(0, 5).join(", ") + (names.length > 5 ? " …" : "") }));
+  };
 
   // --- facts from the schematic's text ---------------------------------------
   // Values, part numbers and net voltages, read once the schematic is indexed.
@@ -1822,6 +1838,13 @@ export function App() {
       { id: "marker", label: t("marker.place"), shortcut: "M", enabled: board && notes !== null, run: () => setPlacingMarker(true) },
       { id: "ruler", label: t("ruler.title"), shortcut: "L", enabled: board, run: () => setRuler({ side, points: [] }) },
       { id: "pad-values", label: t("pad.command"), shortcut: "V", enabled: board, run: cyclePadValues },
+      { id: "hide-selected", label: t("hide.command"), shortcut: "H", enabled: board && notesForModel !== null, run: hideSelected },
+      {
+        id: "show-all-parts",
+        label: t("hide.showAllCommand"),
+        enabled: !!notesForModel?.hidden,
+        run: () => updateNotes((n) => showParts(n)),
+      },
       { id: "draw-line", label: t("draw.line"), enabled: board && notes !== null, run: () => startDrawing("line") },
       { id: "draw-area", label: t("draw.area"), enabled: board && notes !== null, run: () => startDrawing("area") },
       { id: "draw-jumper", label: t("draw.jumper"), enabled: board && notes !== null, run: () => startDrawing("jumper") },
@@ -1978,6 +2001,9 @@ export function App() {
         case "v":
         case "V":
           if (model) cyclePadValues();
+          break;
+        case "h":
+          if (model) hideSelected();
           break;
         case "Enter": {
           if (drawingRef.current?.kind === "area") {

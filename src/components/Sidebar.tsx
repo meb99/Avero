@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "./Icons";
 import { Diagnosis } from "./Diagnosis";
 import { PowerTree } from "./PowerTree";
+import { HiddenParts } from "./HiddenParts";
 import { MultiSelection } from "./MultiSelection";
 import { matchesQuery, parsePartQuery, partSpecs } from "../core/partSearch";
 import type { ObdData } from "../knowledge/obdata";
@@ -400,6 +401,7 @@ export function Sidebar({
             value={partFilter}
             onChange={(e) => setPartFilter(e.target.value)}
           />
+          {notes && <HiddenParts model={model} notes={notes} update={updateNotes} onSelect={onSelect} />}
           <div className="part-kinds">
             <select value={partKind} aria-label={t("list.partKinds")} onChange={(e) => setPartKind(e.target.value as PartRole | "all")}>
               <option value="all">{t("list.partKind.all")}</option>

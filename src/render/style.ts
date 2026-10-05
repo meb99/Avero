@@ -86,7 +86,9 @@ export function computeStyle(
     const near = visibleFrom(pin.side, view);
     const onNet = net !== undefined && pin.net === net;
     const selected = selection.kind === "pin" && selection.pin === i;
-    if (selected) {
+    if (model.pinHidden(i)) {
+      put(pinColors, i, pinBase(palette, nets[pin.net].kind), 0);
+    } else if (selected) {
       put(pinColors, i, palette.pinSelected, near ? 1 : farHighlight);
     } else if (onNet) {
       // Far-side members stay visible so you can see where the net goes.
@@ -154,7 +156,8 @@ export function computeStyle(
     const part = parts[i];
     if (!part.marker) continue;
     const near = visibleFrom(part.side, view);
-    if (i === selectedPart) put(markerColors, i, palette.partSelectedOutline, 1);
+    if (model.partHidden(i)) put(markerColors, i, palette.markerSmall, 0);
+    else if (i === selectedPart) put(markerColors, i, palette.partSelectedOutline, 1);
     else put(markerColors, i, markerSize(part) > 4 ? palette.markerChip : palette.markerSmall, near ? dim : farGhost);
   }
 
@@ -166,6 +169,13 @@ export function computeStyle(
     const near = visibleFrom(parts[i].side, view);
     const far = near ? 1 : farGhost;
     partOutlineWidths[i] = 1;
+    // Hidden parts: no body, no outline (their pads follow the hide mode above).
+    if (model.partHidden(i)) {
+      put(padMarkColors, i, palette.padMark, 0);
+      put(partFillColors, i, palette.partFill, 0);
+      put(partOutlineColors, i, palette.partOutline, 0);
+      continue;
+    }
     put(padMarkColors, i, palette.padMark, near ? dim : far);
     const pkg = parts[i].package;
     if (pkg && i !== selectedPart && !options.extraParts?.has(i)) {

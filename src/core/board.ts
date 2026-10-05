@@ -115,6 +115,38 @@ export class BoardModel {
    * Applies the user's own net names (file name -> own name). Nets missing
    * from `names` get their file name back. Returns true when a name changed.
    */
+  /** Parts hidden from view: 1 the body only (pads stay), 2 body and pads. */
+  private hiddenParts = new Uint8Array(0);
+
+  /**
+   * Hides parts by name (a shield over the pads, parts only on ground …);
+   * the net list stays as it is. True when anything changed.
+   */
+  setHiddenParts(names: readonly string[], mode: "body" | "all"): boolean {
+    const next = new Uint8Array(this.parts.length);
+    for (const name of names) {
+      const i = this.findPart(name);
+      if (i !== undefined) next[i] = mode === "all" ? 2 : 1;
+    }
+    const changed = next.length !== this.hiddenParts.length || next.some((v, i) => v !== this.hiddenParts[i]);
+    this.hiddenParts = next;
+    return changed;
+  }
+
+  /** The part's body is hidden (not drawn, not clickable). */
+  partHidden(part: number): boolean {
+    return (this.hiddenParts[part] ?? 0) > 0;
+  }
+
+  /** The pin is hidden with its part. */
+  pinHidden(pin: number): boolean {
+    return this.hiddenParts[this.pins[pin].part] === 2;
+  }
+
+  get hiddenCount(): number {
+    return this.hiddenParts.reduce((n, v) => n + (v > 0 ? 1 : 0), 0);
+  }
+
   /** The kind the file gave a net (before own corrections). */
   fileNetKind(net: number): NetKind {
     return this.fileNetKinds[net];
@@ -366,7 +398,7 @@ export class BoardModel {
     let bestDist = Infinity;
     this.pinIndex.query(probe, (i) => {
       const pin = this.pins[i];
-      if (!visibleFrom(pin.side, view)) return;
+      if (!visibleFrom(pin.side, view) || this.pinHidden(i)) return;
       const d = Math.hypot(pin.x - p.x, pin.y - p.y) - pin.radius;
       if (d <= tolerance && d < bestDist) {
         bestDist = d;
@@ -390,7 +422,7 @@ export class BoardModel {
       { minX: p.x - 12 * px, minY: p.y - 12 * px, maxX: p.x + 12 * px, maxY: p.y + 12 * px },
       (i) => {
         const part = this.parts[i];
-        if (!part.marker || !visibleFrom(part.side, view)) return;
+        if (!part.marker || !visibleFrom(part.side, view) || this.partHidden(i)) return;
         const c = partCenter(part);
         const d = Math.hypot(c.x - p.x, c.y - p.y) - markerSize(part) * px;
         if (d <= tolerance && d < bestDist) {
@@ -417,7 +449,7 @@ export class BoardModel {
     let bestArea = Infinity;
     this.partIndex.query(probe, (i) => {
       const part = this.parts[i];
-      if (!visibleFrom(part.side, view)) return;
+      if (!visibleFrom(part.side, view) || this.partHidden(i)) return;
       const b = part.bounds;
       if (p.x < b.minX || p.x > b.maxX || p.y < b.minY || p.y > b.maxY) return;
       if (part.outline.length >= 3 && !pointInPolygon(p, part.outline)) return;

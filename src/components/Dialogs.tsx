@@ -331,6 +331,7 @@ export function HelpDialog({ onClose }: { onClose(): void }) {
     ["help.pins", "help.pinsLabel"],
     ["help.ruler", "help.rulerLabel"],
     ["help.pad", "help.padLabel"],
+    ["help.hide", "help.hideLabel"],
     ["help.clear", "help.clearLabel"],
   ] as const;
   return (

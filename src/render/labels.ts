@@ -100,7 +100,7 @@ export function drawLabels(
     model.pinIndex.query(visible, (i) => {
       if (count >= MAX_PIN_LABELS) return;
       const pin = model.pins[i];
-      if (!visibleFrom(pin.side, view)) return;
+      if (!visibleFrom(pin.side, view) || model.pinHidden(i)) return;
       const r = pin.radius * s;
       if (r < 7) return;
       const p = camera.toScreen(pin);
@@ -130,7 +130,7 @@ export function drawLabels(
     const candidates: { i: number; w: number; h: number }[] = [];
     model.partIndex.query(visible, (i) => {
       const part = model.parts[i];
-      if (!visibleFrom(part.side, view)) return;
+      if (!visibleFrom(part.side, view) || model.partHidden(i)) return;
       if (part.marker) {
         // Size unknown: chips are always named, small parts once zoomed in.
         const chip = markerSize(part) > 4;
@@ -252,7 +252,7 @@ function drawPadValues(
   model.pinIndex.query(visible, (i) => {
     if (items.length >= MAX_PAD_VALUES || (selection.kind === "pin" && selection.pin === i)) return;
     const pin = model.pins[i];
-    if (visibleFrom(pin.side, view)) take(pin.x, pin.y, pin.radius, values.pin(i), false);
+    if (visibleFrom(pin.side, view) && !model.pinHidden(i)) take(pin.x, pin.y, pin.radius, values.pin(i), false);
   });
   model.testPointIndex.query(visible, (i) => {
     if (items.length >= MAX_PAD_VALUES) return;
@@ -347,7 +347,7 @@ function drawMeasured(
     seen.add(i);
     const pin = model.pins[i];
     const status = measured.get(pin.net);
-    if (status && visibleFrom(pin.side, view)) dot(pin.x, pin.y, pin.radius, status);
+    if (status && visibleFrom(pin.side, view) && !model.pinHidden(i)) dot(pin.x, pin.y, pin.radius, status);
   });
   seen.clear();
   model.testPointIndex.query(visible, (i) => {

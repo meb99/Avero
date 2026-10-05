@@ -88,6 +88,8 @@ export interface BoardNotes {
   photos?: Partial<Record<PhotoSide, BoardPhoto>>;
   /** Own net names: name in the file -> name to show (Net10 -> GND). */
   netNames?: Record<string, string>;
+  /** Parts hidden from view (shields, parts only on ground …) and whether their pads go too. */
+  hidden?: { parts: string[]; mode: "body" | "all" };
   /** Own net kinds by file net name, where the file is wrong (a signal that is ground). */
   netKinds?: Record<string, NetKind>;
   /** Notes pinned to spots on the board. */
@@ -613,6 +615,28 @@ function parseMarkers(value: unknown): BoardMarker[] | undefined {
   return out.length ? out.map((m) => ({ ...m, created: typeof m.created === "string" ? m.created : new Date(0).toISOString() })) : undefined;
 }
 
+function parseHidden(value: unknown): BoardNotes["hidden"] {
+  if (!isRecord(value) || !Array.isArray(value.parts)) return undefined;
+  const parts = [...new Set(value.parts.filter((p): p is string => typeof p === "string" && p !== ""))];
+  return parts.length ? { parts, mode: value.mode === "all" ? "all" : "body" } : undefined;
+}
+
+/** Hides parts by name (added to those hidden already). */
+export function hideParts(notes: BoardNotes, names: readonly string[]): BoardNotes {
+  const parts = [...new Set([...(notes.hidden?.parts ?? []), ...names])];
+  return { ...notes, hidden: parts.length ? { parts, mode: notes.hidden?.mode ?? "body" } : undefined, updated: now() };
+}
+
+/** Shows parts again; without names, all of them. */
+export function showParts(notes: BoardNotes, names?: readonly string[]): BoardNotes {
+  const parts = names ? (notes.hidden?.parts ?? []).filter((p) => !names.includes(p)) : [];
+  return { ...notes, hidden: parts.length ? { parts, mode: notes.hidden!.mode } : undefined, updated: now() };
+}
+
+export function setHideMode(notes: BoardNotes, mode: "body" | "all"): BoardNotes {
+  return notes.hidden ? { ...notes, hidden: { ...notes.hidden, mode }, updated: now() } : notes;
+}
+
 function parseNetKinds(value: unknown): Record<string, NetKind> | undefined {
   if (!isRecord(value)) return undefined;
   const out: Record<string, NetKind> = {};
@@ -781,6 +805,7 @@ export function parseNotes(json: string): BoardNotes | null {
       photos: parsePhotos(d.photos),
       netNames: parseNetNames(d.netNames),
       netKinds: parseNetKinds(d.netKinds),
+      hidden: parseHidden(d.hidden),
       markers: parseMarkers(d.markers),
       drawings: parseDrawings(d.drawings),
       bookmarks: parseBookmarks(d.bookmarks),
@@ -852,6 +877,7 @@ export function mergeNotes(mine: BoardNotes, theirs: BoardNotes): BoardNotes {
       mine.referencePoints || theirs.referencePoints ? mergeReadings(mine.referencePoints ?? {}, theirs.referencePoints ?? {}) : undefined,
     netNames: theirs.netNames || mine.netNames ? { ...theirs.netNames, ...mine.netNames } : undefined,
     netKinds: theirs.netKinds || mine.netKinds ? { ...theirs.netKinds, ...mine.netKinds } : undefined,
+    hidden: mine.hidden ?? theirs.hidden,
     markers: mergeMarkers(mine.markers, theirs.markers),
     drawings: mergeById(mine.drawings, theirs.drawings),
     bookmarks: mergeById(mine.bookmarks, theirs.bookmarks),

@@ -4105,3 +4105,35 @@ button.danger {
   background: color-mix(in srgb, var(--surface) 88%, transparent);
   color: var(--text);
 }
+
+.hidden-parts {
+  font-size: 12px;
+}
+
+.hidden-parts summary {
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.hidden-groups,
+.hidden-mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 6px 0;
+}
+
+.hidden-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.hidden-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
