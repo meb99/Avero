@@ -81,26 +81,53 @@ pub fn load(path: &Path, options: ParseOptions) -> Result<Board, LoadError> {
 /// XZZ boards: the direct reader first. Where it stays incomplete (parts
 /// locked without a matching key, or none read), the library converter
 /// fills in: its GenCAD output, read like any GenCAD file, has every part
-/// with pad shapes and traces. A complete direct read is kept as it is, so
-/// markers and photo alignments on such boards stay where they are.
+/// with pad shapes and traces. A direct read with all parts keeps its frame
+/// (so markers and photo alignments stay where they are) and gets the
+/// converter's tracks, layers and vias added, lined up on shared pins.
+/// Either way the two views XZZ draws side by side are folded into one
+/// board with a top and a bottom side.
 fn load_xzz(bytes: &[u8], name: Option<&str>, options: ParseOptions) -> Result<Board, LoadError> {
     let key = options.xzz_key;
     let direct = avero_formats::parse_with(bytes, name, options);
     let complete = matches!(&direct, Ok(b) if b.locked_parts == 0 && !b.parts.is_empty());
+    let convert = || {
+        avero_formats::convert::xzz_to_gencad(bytes, name.unwrap_or("board"), key)
+            .ok()
+            .and_then(|c| avero_formats::parse(&c.cad, Some("converted.gcd")).ok())
+            .filter(|b| !b.parts.is_empty())
+            .map(|mut b| {
+                avero_formats::fold::fold_side_by_side(&mut b);
+                b
+            })
+    };
     if complete {
-        return Ok(direct?);
+        let mut board = direct?;
+        avero_formats::fold::fold_side_by_side(&mut board);
+        // Parts alone are not the whole board: tracks, vias and layers come from the converter.
+        if board.traces.is_empty() {
+            if let Some(converted) = convert() {
+                match avero_formats::copper::add_copper_from(&mut board, &converted) {
+                    Ok((0, 0)) => {}
+                    Ok((traces, vias)) => board.warnings.push(format!(
+                        "Tracks ({traces}), vias ({vias}) and layers added from the GenCAD conversion."
+                    )),
+                    Err(e) => board.warnings.push(format!("Tracks of the GenCAD conversion left out: {e}.")),
+                }
+            }
+        }
+        return Ok(board);
     }
-    let converted = avero_formats::convert::xzz_to_gencad(bytes, name.unwrap_or("board"), key)
-        .ok()
-        .and_then(|c| avero_formats::parse(&c.cad, Some("converted.gcd")).ok())
-        .filter(|b| !b.parts.is_empty());
-    match (direct, converted) {
+    match (direct, convert()) {
         (_, Some(mut board)) => {
             board.format = avero_formats::FormatId::Xzz;
             board.format_name = format!("{} → GenCAD", avero_formats::FormatId::Xzz.display_name());
             Ok(board)
         }
-        (direct, None) => Ok(direct?),
+        (direct, None) => {
+            let mut board = direct?;
+            avero_formats::fold::fold_side_by_side(&mut board);
+            Ok(board)
+        }
     }
 }
 

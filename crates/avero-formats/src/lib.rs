@@ -12,7 +12,9 @@
 
 mod builder;
 pub mod convert;
+pub mod copper;
 pub mod demo;
+pub mod fold;
 pub mod formats;
 mod infer;
 pub mod model;
