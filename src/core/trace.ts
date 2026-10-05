@@ -66,7 +66,7 @@ export function partLinks(model: BoardModel, part: number, net: number): { kind:
   const nets = partNets(model, part);
   const others = nets.filter((n) => n !== net && usable(model, n));
   if (others.length === 0) return null;
-  if (passesThrough(p.name, p.device, p.pinCount)) return { kind: "through", nets: others };
+  if (passesThrough(p.name, p.device, p.pinCount, nets.length)) return { kind: "through", nets: others };
   const role = partRole(p.name, p.device, p.pinCount);
   switch (role) {
     case "diode":

@@ -73,8 +73,9 @@ export function isZeroOhm(device: string | undefined): boolean {
  * Parts that join their two nets into one for tracing a supply or signal:
  * coils, ferrites, fuses, jumpers and 0 Ω resistors.
  */
-export function passesThrough(name: string, device: string | undefined, pinCount: number): boolean {
-  if (pinCount !== 2) return false;
-  const role = partRole(name, device, pinCount);
+export function passesThrough(name: string, device: string | undefined, pinCount: number, distinctNets?: number): boolean {
+  // Two pins, or a power coil or fuse with two pads per side (4 pins on 2 nets).
+  if (pinCount !== 2 && !(pinCount <= 4 && distinctNets === 2)) return false;
+  const role = partRole(name, device, 2);
   return role === "inductor" || role === "ferrite" || role === "fuse" || role === "jumper" || (role === "resistor" && isZeroOhm(device));
 }

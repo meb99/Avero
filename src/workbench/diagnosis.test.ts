@@ -32,6 +32,10 @@ describe("fault-finding guide", () => {
     expect(railVolts("+5VALW")).toBe(5);
     expect(railVolts("+1.05VALW")).toBe(1.05);
     expect(railVolts("+1V8_MAIN")).toBe(1.8);
+    expect(railVolts("3D3V_S5")).toBe(3.3);
+    expect(railVolts("1D05V_VCCPRIM_CORE")).toBe(1.05);
+    expect(railVolts("0D95V_VCCIO")).toBe(0.95);
+    expect(railVolts("DDR_VTT")).toBeUndefined();
     expect(railVolts("+19VB")).toBe(19);
     expect(railVolts("+0.6VSP")).toBe(0.6);
     expect(railVolts("PP1V8_S0")).toBe(1.8);

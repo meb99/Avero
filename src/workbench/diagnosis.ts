@@ -44,12 +44,14 @@ export interface DiagStep {
 
 /** Nominal voltage a rail name states: "+3VALW" 3.3, "+1.05VS" 1.05, "+1V8_MAIN" 1.8, "+19VB" 19. */
 export function railVolts(name: string): number | undefined {
-  // "+3VALW", or "PP1V8_S0" / "P5V_HDMI" as Apple and console boards name rails.
-  const m = /^(?:\+|PP_?|P(?=\d))?(\d+(?:\.\d+)?)V(\d+)?/i.exec(name.trim());
+  // "+3VALW", "+1.05VS", "PP1V8_S0" / "P5V_HDMI" as Apple and console boards
+  // name rails, and "3D3V_S5" / "1D05V" with D for the decimal point (Dell).
+  const m = /^(?:\+|PP_?|P(?=\d))?(\d+)(?:[.D](\d+))?V(\d+)?/i.exec(name.trim());
   if (!m) return undefined;
-  const volts = m[2] ? Number(`${m[1]}.${m[2]}`) : Number(m[1]);
+  const fraction = m[2] ?? m[3];
+  const volts = fraction ? Number(`${m[1]}.${fraction}`) : Number(m[1]);
   // "3V" rails are 3.3 V.
-  if (volts === 3 && !m[2]) return 3.3;
+  if (volts === 3 && !fraction) return 3.3;
   return Number.isFinite(volts) && volts > 0 && volts < 60 ? volts : undefined;
 }
 

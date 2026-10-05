@@ -46,5 +46,8 @@ describe("part roles across naming schemes", () => {
     expect(passesThrough("R12", "R_0402", 2)).toBe(false);
     expect(passesThrough("C12", undefined, 2)).toBe(false);
     expect(passesThrough("PL1", undefined, 3)).toBe(false);
+    // Power coils with two pads per side: four pins on two nets.
+    expect(passesThrough("PL701", "L_5X5X3_M", 4, 2)).toBe(true);
+    expect(passesThrough("PL701", "L_5X5X3_M", 4, 3)).toBe(false);
   });
 });

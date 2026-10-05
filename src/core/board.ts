@@ -191,12 +191,17 @@ export class BoardModel {
   }
 
   /**
-   * True for two-pin parts that connect their nets for tracing purposes:
-   * coils, ferrites, fuses, net ties, jumpers and 0 Ω resistors.
+   * True for two-terminal parts that connect their nets for tracing
+   * purposes: coils (also with two pads per side), ferrites, fuses, net
+   * ties, jumpers and 0 Ω resistors.
    */
   isSeriesPart(part: number): boolean {
     const p = this.parts[part];
-    return passesThrough(p.name, p.device, p.pinCount);
+    if (p.pinCount === 2) return passesThrough(p.name, p.device, 2);
+    if (p.pinCount > 4) return false;
+    const nets = new Set<number>();
+    for (let i = p.firstPin; i < p.firstPin + p.pinCount; i++) nets.add(this.pins[i].net);
+    return passesThrough(p.name, p.device, p.pinCount, nets.size);
   }
 
   /**

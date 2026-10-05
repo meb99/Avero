@@ -3995,3 +3995,100 @@ button.danger {
   flex: 1;
   min-width: 0;
 }
+
+/* Power tree */
+
+.power-tree {
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+
+.power-tree summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.pt-hint {
+  font-size: 12px;
+  margin: 6px 0;
+}
+
+.pt-tree,
+.pt-tree ul,
+.pt-suspects ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pt-tree ul {
+  padding-left: 14px;
+  border-left: 1px solid var(--border);
+  margin-left: 4px;
+}
+
+.pt-tree li {
+  padding: 2px 0;
+}
+
+.pt-supply,
+.pt-converter {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.pt-supply > .link {
+  font-weight: 600;
+}
+
+.pt-volts {
+  font-size: 11px;
+  color: var(--power);
+  font-variant-numeric: tabular-nums;
+}
+
+.pt-measured {
+  font-size: 11px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--surface-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.pt-ok .pt-measured {
+  background: color-mix(in srgb, var(--ok, #2e7d32) 25%, transparent);
+}
+
+.pt-bad .pt-measured {
+  background: color-mix(in srgb, var(--danger, #c62828) 30%, transparent);
+}
+
+.pt-bad > .link {
+  color: var(--danger, #c62828);
+}
+
+.pt-kind {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--surface-3);
+  color: var(--text-muted);
+}
+
+.pt-device {
+  font-size: 11px;
+}
+
+.pt-suspects {
+  border: 1px solid var(--danger, #c62828);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  margin: 6px 0 10px;
+  font-size: 13px;
+}

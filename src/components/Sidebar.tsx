@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "./Icons";
 import { Diagnosis } from "./Diagnosis";
+import { PowerTree } from "./PowerTree";
 import { MultiSelection } from "./MultiSelection";
 import { matchesQuery, parsePartQuery, partSpecs } from "../core/partSearch";
 import type { ObdData } from "../knowledge/obdata";
@@ -360,6 +361,7 @@ export function Sidebar({
 
       {tab === "diagnose" && (
         <div className="panel scroll">
+          <PowerTree model={model} notes={notes} schematicFacts={schematicFacts} onSelect={onSelect} />
           <Diagnosis model={model} notes={notes} update={updateNotes} onSelect={onSelect} schematicFacts={schematicFacts} selection={selection} />
         </div>
       )}
