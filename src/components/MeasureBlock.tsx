@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n, type MessageKey } from "../i18n";
-import { compare, conditionsFit, formatValue, parseValue, QUANTITIES, type HistoryEntry, type Quantity, type Reading, type Value } from "../workbench/measure";
+import { compare, condOf, conditionsFit, formatValue, parseValue, QUANTITIES, type HistoryEntry, type Quantity, type Reading, type Value } from "../workbench/measure";
 import { conditionsText } from "./Conditions";
-import { activeCase, addCase, setReading, setValue, type BoardNotes, type Target } from "../workbench/notes";
+import { activeCase, addCase, clearHistory, setReading, setValue, type BoardNotes, type Target } from "../workbench/notes";
 import { METER_VALUE_EVENT, readMeter, useMeter } from "../workbench/meter";
 
 interface Props {
@@ -25,18 +25,25 @@ export function ValueInput({
   onChange,
   status,
   label,
+  bind,
 }: {
   value: Value | undefined;
   quantity: Quantity;
   onChange(v: Value | undefined): void;
   status?: "ok" | "deviation" | "mismatch";
   label: string;
+  /** What the field stands for (board, target, net, quantity): a reading that arrives late goes there, not to whatever the field shows by then. */
+  bind?: string;
 }) {
   const { t, lang } = useI18n();
   const shown = formatValue(value, quantity, lang);
   const [text, setText] = useState(shown);
   const [invalid, setInvalid] = useState(false);
   const editing = useRef(false);
+  // Escape: the blur that follows must not save what was typed.
+  const cancelled = useRef(false);
+  const bindRef = useRef(bind);
+  bindRef.current = bind;
   const inputRef = useRef<HTMLInputElement>(null);
   const meter = useMeter();
   const onChangeRef = useRef(onChange);
@@ -63,6 +70,12 @@ export function ValueInput({
 
   const commit = () => {
     editing.current = false;
+    if (cancelled.current) {
+      cancelled.current = false;
+      setInvalid(false);
+      setText(shown);
+      return;
+    }
     if (text === shown) {
       setInvalid(false);
       return;
@@ -85,6 +98,7 @@ export function ValueInput({
       value={text}
       aria-label={label}
       aria-invalid={invalid}
+      data-bind={bind}
       title={invalid ? t("measure.invalid") : status ? t(`measure.status.${status}`) : undefined}
       spellCheck={false}
       onFocus={(e) => {
@@ -96,9 +110,8 @@ export function ValueInput({
       onKeyDown={(e) => {
         if (e.key === "Enter") e.currentTarget.blur();
         if (e.key === "Escape") {
-          editing.current = false;
-          setInvalid(false);
-          setText(shown);
+          e.stopPropagation();
+          cancelled.current = true;
           e.currentTarget.blur();
         }
       }}
@@ -113,7 +126,15 @@ export function ValueInput({
         disabled={meter.busy}
         title={t("meter.take")}
         aria-label={`${label}: ${t("meter.take")}`}
-        onClick={() => void readMeter(quantity).then(take, () => {})}
+        onClick={() => {
+          // The reading belongs to the field as it was when asked for.
+          const to = onChangeRef.current;
+          const asked = bindRef.current;
+          void readMeter(quantity).then(
+            (v) => (bindRef.current === asked ? take(v) : to(v)),
+            () => {},
+          );
+        }}
       >
         ⇣
       </button>
@@ -132,6 +153,10 @@ export function MeasureBlock({ net, notes, update, tolerance }: Props) {
   const note = (target ? mine?.note : ref?.note) ?? "";
   const [noteText, setNoteText] = useState(note);
   useEffect(() => setNoteText(note), [note, net]);
+  // Changes go to this board only, even when they land after a switch.
+  const key = notes.key;
+  const change = (f: (n: BoardNotes) => BoardNotes) => update((n) => (n.key === key ? f(n) : n));
+  const bindOf = (to: Target, q: Quantity) => `${key}|${to === "reference" ? "ref" : to.caseId}|${net}|${q}`;
 
   return (
     <section className="details-section measure">
@@ -153,7 +178,8 @@ export function MeasureBlock({ net, notes, update, tolerance }: Props) {
                   value={ref?.[q]}
                   quantity={q}
                   label={`${t(LABEL[q])} · ${t("measure.reference")}`}
-                  onChange={(v) => update((n) => setValue(n, "reference", net, q, v))}
+                  bind={bindOf("reference", q)}
+                  onChange={(v) => change((n) => setValue(n, "reference", net, q, v))}
                 />
               </td>
               {target && current && (
@@ -162,12 +188,13 @@ export function MeasureBlock({ net, notes, update, tolerance }: Props) {
                     value={mine?.[q]}
                     quantity={q}
                     label={`${t(LABEL[q])} · ${current.title}`}
+                    bind={bindOf(target, q)}
                     status={
-                      ref?.[q] !== undefined && mine?.[q] !== undefined && !conditionsFit(ref.cond, mine.cond, q)
+                      ref?.[q] !== undefined && mine?.[q] !== undefined && !conditionsFit(condOf(ref, q), condOf(mine, q), q)
                         ? "mismatch"
                         : compare(ref?.[q], mine?.[q], q, tolerance)
                     }
-                    onChange={(v) => update((n) => setValue(n, target, net, q, v))}
+                    onChange={(v) => change((n) => setValue(n, target, net, q, v))}
                   />
                 </td>
               )}
@@ -175,29 +202,29 @@ export function MeasureBlock({ net, notes, update, tolerance }: Props) {
           ))}
         </tbody>
       </table>
-      {(ref?.cond || mine?.cond) && (
+      {(conditionsLine(ref, t) || (current && conditionsLine(mine, t))) && (
         <p className="muted measure-cond">
-          {ref?.cond && (
+          {conditionsLine(ref, t) && (
             <span>
-              {t("measure.reference")}: {conditionsText(ref.cond, t)}
+              {t("measure.reference")}: {conditionsLine(ref, t)}
             </span>
           )}
-          {mine?.cond && current && (
+          {current && conditionsLine(mine, t) && (
             <span>
-              {current.title}: {conditionsText(mine.cond, t)}
+              {current.title}: {conditionsLine(mine, t)}
             </span>
           )}
         </p>
       )}
-      <History reading={ref} title={t("measure.reference")} lang={lang} />
-      {current && <History reading={mine} title={current.title} lang={lang} />}
+      <History reading={ref} title={t("measure.reference")} lang={lang} onClear={() => change((n) => clearHistory(n, "reference", net))} />
+      {current && target && <History reading={mine} title={current.title} lang={lang} onClear={() => change((n) => clearHistory(n, target, net))} />}
       <input
         className="note-input"
         placeholder={t("measure.note")}
         value={noteText}
         onChange={(e) => setNoteText(e.target.value)}
         onBlur={() => {
-          if (noteText !== note) update((n) => setReading(n, noteTarget, net, { note: noteText || undefined }));
+          if (noteText !== note) change((n) => setReading(n, noteTarget, net, { note: noteText || undefined }));
         }}
         onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
       />
@@ -215,8 +242,22 @@ export function MeasureBlock({ net, notes, update, tolerance }: Props) {
 
 const SHORT: Record<Quantity, string> = { diode: "D", voltage: "U", resistance: "R" };
 
+/** Conditions and origin of each value: "D aus · rot an Masse; U an (aus Fall 2)". */
+function conditionsLine(r: Reading | undefined, t: ReturnType<typeof useI18n>["t"]): string {
+  if (!r) return "";
+  const parts: string[] = [];
+  for (const q of QUANTITIES) {
+    if (r[q] === undefined) continue;
+    const cond = conditionsText(condOf(r, q), t);
+    const origin = r.origin?.[q];
+    if (!cond && !origin) continue;
+    parts.push(`${SHORT[q]} ${[cond, origin && t("measure.origin", { from: origin })].filter(Boolean).join(" ")}`);
+  }
+  return parts.join("; ");
+}
+
 /** Earlier values of a reading, newest first, with the current one on top: before and after a repair. */
-function History({ reading, title, lang }: { reading: Reading | undefined; title: string; lang: string }) {
+function History({ reading, title, lang, onClear }: { reading: Reading | undefined; title: string; lang: string; onClear(): void }) {
   const { t } = useI18n();
   const history = reading?.history ?? [];
   if (history.length === 0 || !reading) return null;
@@ -227,7 +268,7 @@ function History({ reading, title, lang }: { reading: Reading | undefined; title
       .map((q) => `${SHORT[q]} ${formatValue(r[q], q, lang)}`)
       .join(" · ");
   const entries: { at?: string; text: string; cond: string; now?: boolean }[] = [
-    { at: reading.updated, text: values(reading), cond: conditionsText(reading.cond, t), now: true },
+    ...(QUANTITIES.some((q) => reading[q] !== undefined) ? [{ at: reading.updated, text: values(reading), cond: conditionsLine(reading, t), now: true }] : []),
     ...[...history].reverse().map((h) => ({ at: h.at, text: values(h), cond: conditionsText(h.cond, t) })),
   ];
   return (
@@ -243,6 +284,9 @@ function History({ reading, title, lang }: { reading: Reading | undefined; title
           </li>
         ))}
       </ol>
+      <button className="link danger-link" onClick={onClear}>
+        {t("measure.clearHistory")}
+      </button>
     </details>
   );
 }

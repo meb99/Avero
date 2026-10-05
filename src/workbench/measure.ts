@@ -42,10 +42,26 @@ export interface Reading {
   note?: string;
   /** ISO timestamp of the last change. */
   updated?: string;
-  /** Conditions the current values were taken under. */
+  /** Conditions each current value was taken under. */
+  conds?: Partial<Record<Quantity, Conditions>>;
+  /** When each current value was taken. */
+  at?: Partial<Record<Quantity, string>>;
+  /** Where a value came from when it was not typed here ("Fall: Lenovo 1"). */
+  origin?: Partial<Record<Quantity, string>>;
+  /** Conditions of all values, as files before 0.9.24 stored them; read through `condOf`. */
   cond?: Conditions;
   /** Earlier values, oldest first. */
   history?: HistoryEntry[];
+}
+
+/** The conditions a reading's value of `q` was taken under. */
+export function condOf(r: Reading | undefined, q: Quantity): Conditions | undefined {
+  return r?.conds?.[q] ?? r?.cond;
+}
+
+/** When a reading's value of `q` was taken. */
+export function takenAt(r: Reading | undefined, q: Quantity): string | undefined {
+  return r?.at?.[q] ?? r?.updated;
 }
 
 /** Most earlier values kept per reading. */
@@ -73,7 +89,10 @@ export function parseValue(input: string, q: Quantity): Value | undefined | null
   if (OPEN_WORDS.has(upper) && (upper !== "1" || q === "diode")) return "OL";
   if (/^(SHORT|KURZ|KURZSCHLUSS)$/.test(upper)) return 0;
 
-  const s = raw.replace(/\s+/g, "").replace(",", ".").replace(/(ohm|Ω|ω)$/i, "").replace(/V$/i, "");
+  const compact = raw.replace(/\s+/g, "").replace(",", ".");
+  // A unit typed out ("4V", "452mV", "10Ω") is taken as given; only bare numbers are guessed.
+  const unitGiven = /(ohm|Ω|ω|V)$/i.test(compact);
+  const s = compact.replace(/(ohm|Ω|ω)$/i, "").replace(/V$/i, "");
 
   // Resistor code notation: 4k7, 2R2, 1M5.
   const code = /^(\d+)([RkKM])(\d+)$/.exec(s);
@@ -91,7 +110,7 @@ export function parseValue(input: string, q: Quantity): Value | undefined | null
   // "m" is milli; "M" is mega (only meaningful for resistance).
   if (unit === "M" && q !== "resistance") return null;
   value *= PREFIX[unit] ?? 1;
-  if (q === "diode" && unit === "" && Math.abs(value) > 3) value /= 1000;
+  if (q === "diode" && unit === "" && !unitGiven && Math.abs(value) > 3) value /= 1000;
   return value;
 }
 
@@ -151,7 +170,7 @@ export function compareReadings(
   let result: Comparison | "mismatch" | undefined;
   for (const q of QUANTITIES) {
     if (reference?.[q] === undefined || measured?.[q] === undefined) continue;
-    if (!conditionsFit(reference.cond, measured.cond, q)) {
+    if (!conditionsFit(condOf(reference, q), condOf(measured, q), q)) {
       result ??= "mismatch";
       continue;
     }

@@ -47,6 +47,17 @@ describe("MCP tools", () => {
     expect(rails.items.some((r) => /GND/i.test(r.net))).toBe(false);
   });
 
+  it("compares readings only under fitting conditions", () => {
+    const notes = { ...emptyNotes("k", "test"), reference: { PP3V3: { voltage: 0, conds: { voltage: { power: "off" as const } } } } };
+    notes.cases = [{ id: "c", title: "Fall", created: "", notes: "", readings: { PP3V3: { voltage: 3.3, conds: { voltage: { power: "on" as const } } } } }];
+    notes.activeCase = "c";
+    const r = answerMcp({ method: "tools/call", params: { name: "get_measurements" } }, { ...ctx, notes }) as { structuredContent: { readings: Record<string, unknown>[] } };
+    const row = r.structuredContent.readings[0];
+    expect(row.differs).toBeUndefined();
+    expect(row.not_comparable).toEqual(["voltage"]);
+    expect(row.reference).toMatchObject({ voltage_conditions: { power: "off" } });
+  });
+
   it("reports unknown names as tool errors, not crashes", () => {
     const r = call("get_part", { name: "NOPE99" });
     expect(r.isError).toBe(true);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AskHost, askText } from "./components/Ask";
+import { AskHost, askConfirm, askText } from "./components/Ask";
 import { copyText } from "./core/clipboard";
 import { netsCsv, partsCsv, readingsCsv } from "./workbench/csvExport";
 import { answerMcp, type McpContext } from "./workbench/mcpTools";
@@ -103,7 +103,7 @@ import { guessCategory } from "./workbench/catalog";
 import { PIN_COLORS } from "./render/palette";
 import { alignFromPoints, fitToBounds } from "./workbench/photo";
 import { boardInPicture, loadPhotoImage, renderPageImage } from "./workbench/photoImage";
-import { useBoardNotes } from "./workbench/store";
+import { saveAllNotes, useBoardNotes } from "./workbench/store";
 
 const NONE: Selection = { kind: "none" };
 const NO_NETS: number[] = [];
@@ -311,7 +311,12 @@ export function App() {
     () => (model && compareModel ? mapSelection(model, compareModel, selection) : NONE),
     [model, compareModel, selection],
   );
-  const { notes, update: updateNotes, undo: undoNotes, redo: redoNotes, error: notesError } = useBoardNotes(source);
+  const { notes, update: updateNotes, undo: undoNotes, redo: redoNotes, error: notesError, notice: notesNotice } = useBoardNotes(source);
+  // A damaged notes file, a recovered snapshot or notes taken over from an older key: say so.
+  useEffect(() => {
+    if (notesNotice) setToast(t(`notes.${notesNotice.kind}`, { detail: notesNotice.detail }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notesNotice]);
 
   // Own net names (Net10 -> GND) live in the board notes and are applied to
   // the model in place; the revision makes name-sorted views refresh.
@@ -404,15 +409,12 @@ export function App() {
     }
   };
 
-  /** Deletes a stored photo unless the other side still shows it. */
-  const dropPhotoFile = (file: string, keep: (string | undefined)[]) => {
-    if (!keep.includes(file)) void invoke("remove_photo", { path: file }).catch(() => {});
-  };
 
   /**
    * The board picture in the open PDF (some boardviews come with one) as
-   * the photo of both sides: laid onto the board outline right away when
-   * the shapes match, otherwise aligned by hand.
+   * the photo of the side in view: laid onto the board outline right away
+   * when the shapes match, otherwise aligned by hand. The other side keeps
+   * its picture.
    */
   const photoFromPdf = async () => {
     if (!model || !notes || !schematic) return;
@@ -420,7 +422,7 @@ export function App() {
       const page = schematicViewRef.current?.currentPage() ?? 0;
       const { canvas, png } = await renderPageImage(schematic, page);
       const file = await invoke<string>("store_photo_png", png, {
-        headers: { "x-key": encodeURIComponent(notes.key), "x-side": "top" },
+        headers: { "x-key": encodeURIComponent(notes.key), "x-side": side },
       });
       const box = boardInPicture(canvas);
       const matrix = box && fitToBounds(box, canvas.width, model.board.bounds);
@@ -430,9 +432,9 @@ export function App() {
         return;
       }
       const old = notes.photos ?? {};
-      const opacity = old.top?.opacity ?? old.bottom?.opacity ?? 0.8;
-      updateNotes((n) => setPhoto(setPhoto(n, "top", { file, matrix, opacity }), "bottom", { file, matrix, opacity }));
-      for (const previous of [old.top?.file, old.bottom?.file]) if (previous) dropPhotoFile(previous, [file]);
+      const opacity = old[side]?.opacity ?? 0.8;
+      // The picture shows the board as drawn from this side; the replaced file stays for undo.
+      updateNotes((n) => setPhoto(n, side, { file, matrix, opacity }));
       setShowPhoto(true);
       setPhotoPane(true);
       setToast(t("photo.pdfDone"));
@@ -488,15 +490,15 @@ export function App() {
     }
     const previous = notes?.photos?.[a.side];
     updateNotes((n) => setPhoto(n, a.side, { file: a.file, ...alignment, opacity: previous?.opacity ?? 0.8 }));
-    if (previous && previous.file !== a.file) dropPhotoFile(previous.file, [notes?.photos?.[a.side === "top" ? "bottom" : "top"]?.file]);
+    // The replaced picture file stays: undo and saved versions may bring it back.
     setAligning(null);
     setShowPhoto(true);
   };
 
   const removePhoto = () => {
     if (!storedPhoto) return;
+    // The file stays for undo and versions; Avero clears unused photos after a month.
     updateNotes((n) => setPhoto(n, side, undefined));
-    dropPhotoFile(storedPhoto.file, [notes?.photos?.[side === "top" ? "bottom" : "top"]?.file]);
   };
 
   // Measurement state by net index for the board overlay.
@@ -1022,6 +1024,7 @@ export function App() {
     facts: schematicFacts,
     schematic,
     t,
+    tolerance: settings.tolerance,
     select: (sel) => select(sel, true),
   };
   const mcpEnabled = !!settings.mcp?.enabled;
@@ -1291,8 +1294,14 @@ export function App() {
         const field = document.activeElement;
         const quantity = field instanceof HTMLInputElement && field.classList.contains("value-input") ? (field.dataset.quantity as Quantity | undefined) : undefined;
         if (quantity && meterState().connected && field instanceof HTMLInputElement && !field.value.trim()) {
+          // The field may show another net by the time the meter answers: then the value is dropped.
+          const bind = field.dataset.bind;
           void readMeter(quantity).then(
             (v) => {
+              if (!field.isConnected || field.dataset.bind !== bind) {
+                setToast(t("meter.moved"));
+                return;
+              }
               field.dispatchEvent(new CustomEvent(METER_VALUE_EVENT, { detail: v }));
               field.blur();
               window.setTimeout(() => shortcutRef.current("nextPoint"), 50);
@@ -1642,6 +1651,23 @@ export function App() {
 
   const openExternal = (url: string) => void openUrl(url).catch(() => window.open(url, "_blank"));
 
+  /** Writes unsaved readings and notes, then ends the app; asks when saving fails. */
+  const saveAndQuit = async () => {
+    void invoke("quit_ack").catch(() => {});
+    const saved = await Promise.race([saveAllNotes(), new Promise<boolean>((r) => window.setTimeout(() => r(false), 4000))]);
+    if (!saved && !(await askConfirm(t("quit.unsaved"), { ok: t("quit.anyway"), danger: true }))) {
+      await invoke("quit_cancel").catch(() => {});
+      return;
+    }
+    await invoke("quit_app").catch(() => {});
+  };
+  useEffect(() => {
+    const off = listen("app:save-and-quit", () => void saveAndQuit());
+    return () => void off.then((f) => f()).catch(() => {});
+    // saveAndQuit only reads module state and t.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t]);
+
   const actions: MenuActions = {
     open: () => void openDialog(),
     openRecent: (path) => void openPath(path),
@@ -1697,6 +1723,7 @@ export function App() {
     ruler: () => model && setRuler((r) => (r ? null : { side, points: [] })),
     shortcuts: () => setDialog("help"),
     checkUpdates: () => void checkUpdates(true),
+    quit: () => void saveAndQuit(),
     website: () => openExternal(WEBSITE),
   };
   const actionsRef = useRef(actions);

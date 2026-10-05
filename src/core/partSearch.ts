@@ -69,7 +69,8 @@ function queryValue(token: string): { v: number; unit: Unit } | undefined {
  */
 export function parsePartQuery(input: string): PartQuery | null {
   // "10 µF" → "10µF", "16 V" → "16V", "≥ 16" → "≥16".
-  const text = input.replace(/,/g, " ").replace(/(\d)\s+(?=[a-zA-ZµΩ%])/g, "$1").replace(/([≥≤<>]=?)\s+(?=\d)/g, "$1");
+  // A comma between digits is a decimal comma ("4,7k" = 4.7 kΩ); other commas separate words.
+  const text = input.replace(/(\d),(?=\d)/g, "$1.").replace(/,/g, " ").replace(/(\d)\s+(?=[a-zA-ZµΩ%])/g, "$1").replace(/([≥≤<>]=?)\s+(?=\d)/g, "$1");
   const tokens = text.split(/\s+/).filter(Boolean);
   const q: PartQuery = { words: [] };
   let found = false;

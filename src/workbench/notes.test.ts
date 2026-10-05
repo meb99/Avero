@@ -7,6 +7,7 @@ import {
   addMarker,
   boardKey,
   caseToReference,
+  clearHistory,
   emptyNotes,
   linkObdata,
   mergeNotes,
@@ -19,6 +20,7 @@ import {
   setValue,
   updateMarker,
 } from "./notes";
+import { condOf } from "./measure";
 
 describe("boardKey", () => {
   it("uses the board number so formats of one board share notes", () => {
@@ -27,6 +29,12 @@ describe("boardKey", () => {
     expect(boardKey({ name: "x", path: "/Boards/X1C6 NM-B481/pins.asc" })).toBe("nm-b481");
     expect(boardKey({ name: "x", path: "/tmp/myboard.brd" })).toBe("myboard");
     expect(boardKey({ name: "Avero Demo" })).toBe("avero-demo");
+    // The board number wins over words with a digit; revisions stay apart.
+    expect(boardKey({ name: "x", path: "/PS5/PlayStation5 EDM-010.brd" })).toBe("edm-010");
+    expect(boardKey({ name: "x", path: "/PS5/PlayStation5 EDM-020.brd" })).toBe("edm-020");
+    // Generic names take the folder along.
+    expect(boardKey({ name: "x", path: "/Boards/Trinity/Board.brd" })).toBe("trinity-board");
+    expect(boardKey({ name: "x", path: "/Boards/Other/Board.brd" })).toBe("other-board");
   });
 });
 
@@ -37,6 +45,10 @@ describe("board notes", () => {
     let n = setValue(base, "reference", "PP3V3", "voltage", 3.3);
     expect(n.reference.PP3V3.voltage).toBe(3.3);
     n = setValue(n, "reference", "PP3V3", "voltage", undefined);
+    // The cleared value stays in the history; forgetting it is a step of its own.
+    expect(n.reference.PP3V3.voltage).toBeUndefined();
+    expect(n.reference.PP3V3.history?.[0].voltage).toBe(3.3);
+    n = clearHistory(n, "reference", "PP3V3");
     expect(n.reference.PP3V3).toBeUndefined();
     expect(base.reference).toEqual({});
   });
@@ -172,13 +184,64 @@ describe("measuring conditions and history", () => {
     n = setConditions(n, target, { polarity: "black-gnd", power: "off", meter: "XDM1241" });
     n = setValue(n, "reference", "PP3V3", "diode", 0.42);
     n = setValue(n, target, "PP3V3", "diode", 0.7);
-    expect(n.reference.PP3V3.cond).toEqual({ polarity: "red-gnd", power: "off" });
-    expect(n.cases[0].readings.PP3V3.cond?.meter).toBe("XDM1241");
+    expect(condOf(n.reference.PP3V3, "diode")).toEqual({ polarity: "red-gnd", power: "off" });
+    expect(condOf(n.cases[0].readings.PP3V3, "diode")?.meter).toBe("XDM1241");
     expect(netStatuses(n, 0.1).get("PP3V3")).toBe("mismatch");
     // Same polarity: compared again, and the deviation shows.
     n = setConditions(n, target, { polarity: "red-gnd", power: "off" });
     n = setValue(n, target, "PP3V3", "diode", 0.71);
     expect(netStatuses(n, 0.1).get("PP3V3")).toBe("deviation");
+  });
+
+  it("keeps each quantity's own conditions", () => {
+    let n = base();
+    const target = { caseId: n.activeCase! };
+    n = setConditions(n, target, { power: "off" });
+    n = setValue(n, target, "PP3V3", "diode", 0.45);
+    n = setConditions(n, target, { power: "on" });
+    n = setValue(n, target, "PP3V3", "voltage", 3.3);
+    const r = n.cases[0].readings.PP3V3;
+    expect(condOf(r, "diode")).toEqual({ power: "off" });
+    expect(condOf(r, "voltage")).toEqual({ power: "on" });
+  });
+
+  it("takes the same number under new conditions as a new measurement", () => {
+    let n = base();
+    const target = { caseId: n.activeCase! };
+    n = setConditions(n, target, { power: "off" });
+    n = setValue(n, target, "PP3V3", "voltage", 0);
+    n = setConditions(n, target, { power: "on" });
+    n = setValue(n, target, "PP3V3", "voltage", 0);
+    const r = n.cases[0].readings.PP3V3;
+    expect(condOf(r, "voltage")).toEqual({ power: "on" });
+    expect(r.history?.at(-1)).toMatchObject({ voltage: 0, cond: { power: "off" } });
+  });
+
+  it("takes a case as reference with its conditions, keeping the old reference in the history", () => {
+    let n = base();
+    const target = { caseId: n.activeCase! };
+    n = setConditions(n, "reference", { power: "off" });
+    n = setValue(n, "reference", "PP3V3", "voltage", 0);
+    n = setConditions(n, target, { power: "on" });
+    n = setValue(n, target, "PP3V3", "voltage", 3.3);
+    n = caseToReference(n, target.caseId);
+    const r = n.reference.PP3V3;
+    expect(r.voltage).toBe(3.3);
+    expect(condOf(r, "voltage")).toEqual({ power: "on" });
+    expect(r.origin?.voltage).toBe(n.cases[0].title);
+    expect(r.history?.at(-1)).toMatchObject({ voltage: 0, cond: { power: "off" } });
+  });
+
+  it("reads old shared conditions and rejects broken readings", () => {
+    const old = { ...base(), reference: { PP3V3: { diode: 0.4, voltage: 3.3, cond: { power: "off" } }, BAD: null, ODD: { voltage: "x" } } };
+    const back = parseNotes(JSON.stringify(old))!;
+    expect(condOf(back.reference.PP3V3, "voltage")).toEqual({ power: "off" });
+    expect(back.reference.BAD).toBeUndefined();
+    expect(back.reference.ODD).toBeUndefined();
+    const broken = { ...base(), cases: [{ id: "a", title: "A", readings: null }, { id: "b", title: "B", readings: { X: { voltage: 1 } } }] };
+    const parsed = parseNotes(JSON.stringify(broken))!;
+    expect(parsed.cases.map((c) => c.id)).toEqual(["b"]);
+    expect(() => caseToReference(parsed, "b")).not.toThrow();
   });
 
   it("round-trips conditions and lists through JSON", () => {

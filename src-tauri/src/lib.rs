@@ -14,6 +14,7 @@ mod notes;
 mod updater;
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 use avero_formats::{Board, ParseError, ParseOptions, ASC_FILES, MAX_FILE_SIZE};
@@ -138,6 +139,48 @@ fn id_tokens(name: &str) -> Vec<String> {
         .filter(|t| t.len() >= 5 && t.chars().any(|c| c.is_ascii_digit()))
         .map(str::to_string)
         .collect()
+}
+
+/// Set once the window has saved everything; closing and quitting then go through.
+static QUIT_READY: AtomicBool = AtomicBool::new(false);
+static QUIT_ASKED: AtomicBool = AtomicBool::new(false);
+/** The window answered and is saving (or asking); no forced exit then. */
+static QUIT_ACK: AtomicBool = AtomicBool::new(false);
+
+fn ask_to_quit(app: &tauri::AppHandle) {
+    use tauri::Emitter;
+    if QUIT_ASKED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let _ = app.emit_to("main", "app:save-and-quit", ());
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        if !QUIT_ACK.load(Ordering::SeqCst) && QUIT_ASKED.load(Ordering::SeqCst) {
+            QUIT_READY.store(true, Ordering::SeqCst);
+            handle.exit(0);
+        }
+    });
+}
+
+/// The window got the request to quit and is saving.
+#[tauri::command]
+fn quit_ack() {
+    QUIT_ACK.store(true, Ordering::SeqCst);
+}
+
+/// The user chose to stay (saving failed and they want to keep the data).
+#[tauri::command]
+fn quit_cancel() {
+    QUIT_ACK.store(false, Ordering::SeqCst);
+    QUIT_ASKED.store(false, Ordering::SeqCst);
+}
+
+/// The window has saved its data: quit now.
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) {
+    QUIT_READY.store(true, Ordering::SeqCst);
+    app.exit(0);
 }
 
 /// Files handed to the app by Finder before the UI subscribed to them.
@@ -642,6 +685,14 @@ fn save_notes(app: tauri::AppHandle, key: String, data: String) -> Result<(), St
 }
 
 /// Snapshot times (unix seconds) of a board's notes, newest first.
+/// Moves a damaged notes file aside so a new save cannot overwrite it.
+#[tauri::command]
+fn set_notes_aside(app: tauri::AppHandle, key: String) -> Result<Option<String>, String> {
+    let now =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    Ok(notes::set_aside(&notes_dir(&app)?, &key, now)?.map(|p| p.to_string_lossy().into_owned()))
+}
+
 #[tauri::command]
 fn note_versions(app: tauri::AppHandle, key: String) -> Result<Vec<u64>, String> {
     Ok(notes::versions(&notes_dir(&app)?, &key))
@@ -741,6 +792,16 @@ pub fn run() {
         .manage(PendingPaths::default())
         .manage(meter::Meter::default())
         .manage(mcp::Mcp::default())
+        .setup(|app| {
+            // Photos taken out of the notes are kept for undo and versions;
+            // only those nothing refers to for a month are cleared away.
+            if let (Ok(photos), Ok(notes)) = (photos_dir(app.handle()), notes_dir(app.handle())) {
+                std::thread::spawn(move || {
+                    notes::prune_photos(&photos, &notes, std::time::Duration::from_secs(30 * 24 * 3600));
+                });
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             open_board,
             open_demo,
@@ -768,6 +829,7 @@ pub fn run() {
             load_knowledge,
             load_store,
             note_versions,
+            set_notes_aside,
             load_note_version,
             backup_create,
             find_donors,
@@ -793,12 +855,36 @@ pub fn run() {
             install_update,
             open_schematic_window,
             close_schematic_window,
-            take_pending_paths
+            take_pending_paths,
+            quit_app,
+            quit_ack,
+            quit_cancel
         ])
         .build(tauri::generate_context!())
         .expect("error while building Avero");
 
     app.run(|_app, _event| {
+        // Closing the main window or quitting: the window saves what is still
+        // unsaved first and then calls `quit_app`; a window that does not
+        // answer within a few seconds does not keep the app open.
+        match &_event {
+            tauri::RunEvent::WindowEvent {
+                label,
+                event: tauri::WindowEvent::CloseRequested { api, .. },
+                ..
+            } if label == "main" && !QUIT_READY.load(Ordering::SeqCst) => {
+                api.prevent_close();
+                ask_to_quit(_app);
+            }
+            tauri::RunEvent::ExitRequested { api, .. } if !QUIT_READY.load(Ordering::SeqCst) => {
+                use tauri::Manager;
+                if _app.get_webview_window("main").is_some() {
+                    api.prevent_exit();
+                    ask_to_quit(_app);
+                }
+            }
+            _ => {}
+        }
         if let tauri::RunEvent::WindowEvent { label, event: tauri::WindowEvent::Destroyed, .. } = &_event {
             use tauri::Emitter;
             if label == SCHEMATIC_WINDOW {

@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { compare, compareReadings, formatValue, parseValue } from "./measure";
 
+describe("typed units", () => {
+  it("takes an explicit volt as volts, a bare diode number above 3 as millivolts", () => {
+    expect(parseValue("4V", "diode")).toBe(4);
+    expect(parseValue("4000mV", "diode")).toBe(4);
+    expect(parseValue("452", "diode")).toBeCloseTo(0.452);
+    expect(parseValue("0,452", "diode")).toBeCloseTo(0.452);
+  });
+});
+
 describe("parseValue", () => {
   it("reads diode mode the way meters show it", () => {
     expect(parseValue("0,452", "diode")).toBeCloseTo(0.452);

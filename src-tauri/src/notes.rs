@@ -5,27 +5,72 @@
 use std::path::{Path, PathBuf};
 
 /// File name for a board key: lower case, filesystem-safe, bounded length.
+/// A key that had to be changed for that (other characters, too long) gets a
+/// hash of the full key, so `A+B` and `A B` never share a file.
 pub fn file_name(key: &str) -> String {
-    let mut safe: String = key
-        .trim()
-        .to_lowercase()
+    let (safe, exact) = safe_name(key);
+    if exact {
+        format!("{safe}.json")
+    } else {
+        format!("{safe}~{:08x}.json", fnv1a(key.trim()) as u32)
+    }
+}
+
+/// The name before keys were made unique; still read when a board has no file under the new name.
+fn legacy_file_name(key: &str) -> String {
+    format!("{}.json", safe_name(key).0)
+}
+
+fn safe_name(key: &str) -> (String, bool) {
+    let lower = key.trim().to_lowercase();
+    let mapped: String = lower
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') { c } else { '_' })
         .collect();
-    safe = safe.trim_matches(|c| c == '.' || c == '_').chars().take(96).collect();
+    let trimmed = mapped.trim_matches(|c| c == '.' || c == '_');
+    let mut safe: String = trimmed.chars().take(96).collect();
+    let exact = safe == key.trim() && !safe.is_empty();
     if safe.is_empty() {
         safe = "board".into();
     }
-    format!("{safe}.json")
+    (safe, exact)
+}
+
+/// FNV-1a: small, stable across versions and platforms.
+fn fnv1a(text: &str) -> u64 {
+    text.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3))
 }
 
 pub fn load(dir: &Path, key: &str) -> Result<Option<String>, String> {
-    let path = dir.join(file_name(key));
-    match std::fs::read_to_string(&path) {
-        Ok(s) => Ok(Some(s)),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(format!("{}: {e}", path.display())),
+    let read = |name: String| {
+        let path = dir.join(name);
+        match std::fs::read_to_string(&path) {
+            Ok(s) => Ok(Some(s)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(format!("{}: {e}", path.display())),
+        }
+    };
+    let name = file_name(key);
+    let legacy = legacy_file_name(key);
+    match read(name.clone())? {
+        Some(s) => Ok(Some(s)),
+        None if legacy != name => read(legacy),
+        None => Ok(None),
     }
+}
+
+/// Moves a file that is no valid JSON aside (`<name>.damaged-<stamp>.json`)
+/// so a new save cannot overwrite it; returns the new path.
+pub fn set_aside(dir: &Path, key: &str, stamp: u64) -> Result<Option<PathBuf>, String> {
+    for name in [file_name(key), legacy_file_name(key)] {
+        let path = dir.join(&name);
+        if path.exists() {
+            let target = dir.join(format!("{}.damaged-{stamp}.json", name.trim_end_matches(".json")));
+            std::fs::rename(&path, &target).map_err(|e| format!("{}: {e}", path.display()))?;
+            return Ok(Some(target));
+        }
+    }
+    Ok(None)
 }
 
 /// Writes through a temporary file so a crash never leaves half a file.
@@ -53,9 +98,26 @@ fn versions_dir(dir: &Path, key: &str) -> PathBuf {
     dir.join("versions").join(file_name(key).trim_end_matches(".json"))
 }
 
-/// Snapshot times of a board, newest first.
+fn legacy_versions_dir(dir: &Path, key: &str) -> PathBuf {
+    dir.join("versions").join(legacy_file_name(key).trim_end_matches(".json"))
+}
+
+/// Snapshot times of a board, newest first (also those from before keys were made unique).
 pub fn versions(dir: &Path, key: &str) -> Vec<u64> {
-    let mut out: Vec<u64> = std::fs::read_dir(versions_dir(dir, key))
+    let mut out = stamps(&versions_dir(dir, key));
+    if legacy_file_name(key) != file_name(key) {
+        for s in stamps(&legacy_versions_dir(dir, key)) {
+            if !out.contains(&s) {
+                out.push(s);
+            }
+        }
+    }
+    out.sort_unstable_by(|a, b| b.cmp(a));
+    out
+}
+
+fn stamps(folder: &Path) -> Vec<u64> {
+    std::fs::read_dir(folder)
         .map(|entries| {
             entries
                 .filter_map(Result::ok)
@@ -64,14 +126,18 @@ pub fn versions(dir: &Path, key: &str) -> Vec<u64> {
                 })
                 .collect()
         })
-        .unwrap_or_default();
-    out.sort_unstable_by(|a, b| b.cmp(a));
-    out
+        .unwrap_or_default()
 }
 
 pub fn load_version(dir: &Path, key: &str, stamp: u64) -> Result<String, String> {
     let path = versions_dir(dir, key).join(format!("{stamp}.json"));
-    std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))
+    match std::fs::read_to_string(&path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            let old = legacy_versions_dir(dir, key).join(format!("{stamp}.json"));
+            std::fs::read_to_string(&old).map_err(|e| format!("{}: {e}", old.display()))
+        }
+        other => other.map_err(|e| format!("{}: {e}", path.display())),
+    }
 }
 
 /// Saves the board's notes and, when the last snapshot is old enough, a new snapshot.
@@ -148,6 +214,47 @@ pub fn remove_photo(dir: &Path, path: &Path) -> Result<(), String> {
     }
 }
 
+/// Deletes stored photos that no board refers to any more: not in the notes,
+/// not in any saved version of them, and older than `min_age` (undo within a
+/// session still finds them). Returns how many went.
+pub fn prune_photos(photos: &Path, notes: &Path, min_age: std::time::Duration) -> usize {
+    fn texts(dir: &Path, out: &mut String) {
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        for e in entries.filter_map(Result::ok) {
+            let path = e.path();
+            if path.is_dir() {
+                texts(&path, out);
+            } else if path.extension().is_some_and(|x| x == "json") {
+                if let Ok(s) = std::fs::read_to_string(&path) {
+                    out.push_str(&s);
+                }
+            }
+        }
+    }
+    let mut referenced = String::new();
+    texts(notes, &mut referenced);
+    let Ok(entries) = std::fs::read_dir(photos) else { return 0 };
+    let now = std::time::SystemTime::now();
+    let mut removed = 0;
+    for e in entries.filter_map(Result::ok) {
+        let path = e.path();
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
+        if referenced.contains(name) {
+            continue;
+        }
+        let old = e
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| now.duration_since(t).ok())
+            .is_some_and(|age| age >= min_age);
+        if old && path.is_file() && std::fs::remove_file(&path).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
+}
+
 /// Copies a picture of a saved wiki page into `dir`, named by its content so
 /// the same picture on several pages is stored once; returns the copy's path.
 pub fn store_knowledge_image(dir: &Path, source: &Path) -> Result<PathBuf, String> {
@@ -171,6 +278,47 @@ pub fn store_knowledge_image(dir: &Path, source: &Path) -> Result<PathBuf, Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keeps_photos_the_notes_or_their_versions_still_use() {
+        let base = std::env::temp_dir().join(format!("avero-prune-{}", std::process::id()));
+        let (photos, notes) = (base.join("photos"), base.join("boards"));
+        std::fs::create_dir_all(&photos).unwrap();
+        for n in ["used.jpg", "in-version.jpg", "gone.jpg"] {
+            std::fs::write(photos.join(n), b"x").unwrap();
+        }
+        save(&notes, "b", r#"{"file":"/x/photos/used.jpg"}"#).unwrap();
+        write_json(&notes.join("versions/b/1.json"), r#"{"file":"/x/photos/in-version.jpg"}"#).unwrap();
+        // Young files stay even when unused.
+        assert_eq!(prune_photos(&photos, &notes, std::time::Duration::from_secs(3600)), 0);
+        assert_eq!(prune_photos(&photos, &notes, std::time::Duration::ZERO), 1);
+        assert!(photos.join("used.jpg").exists() && photos.join("in-version.jpg").exists());
+        assert!(!photos.join("gone.jpg").exists());
+        std::fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn keys_that_only_look_alike_get_their_own_files() {
+        assert_eq!(file_name("820-02100"), "820-02100.json");
+        assert_ne!(file_name("A+B"), file_name("A B"));
+        let long_a = format!("{}a", "x".repeat(100));
+        let long_b = format!("{}b", "x".repeat(100));
+        assert_ne!(file_name(&long_a), file_name(&long_b));
+
+        let dir = std::env::temp_dir().join(format!("avero-keys-{}", std::process::id()));
+        save(&dir, "A+B", r#"{"k":1}"#).unwrap();
+        save(&dir, "A B", r#"{"k":2}"#).unwrap();
+        assert_eq!(load(&dir, "A+B").unwrap().unwrap(), r#"{"k":1}"#);
+        assert_eq!(load(&dir, "A B").unwrap().unwrap(), r#"{"k":2}"#);
+        // A file written under the old name is still found.
+        std::fs::write(dir.join("c_d.json"), r#"{"k":3}"#).unwrap();
+        assert_eq!(load(&dir, "c+d").unwrap().unwrap(), r#"{"k":3}"#);
+        // A damaged file is moved aside, not overwritten.
+        let aside = set_aside(&dir, "c+d", 5).unwrap().unwrap();
+        assert!(aside.ends_with("c_d.damaged-5.json"));
+        assert_eq!(load(&dir, "c+d").unwrap(), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn stores_each_knowledge_picture_once() {
@@ -215,7 +363,8 @@ mod tests {
     fn stores_rendered_pngs() {
         let dir = std::env::temp_dir().join(format!("avero-png-{}", std::process::id()));
         let stored = store_photo_png(&dir, "PS5 EDM-010", "top", b"\x89PNG\r\n", 9).unwrap();
-        assert_eq!(stored.file_name().unwrap(), "ps5_edm-010-top-9.png");
+        let name = stored.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.starts_with("ps5_edm-010~") && name.ends_with("-top-9.png"), "{name}");
         // Camera snapshots for a repair case.
         let snap = store_photo_png(&dir, "x", "case", b"\x89PNG", 9).unwrap();
         assert_eq!(snap.file_name().unwrap(), "x-case-9.png");
@@ -239,9 +388,10 @@ mod tests {
     #[test]
     fn makes_safe_file_names() {
         assert_eq!(file_name("820-02100"), "820-02100.json");
-        assert_eq!(file_name("../../etc/passwd"), "etc_passwd.json");
-        assert_eq!(file_name("Mein Board: X1 Carbon"), "mein_board__x1_carbon.json");
-        assert_eq!(file_name("  "), "board.json");
+        assert!(file_name("../../etc/passwd").starts_with("etc_passwd~"));
+        assert!(file_name("Mein Board: X1 Carbon").starts_with("mein_board__x1_carbon~"));
+        assert!(file_name("  ").starts_with("board~"));
+        assert!(!file_name("../x").contains('/'));
     }
 
     #[test]

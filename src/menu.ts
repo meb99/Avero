@@ -41,6 +41,8 @@ export interface MenuActions {
   ruler(): void;
   shortcuts(): void;
   checkUpdates(): void;
+  /** Saves what is unsaved, then quits. */
+  quit(): void;
   website(): void;
 }
 
@@ -130,7 +132,8 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
         { item: "HideOthers" },
         { item: "ShowAll" },
         SEP,
-        { item: "Quit" },
+        // Not the predefined item: unsaved readings are written before the app ends.
+        item("quit", t("menu.quit"), (a) => a.quit(), "CmdOrCtrl+Q"),
       ],
     },
     {

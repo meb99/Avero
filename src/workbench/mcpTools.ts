@@ -14,7 +14,7 @@ import type { SchematicFacts } from "../schematic/partInfo";
 import { consoleGuides, NOT_A_RAIL } from "./consoleGuides";
 import { judge, noPowerGuide, railVolts, type Expect } from "./diagnosis";
 import { judgeFlow, type FlowExpect } from "./flows";
-import { QUANTITIES, type Reading, type Value } from "./measure";
+import { compare, condOf, conditionsFit, QUANTITIES, type Conditions, type Reading, type Value } from "./measure";
 import { activeCase, type BoardNotes } from "./notes";
 
 export interface McpContext {
@@ -26,6 +26,8 @@ export interface McpContext {
   facts: SchematicFacts | null;
   schematic: SchematicDocument | null;
   t: Translate;
+  /** Relative tolerance of a comparison, as set in Avero (0.1 = 10 %). */
+  tolerance?: number;
   /** Shows something in Avero (select and zoom). */
   select(selection: Selection): void;
 }
@@ -52,10 +54,18 @@ const needBoard = (ctx: McpContext): BoardModel => {
 
 const valueOut = (v: Value | undefined) => (v === undefined ? undefined : v === "OL" ? "OL" : v);
 
+const conditionsOut = (c: Conditions | undefined) => (c && Object.keys(c).length ? c : undefined);
+
 function readingOut(r: Reading | undefined) {
   if (!r) return undefined;
   const out: Record<string, unknown> = {};
-  for (const q of QUANTITIES) if (r[q] !== undefined) out[q === "voltage" ? "voltage_V" : q === "diode" ? "diode_V" : "resistance_ohm"] = valueOut(r[q]);
+  for (const q of QUANTITIES) {
+    if (r[q] === undefined) continue;
+    const name = q === "voltage" ? "voltage_V" : q === "diode" ? "diode_V" : "resistance_ohm";
+    out[name] = valueOut(r[q]);
+    const cond = conditionsOut(condOf(r, q));
+    if (cond) out[`${q}_conditions`] = cond;
+  }
   if (r.note) out.note = r.note;
   return Object.keys(out).length ? out : undefined;
 }
@@ -218,27 +228,32 @@ export const MCP_TOOLS: Tool[] = [
   {
     name: "get_measurements",
     title: "Measurements",
-    description: "All readings of the active repair case next to the reference values of a known good board, with the ones that differ by more than 10 %.",
+    description:
+      "All readings of the active repair case next to the reference values of a known good board, each with the conditions it was taken under (power, battery, probe polarity). \"differs\" lists quantities outside Avero's tolerance; \"not_comparable\" those taken under conditions that do not fit (e.g. board off vs. on).",
     inputSchema: { type: "object", properties: {} },
     run(ctx) {
       needBoard(ctx);
       const n = ctx.notes;
       if (!n) return { readings: [] };
       const c = activeCase(n);
+      const tolerance = ctx.tolerance ?? 0.1;
       const nets = new Set([...Object.keys(n.reference), ...Object.keys(c?.readings ?? {})]);
       const rows = [...nets].sort().map((net) => {
         const ref = n.reference[net];
         const got = c?.readings[net];
-        const differs = QUANTITIES.filter((q) => {
-          const a = ref?.[q];
-          const b = got?.[q];
-          if (a === undefined || b === undefined) return false;
-          if (a === "OL" || b === "OL") return a !== b;
-          return Math.abs(a - b) > Math.max(Math.abs(a) * 0.1, 0.02);
-        });
-        return { net, reference: readingOut(ref), measured: readingOut(got), ...(differs.length && { differs }) };
+        // The same rule as the workbench: fitting conditions first, then the tolerance.
+        const both = QUANTITIES.filter((q) => ref?.[q] !== undefined && got?.[q] !== undefined);
+        const notComparable = both.filter((q) => !conditionsFit(condOf(ref, q), condOf(got, q), q));
+        const differs = both.filter((q) => !notComparable.includes(q) && compare(ref?.[q], got?.[q], q, tolerance) === "deviation");
+        return {
+          net,
+          reference: readingOut(ref),
+          measured: readingOut(got),
+          ...(differs.length && { differs }),
+          ...(notComparable.length && { not_comparable: notComparable }),
+        };
       });
-      return { repair_case: c?.title ?? null, readings: rows };
+      return { repair_case: c?.title ?? null, tolerance_percent: Math.round(tolerance * 100), readings: rows };
     },
   },
   {

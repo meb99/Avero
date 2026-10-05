@@ -1,4 +1,4 @@
-import { compareReadings, hasValues, HISTORY_MAX, QUANTITIES, type Comparison, type Conditions, type HistoryEntry, type Quantity, type Reading, type Value } from "./measure";
+import { compareReadings, condOf, hasValues, HISTORY_MAX, QUANTITIES, takenAt, type Comparison, type Conditions, type HistoryEntry, type Quantity, type Reading, type Value } from "./measure";
 import { parsePhoto, type BoardPhoto, type PhotoSide } from "./photo";
 
 export type CaseStatus = "open" | "waiting" | "repaired" | "unrepairable";
@@ -125,11 +125,47 @@ export function idTokens(name: string): string[] {
     .filter((t) => t.length >= 5 && /\d/.test(t));
 }
 
+/** How much a token looks like a board number: hyphens and many digits ("820-02100", "edm-010") over words ("playstation5"). */
+function idScore(token: string): number {
+  const digits = token.replace(/\D/g, "").length;
+  return (token.includes("-") ? 2 : 0) + (3 * digits) / token.length;
+}
+
+function bestId(name: string): string | undefined {
+  let best: string | undefined;
+  let score = 0;
+  for (const t of idTokens(name)) {
+    const s = idScore(t);
+    if (s > score) [best, score] = [t, s];
+  }
+  return best;
+}
+
+/** File names that say nothing about the board ("Board.brd", "pins.asc"). */
+const GENERIC_STEM = /^(board|boardview|main|mainboard|motherboard|mobo|mb|pcb|bv|pins|format|nails|untitled|layout|file|top|bottom|new|test|\d{1,4})$/;
+
+const slug = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
 /**
  * Key under which notes for a board are stored. Files of the same board in
- * different formats share it through the board number.
+ * different formats share it through the board number; the token that looks
+ * most like one wins ("PlayStation5 EDM-010" → "edm-010", not "playstation5").
+ * Generic file names take their folder along ("Trinity/Board.brd").
  */
 export function boardKey(source: { name: string; path?: string }): string {
+  if (!source.path) return source.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const parts = source.path.split(/[\\/]/);
+  const file = parts.pop() ?? "";
+  const folder = parts.pop() ?? "";
+  const stem = file.replace(/\.[^.]+$/, "");
+  const token = bestId(stem) ?? bestId(folder);
+  if (token) return token;
+  const name = stem.toLowerCase();
+  return GENERIC_STEM.test(name) && slug(folder) ? `${slug(folder)}-${name}` : name;
+}
+
+/** The key Avero used up to 0.9.23 (first id token), to find notes saved under it. */
+export function legacyBoardKey(source: { name: string; path?: string }): string {
   if (!source.path) return source.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const parts = source.path.split("/");
   const file = parts.pop() ?? "";
@@ -171,13 +207,13 @@ export function removeCase(notes: BoardNotes, id: string): BoardNotes {
 export function caseToReference(notes: BoardNotes, id: string): BoardNotes {
   const c = notes.cases.find((x) => x.id === id);
   if (!c) return notes;
-  const reference = { ...notes.reference };
+  let reference = notes.reference;
+  // Each value with the conditions and time it was taken under; the replaced reference goes to the history.
   for (const [net, r] of Object.entries(c.readings)) {
-    if (!hasValues(r)) continue;
-    const merged: Reading = { ...reference[net] };
-    for (const q of QUANTITIES) if (r[q] !== undefined) merged[q] = r[q];
-    merged.updated = now();
-    reference[net] = merged;
+    for (const q of QUANTITIES) {
+      if (r[q] === undefined) continue;
+      reference = withReading(reference, net, { [q]: r[q] }, condOf(r, q), { stamp: takenAt(r, q), origin: c.title });
+    }
   }
   return { ...notes, reference, updated: now() };
 }
@@ -204,38 +240,94 @@ export function setConditions(notes: BoardNotes, target: Target, conditions: Con
   return { ...notes, cases: notes.cases.map((c) => (c.id === target.caseId ? { ...c, conditions: value } : c)), updated: now() };
 }
 
+const sameConditions = (a: Conditions | undefined, b: Conditions | undefined) => JSON.stringify(a ?? {}) === JSON.stringify(b ?? {});
+
+/** Per-quantity maps without empty entries, or undefined when nothing is left. */
+function tidy<T>(map: Partial<Record<Quantity, T>> | undefined): Partial<Record<Quantity, T>> | undefined {
+  if (!map) return undefined;
+  const out: Partial<Record<Quantity, T>> = {};
+  for (const q of QUANTITIES) if (map[q] !== undefined) out[q] = map[q];
+  return Object.keys(out).length ? out : undefined;
+}
+
+/**
+ * One net's reading after a change. Every quantity keeps its own conditions,
+ * time and origin, so a voltage taken with the board on never relabels a
+ * diode value taken with it off. A value replaced by another (or by the same
+ * number under other conditions) and a value cleared go to the history; the
+ * entry stays while it has a value, a note or a history.
+ */
 function withReading(
   readings: Record<string, Reading>,
   net: string,
   change: Partial<Reading>,
   conditions?: Conditions,
+  meta: { stamp?: string; origin?: string } = {},
 ): Record<string, Reading> {
   const old = readings[net];
-  const valuesChange = QUANTITIES.some((q) => q in change && change[q] !== old?.[q]);
-  // The values being replaced go to the history, so before and after a repair stay visible.
-  let history = old?.history;
-  if (valuesChange && old && hasValues(old)) {
-    const entry: HistoryEntry = { at: old.updated ?? now() };
-    for (const q of QUANTITIES) if (old[q] !== undefined) entry[q] = old[q];
-    if (old.cond) entry.cond = old.cond;
-    history = [...(old.history ?? []), entry].slice(-HISTORY_MAX);
+  const next: Reading = { ...old };
+  // Readings from before 0.9.24 share one set of conditions: give each value its own.
+  if (old?.cond) {
+    const conds = { ...old.conds };
+    for (const q of QUANTITIES) if (old[q] !== undefined && !conds[q]) conds[q] = old.cond;
+    next.conds = conds;
+    delete next.cond;
   }
-  // An explicit timestamp (from an import) wins over "now".
-  const next: Reading = {
-    ...old,
-    updated: now(),
-    ...(valuesChange && { cond: conditions }),
-    ...(history && { history }),
-    ...change,
-  };
-  if (next.cond === undefined) delete next.cond;
-  for (const key of Object.keys(change) as (keyof Reading)[]) {
-    if (change[key] === undefined) delete next[key];
+  const stamp = meta.stamp ?? change.updated ?? now();
+  const history = [...(old?.history ?? [])];
+  for (const q of QUANTITIES) {
+    if (!(q in change)) continue;
+    const value = change[q];
+    const before = old?.[q];
+    const beforeCond = condOf(old, q);
+    const replaced = before !== undefined && (value === undefined || before !== value || !sameConditions(beforeCond, conditions));
+    if (replaced) {
+      const entry: HistoryEntry = { at: takenAt(old, q) ?? stamp, [q]: before };
+      if (beforeCond) entry.cond = beforeCond;
+      history.push(entry);
+    }
+    if (value === undefined) {
+      delete next[q];
+      next.conds = { ...next.conds, [q]: undefined };
+      next.at = { ...next.at, [q]: undefined };
+      next.origin = { ...next.origin, [q]: undefined };
+      continue;
+    }
+    next[q] = value;
+    next.conds = { ...next.conds, [q]: conditions };
+    next.at = { ...next.at, [q]: stamp };
+    next.origin = { ...next.origin, [q]: meta.origin };
   }
+  if ("note" in change) {
+    if (change.note) next.note = change.note;
+    else delete next.note;
+  }
+  next.updated = stamp;
+  next.conds = tidy(next.conds);
+  next.at = tidy(next.at);
+  next.origin = tidy(next.origin);
+  for (const k of ["conds", "at", "origin"] as const) if (next[k] === undefined) delete next[k];
+  if (history.length) next.history = history.slice(-HISTORY_MAX);
+  else delete next.history;
   const out = { ...readings };
-  if (hasValues(next) || next.note) out[net] = next;
+  if (hasValues(next) || next.note || next.history?.length) out[net] = next;
   else delete out[net];
   return out;
+}
+
+/** Forgets a net's earlier values (the current ones stay). */
+export function clearHistory(notes: BoardNotes, target: Target, net: string): BoardNotes {
+  const strip = (readings: Record<string, Reading>) => {
+    const r = readings[net];
+    if (!r?.history) return readings;
+    const { history: _, ...rest } = r;
+    const out = { ...readings };
+    if (hasValues(rest) || rest.note) out[net] = rest;
+    else delete out[net];
+    return out;
+  };
+  if (target === "reference") return { ...notes, reference: strip(notes.reference), updated: now() };
+  return { ...notes, cases: notes.cases.map((c) => (c.id === target.caseId ? { ...c, readings: strip(c.readings) } : c)), updated: now() };
 }
 
 /** Sets (or clears, with `undefined`) one quantity for a net. */
@@ -462,6 +554,85 @@ export function linkObdata(notes: BoardNotes, id: string | null): BoardNotes {
   return { ...notes, obdata: id ?? undefined, updated: now() };
 }
 
+const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+
+function parseValue(v: unknown): Value | undefined {
+  if (v === "OL") return "OL";
+  return typeof v === "number" && Number.isFinite(v) ? v : undefined;
+}
+
+function perQuantity<T>(v: unknown, item: (x: unknown) => T | undefined): Partial<Record<Quantity, T>> | undefined {
+  if (!isRecord(v)) return undefined;
+  const out: Partial<Record<Quantity, T>> = {};
+  for (const q of QUANTITIES) {
+    const x = item(v[q]);
+    if (x !== undefined) out[q] = x;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
+
+/** A reading as stored, with every field checked; null when nothing usable is left. */
+export function parseReading(value: unknown): Reading | null {
+  if (!isRecord(value)) return null;
+  const r: Reading = {};
+  for (const q of QUANTITIES) {
+    const v = parseValue(value[q]);
+    if (v !== undefined) r[q] = v;
+  }
+  if (str(value.note)) r.note = value.note as string;
+  if (str(value.updated)) r.updated = value.updated as string;
+  const cond = parseConditions(value.cond);
+  if (cond) r.cond = cond;
+  const conds = perQuantity(value.conds, parseConditions);
+  if (conds) r.conds = conds;
+  const at = perQuantity(value.at, str);
+  if (at) r.at = at;
+  const origin = perQuantity(value.origin, str);
+  if (origin) r.origin = origin;
+  if (Array.isArray(value.history)) {
+    const history = value.history.flatMap((h): HistoryEntry[] => {
+      if (!isRecord(h) || !str(h.at)) return [];
+      const e: HistoryEntry = { at: h.at as string };
+      for (const q of QUANTITIES) {
+        const v = parseValue(h[q]);
+        if (v !== undefined) e[q] = v;
+      }
+      const c = parseConditions(h.cond);
+      if (c) e.cond = c;
+      return QUANTITIES.some((q) => e[q] !== undefined) ? [e] : [];
+    });
+    if (history.length) r.history = history.slice(-HISTORY_MAX);
+  }
+  return hasValues(r) || r.note || r.history ? r : null;
+}
+
+/** Readings by net name; anything that is not a reading is left out. */
+export function parseReadings(value: unknown): Record<string, Reading> {
+  const out: Record<string, Reading> = {};
+  if (!isRecord(value)) return out;
+  for (const [net, v] of Object.entries(value)) {
+    const r = parseReading(v);
+    if (r && net) out[net] = r;
+  }
+  return out;
+}
+
+function parseCase(value: unknown): RepairCase | null {
+  if (!isRecord(value) || !str(value.id) || !isRecord(value.readings)) return null;
+  const c = value as unknown as RepairCase;
+  return {
+    ...c,
+    title: typeof c.title === "string" ? c.title : "",
+    created: typeof c.created === "string" ? c.created : new Date(0).toISOString(),
+    notes: typeof c.notes === "string" ? c.notes : "",
+    readings: parseReadings(value.readings),
+    photos: Array.isArray(c.photos) ? c.photos.filter((p) => typeof p === "string") : undefined,
+    conditions: parseConditions(c.conditions),
+  };
+}
+
 function parseConditions(value: unknown): Conditions | undefined {
   if (!value || typeof value !== "object") return undefined;
   const v = value as Record<string, unknown>;
@@ -491,20 +662,14 @@ function parseLists(value: unknown): MeasureList[] | undefined {
 export function parseNotes(json: string): BoardNotes | null {
   try {
     const d = JSON.parse(json) as Partial<BoardNotes>;
-    if (d.version !== 1 || typeof d.key !== "string" || typeof d.reference !== "object" || !Array.isArray(d.cases)) return null;
+    if (!isRecord(d) || d.version !== 1 || typeof d.key !== "string" || !isRecord(d.reference) || !Array.isArray(d.cases)) return null;
     return {
       version: 1,
       key: d.key,
       name: typeof d.name === "string" ? d.name : d.key,
       notes: typeof d.notes === "string" ? d.notes : "",
-      reference: d.reference ?? {},
-      cases: d.cases
-        .filter((c): c is RepairCase => !!c && typeof c.id === "string" && typeof c.readings === "object")
-        .map((c) => ({
-          ...c,
-          photos: Array.isArray(c.photos) ? c.photos.filter((p) => typeof p === "string") : undefined,
-          conditions: parseConditions(c.conditions),
-        })),
+      reference: parseReadings(d.reference),
+      cases: d.cases.map(parseCase).filter((c): c is RepairCase => c !== null),
       activeCase: typeof d.activeCase === "string" ? d.activeCase : null,
       photos: parsePhotos(d.photos),
       netNames: parseNetNames(d.netNames),

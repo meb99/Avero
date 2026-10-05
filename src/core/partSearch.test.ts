@@ -37,4 +37,9 @@ describe("partSpecs and matchesQuery", () => {
     expect(specs).toMatchObject({ kind: "C", value: { unit: "F" }, volts: 25, package: "0603" });
     expect(matchesQuery(specs, parsePartQuery("10uF 16V")!, "C3090", "C_0603")).toBe(true);
   });
+  it("reads a decimal comma", () => {
+    expect(parsePartQuery("4,7k")?.value).toEqual(parsePartQuery("4.7k")?.value);
+    expect(parsePartQuery("4,7k")?.words).toEqual([]);
+    expect(parsePartQuery("10uF, 0603")?.package).toBe("0603");
+  });
 });

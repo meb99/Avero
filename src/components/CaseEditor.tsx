@@ -89,7 +89,7 @@ export function CaseEditor({ notes, repair, update, tolerance, onMessage }: Prop
       const c = n.cases.find((x) => x.id === repair.id);
       return updateCase(n, repair.id, { photos: (c?.photos ?? []).filter((p) => p !== file) });
     });
-    await invoke("remove_photo", { path: file }).catch(() => {});
+    // The file stays for undo and saved versions; unused photos are cleared after a month.
   };
 
   const toReference = async () => {
