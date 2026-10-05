@@ -71,13 +71,16 @@ pub(crate) fn is_xzz_head(head: &[u8]) -> bool {
 fn read_head(path: &Path) -> Vec<u8> {
     use std::io::Read;
     // Enough for every content check (Allegro's tag sits at 0xF8, Altium's kind in the first lines).
-    let mut head = vec![0u8; 4096];
+    let mut head = vec![0u8; 8192];
     let n = std::fs::File::open(path).and_then(|mut f| f.read(&mut head)).unwrap_or(0);
     head.truncate(n);
     head
 }
 
 /// What a file is, by name; `.pcb` files are checked by content.
+/// Extensions boards share with all kinds of other files.
+const GENERIC_EXTENSIONS: &[&str] = &["txt", "xml", "ipc", "356", "tgz", "zip"];
+
 fn classify(name: &str, head: impl FnOnce() -> Vec<u8>) -> Option<Kind> {
     let name = name.to_ascii_lowercase();
     let ext = name.rsplit_once('.')?.1;
@@ -92,6 +95,11 @@ fn classify(name: &str, head: impl FnOnce() -> Vec<u8>) -> Option<Kind> {
         _ if avero_formats::formats::extensions().contains(&ext) => {
             match avero_formats::detect(&head(), Some(&name)) {
                 avero_formats::Detected::Unsupported(_) => Some(Kind::Unsupported),
+                avero_formats::Detected::Supported(_) | avero_formats::Detected::AscBundle => {
+                    Some(Kind::Board)
+                }
+                // Names any program uses (.txt, .xml …) count only when the content is a board.
+                _ if GENERIC_EXTENSIONS.contains(&ext) => None,
                 _ => Some(Kind::Board),
             }
         }
@@ -296,6 +304,13 @@ pub fn scan(roots: &[PathBuf]) -> LibraryScan {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn text_files_count_only_when_they_are_boards() {
+        assert_eq!(classify("notes.txt", || b"Shopping list".to_vec()), None);
+        let extract = b"A!REFDES!SYM_X!SYM_Y!\nS!U1!1!2!\n".to_vec();
+        assert_eq!(classify("board.txt", || extract.clone()), Some(Kind::Board));
+    }
 
     #[test]
     fn binary_allegro_boards_are_named_not_listed_as_boards() {

@@ -1111,6 +1111,73 @@ fn altium_ascii_pcbdoc() {
     ));
 }
 
+const ALLEGRO: &str = "J!demo.brd!Mon Oct 05 12:00:00 2026!0.0!0.0!50.0!30.0!0.001!millimeters!
+A!REFDES!COMP_CLASS!COMP_PART_NUMBER!COMP_DEVICE_TYPE!SYM_NAME!SYM_MIRROR!SYM_ROTATE!SYM_X!SYM_Y!COMP_VALUE!
+S!U1!IC!TPS51125!TPS51125_QFN24!QFN24!NO!0!10.0!10.0!!
+S!C1!DISCRETE!!CAP_0402!C0402!YES!90!30.0!10.0!100NF!
+S!J1!IO!!HDR2!HDR2!NO!0!40.0!20.0!!
+A!PAD_NAME!REC_NUMBER!LAYER!FIXFLAG!VIAFLAG!PADSHAPE1!PADWIDTH!PADHGHT!PADXOFF!PADYOFF!
+S!SMD_R!1!TOP!!!RECTANGLE!0.6!0.3!0!0!
+S!TH_60!1!TOP!!!CIRCLE!1.5!1.5!0!0!
+S!TH_60!2!BOTTOM!!!CIRCLE!1.5!1.5!0!0!
+S!VIA10!1!TOP!!!CIRCLE!0.4!0.4!0!0!
+A!SYM_NAME!SYM_MIRROR!PIN_NAME!PIN_NUMBER!PIN_X!PIN_Y!PAD_STACK_NAME!REFDES!PIN_ROTATION!TEST_POINT!
+S!QFN24!NO!VIN!1!9.5!10.0!SMD_R!U1!90!!
+S!QFN24!NO!GND!2!10.5!10.0!SMD_R!U1!90!!
+S!C0402!YES!1!1!29.5!10.0!SMD_R!C1!0!!
+S!C0402!YES!2!2!30.5!10.0!SMD_R!C1!0!!
+S!HDR2!NO!1!1!40.0!20.0!TH_60!J1!0!!
+S!HDR2!NO!2!2!42.54!20.0!TH_60!J1!0!!
+A!NET_NAME!REFDES!PIN_NUMBER!PIN_NAME!PIN_GROUND!PIN_POWER!
+S!+19V!U1!1!VIN!!!
+S!GND!U1!2!GND!!!
+S!+19V!C1!1!1!!!
+S!GND!C1!2!2!!!
+S!+19V!J1!1!1!!!
+S!GND!J1!2!2!!!
+A!VIA_X!VIA_Y!PAD_STACK_NAME!NET_NAME!TEST_POINT!VIA_MIRROR!VIA_ROTATION!
+S!20.0!15.0!VIA10!+19V!!NO!0!
+S!25.0!15.0!VIA10!GND!PROBE_TOP!NO!0!
+A!CLASS!SUBCLASS!GRAPHIC_DATA_NAME!GRAPHIC_DATA_NUMBER!RECORD_TAG!GRAPHIC_DATA_1!GRAPHIC_DATA_2!GRAPHIC_DATA_3!GRAPHIC_DATA_4!GRAPHIC_DATA_5!GRAPHIC_DATA_6!GRAPHIC_DATA_7!GRAPHIC_DATA_8!GRAPHIC_DATA_9!GRAPHIC_DATA_10!SYMBOL_NAME!REFDES!NET_NAME!
+S!BOARD GEOMETRY!OUTLINE!LINE!1!1 1 0!0.0!0.0!50.0!0.0!0.1!!!!!!!!!
+S!BOARD GEOMETRY!OUTLINE!LINE!2!2 1 0!50.0!0.0!50.0!30.0!0.1!!!!!!!!!
+S!BOARD GEOMETRY!OUTLINE!ARC!3!3 1 0!50.0!30.0!40.0!30.0!45.0!30.0!5.0!0.1!COUNTERCLOCKWISE!!!!!
+S!BOARD GEOMETRY!OUTLINE!LINE!4!4 1 0!40.0!30.0!0.0!30.0!0.1!!!!!!!!!
+S!BOARD GEOMETRY!OUTLINE!LINE!5!5 1 0!0.0!30.0!0.0!0.0!0.1!!!!!!!!!
+S!ETCH!TOP!LINE!6!6 1 0!9.5!10.0!20.0!15.0!0.2!!!!!!!!+19V!
+S!ETCH!TOP!LINE!7!7 1 0!20.0!15.0!29.5!10.0!0.2!!!!!!!!+19V!
+";
+
+#[test]
+fn allegro_ascii_extract() {
+    let b = parse(ALLEGRO.as_bytes(), Some("board.txt")).unwrap();
+    assert_eq!(b.format, FormatId::AllegroAscii);
+    assert_eq!(b.parts.len(), 3);
+    let u1 = part(&b, "U1");
+    assert_eq!(u1.side, Side::Top);
+    assert_eq!(u1.device.as_deref(), Some("TPS51125_QFN24"));
+    let pins = &b.pins[u1.first_pin as usize..(u1.first_pin + u1.pin_count) as usize];
+    // Millimetres to mils.
+    assert_close(pins[0].x, 9.5 * MIL);
+    assert_eq!(net_name(&b, &pins[0]), "+19V");
+    assert_eq!(pins[0].name.as_deref(), Some("VIN"));
+    let pad = pins[0].pad.as_ref().unwrap();
+    assert_close(pad.w, 0.6 * MIL);
+    assert_close(pad.angle, 90.0);
+    // Mirrored component on the bottom, its value with the device.
+    let c1 = part(&b, "C1");
+    assert_eq!(c1.side, Side::Bottom);
+    assert_eq!(c1.device.as_deref(), Some("CAP_0402 100NF"));
+    // A pad stack on both outer layers is through-hole.
+    assert_eq!(part(&b, "J1").mount, Mount::ThroughHole);
+    assert_eq!(b.test_points.iter().filter(|t| t.kind == TestPointKind::Via).count(), 1);
+    assert_eq!(b.test_points.iter().filter(|t| t.kind == TestPointKind::Nail).count(), 1);
+    assert_eq!(b.traces.len(), 2);
+    assert_close(b.bounds.max_x, 50.0 * MIL);
+    // The arc bulges above the top edge.
+    assert!(b.outline.iter().flatten().any(|p| p.y > 30.0 * MIL + 1.0));
+}
+
 #[test]
 fn damaged_files_never_panic() {
     let samples: Vec<(&str, Vec<u8>)> = vec![
@@ -1122,6 +1189,7 @@ fn damaged_files_never_panic() {
         ("board.kicad_pcb", KICAD.as_bytes().to_vec()),
         ("board.brd", EAGLE.as_bytes().to_vec()),
         ("board.PcbDoc", ALTIUM.as_bytes().to_vec()),
+        ("board.txt", ALLEGRO.as_bytes().to_vec()),
     ];
     // A fixed pseudo-random sequence, so a failure can be repeated.
     let mut seed: u64 = 0x2545_f491_4f6c_dd1d;

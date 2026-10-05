@@ -1,5 +1,6 @@
 //! One module per file format, plus detection.
 
+pub(crate) mod allegro_ascii;
 pub(crate) mod altium;
 pub(crate) mod asc;
 pub(crate) mod brd;
@@ -66,8 +67,12 @@ pub fn detect(buf: &[u8], file_name: Option<&str>) -> Detected {
         "pcbdoc" if buf.starts_with(&[0xD0, 0xCF, 0x11, 0xE0]) => {
             return Detected::Unsupported("Altium PcbDoc")
         }
-        "asc" | "bom" => return Detected::AscBundle,
+        // An Allegro extract may carry any name; ASC sets are plain tables.
+        "asc" | "bom" if !allegro_ascii::detect(buf) => return Detected::AscBundle,
         _ => {}
+    }
+    if allegro_ascii::detect(buf) {
+        return Detected::Supported(FormatId::AllegroAscii);
     }
     if altium::detect(buf) {
         return Detected::Supported(FormatId::Altium);
@@ -138,6 +143,7 @@ pub const SUPPORTED: &[FormatInfo] = &[
     FormatInfo { id: "fz", name: "ASUS FZ", extensions: &["fz"] },
     FormatInfo { id: "cae", name: "CAE", extensions: &["cae"] },
     FormatInfo { id: "kicad", name: "KiCad", extensions: &["kicad_pcb"] },
+    FormatInfo { id: "allegroascii", name: "Allegro ASCII / Fabmaster", extensions: &["txt", "fab"] },
     FormatInfo { id: "altium", name: "Altium PCB ASCII", extensions: &["pcbdoc"] },
     FormatInfo { id: "eagle", name: "EAGLE / Fusion 360", extensions: &["brd"] },
 ];

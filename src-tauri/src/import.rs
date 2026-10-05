@@ -44,8 +44,11 @@ struct Source {
 /// files that share one belong together (an ASC set, a board with its schematic).
 type Found = (Source, String);
 
+/// Enough of a file for every content check (text formats look a few lines in).
+const HEAD: usize = 8192;
+
 fn head_of(path: &Path) -> Vec<u8> {
-    let mut head = vec![0u8; 0x20];
+    let mut head = vec![0u8; HEAD];
     let n = std::fs::File::open(path).and_then(|mut f| f.read(&mut head)).unwrap_or(0);
     head.truncate(n);
     head
@@ -122,7 +125,7 @@ fn expand_zip(path: &Path, out: &mut Vec<Found>, result: &mut ImportResult) -> R
             result.errors.push(format!("{name}: {e}"));
             continue;
         }
-        if is_importable(&name, || data.iter().take(0x20).copied().collect()) {
+        if is_importable(&name, || data.iter().take(HEAD).copied().collect()) {
             let context = parts.last().map_or(archive_name.clone(), |p| (*p).to_string());
             let group = format!("{}#{}", path.display(), parts.join("/"));
             out.push((Source { name, context, data: Data::Bytes(data) }, group));

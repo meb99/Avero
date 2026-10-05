@@ -64,6 +64,7 @@
           "cae",
           "kicad_pcb",
           "pcbdoc",
+          "fab",
           "gr"
         ],
         "name": "Boardview",

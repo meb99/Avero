@@ -17,7 +17,7 @@ export interface Loaded {
 }
 
 /** Extensions offered in the open dialog. Keep in sync with avero_formats::formats::SUPPORTED. */
-export const BOARD_EXTENSIONS = ["brd", "bdv", "asc", "bvr", "bvr3", "cad", "gcd", "gencad", "cst", "pcb", "fz", "cae", "kicad_pcb", "pcbdoc", "gr"];
+export const BOARD_EXTENSIONS = ["brd", "bdv", "asc", "bvr", "bvr3", "cad", "gcd", "gencad", "cst", "pcb", "fz", "cae", "kicad_pcb", "pcbdoc", "fab", "txt", "gr"];
 
 async function load(command: string, args: Record<string, unknown>): Promise<LoadResult> {
   try {
