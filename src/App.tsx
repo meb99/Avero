@@ -350,6 +350,57 @@ export function App() {
     setToast(t("hide.done", { names: names.slice(0, 5).join(", ") + (names.length > 5 ? " …" : "") }));
   };
 
+  // Isolation view (key I): only the selected and pinned nets with their
+  // parts, tracks and test points; leaving it brings back view and selection.
+  const [isolation, setIsolation] = useState<{
+    model: BoardModel;
+    nets: number[];
+    mode: "union" | "intersection";
+    ground: boolean;
+    unconnected: boolean;
+    before: { view?: ViewState; selection: Selection };
+  } | null>(null);
+  const isolationFor = isolation && isolation.model === model ? isolation : null;
+  const [isolatedParts, setIsolatedParts] = useState(0);
+  useEffect(() => {
+    if (!model || !isolationFor) return;
+    const { nets, mode, ground, unconnected } = isolationFor;
+    const shown = model.setIsolation(nets, mode, (k) => (k === "ground" && ground) || (k === "unconnected" && unconnected));
+    setIsolatedParts(shown.length);
+    setNamesRevision((r) => r + 1);
+    return () => {
+      model.setIsolation(null);
+      setNamesRevision((r) => r + 1);
+    };
+  }, [model, isolationFor]);
+  const endIsolation = () => {
+    if (!isolationFor) return;
+    const { before } = isolationFor;
+    setIsolation(null);
+    setSelection(before.selection);
+    if (before.view) requestAnimationFrame(() => viewRef.current?.setViewState(before.view!));
+  };
+  const toggleIsolation = () => {
+    if (!model) return;
+    if (isolationFor) return endIsolation();
+    const net = model.selectedNet(selection);
+    const nets = [...new Set([...(net !== undefined ? [net] : []), ...pinnedList])];
+    if (nets.length === 0) return setToast(t("isolate.nothing"));
+    const ground = nets.some((n) => model.nets[n].kind === "ground");
+    setIsolation({ model, nets, mode: "union", ground, unconnected: false, before: { view: viewRef.current?.viewState(), selection } });
+    requestAnimationFrame(() => {
+      const bounds = model.isolationBounds();
+      if (bounds) viewRef.current?.zoomTo(bounds);
+    });
+  };
+  // The key handler is bound once per board; these read the current state.
+  const isolationKeyRef = useRef(toggleIsolation);
+  isolationKeyRef.current = toggleIsolation;
+  const isolationRef = useRef<(() => void) | null>(null);
+  isolationRef.current = isolationFor ? endIsolation : null;
+  const hideKeyRef = useRef(hideSelected);
+  hideKeyRef.current = hideSelected;
+
   // --- facts from the schematic's text ---------------------------------------
   // Values, part numbers and net voltages, read once the schematic is indexed.
   const [schematicFacts, setSchematicFacts] = useState<SchematicFacts | null>(null);
@@ -1839,6 +1890,7 @@ export function App() {
       { id: "ruler", label: t("ruler.title"), shortcut: "L", enabled: board, run: () => setRuler({ side, points: [] }) },
       { id: "pad-values", label: t("pad.command"), shortcut: "V", enabled: board, run: cyclePadValues },
       { id: "hide-selected", label: t("hide.command"), shortcut: "H", enabled: board && notesForModel !== null, run: hideSelected },
+      { id: "isolate", label: t(isolationFor ? "isolate.end" : "isolate.command"), shortcut: "I", enabled: board, run: toggleIsolation },
       {
         id: "show-all-parts",
         label: t("hide.showAllCommand"),
@@ -1989,7 +2041,8 @@ export function App() {
           if (model) setRuler((r) => (r ? null : { side, points: [] }));
           break;
         case "Escape":
-          if (rulerRef.current) setRuler(null);
+          if (isolationRef.current) isolationRef.current();
+          else if (rulerRef.current) setRuler(null);
           else if (drawingRef.current) setDrawing(null);
           else if (aligningRef.current) cancelAlignment();
           else if (placingMarkerRef.current) setPlacingMarker(false);
@@ -2003,7 +2056,10 @@ export function App() {
           if (model) cyclePadValues();
           break;
         case "h":
-          if (model) hideSelected();
+          if (model) hideKeyRef.current();
+          break;
+        case "i":
+          if (model) isolationKeyRef.current();
           break;
         case "Enter": {
           if (drawingRef.current?.kind === "area") {
@@ -2164,6 +2220,30 @@ export function App() {
                     extraParts={multiSet}
                   >
                     {placingMarker && <div className="placing-hint">{t("marker.placing")}</div>}
+                    {isolationFor && (
+                      <div className="isolation-bar">
+                        <strong>{t("isolate.title", { nets: isolationFor.nets.length, parts: isolatedParts })}</strong>
+                        <span className="muted">{isolationFor.nets.slice(0, 4).map((n) => model.nets[n].name).join(", ") + (isolationFor.nets.length > 4 ? " …" : "")}</span>
+                        {isolationFor.nets.length > 1 && (
+                          <button
+                            className="small"
+                            title={t("isolate.modeHint")}
+                            onClick={() => setIsolation({ ...isolationFor, mode: isolationFor.mode === "union" ? "intersection" : "union" })}
+                          >
+                            {t(`isolate.${isolationFor.mode}`)}
+                          </button>
+                        )}
+                        <label>
+                          <input type="checkbox" checked={isolationFor.ground} onChange={(e) => setIsolation({ ...isolationFor, ground: e.target.checked })} /> GND
+                        </label>
+                        <label>
+                          <input type="checkbox" checked={isolationFor.unconnected} onChange={(e) => setIsolation({ ...isolationFor, unconnected: e.target.checked })} /> NC
+                        </label>
+                        <button className="small" onClick={endIsolation} title={t("isolate.endHint")}>
+                          {t("isolate.end")}
+                        </button>
+                      </div>
+                    )}
                     {padQuantity !== "off" && (
                       <button className="pad-values-legend" onClick={cyclePadValues} title={t("pad.legendHint")}>
                         {t("pad.legend", {

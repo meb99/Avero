@@ -31,3 +31,55 @@ describe("hidden parts", () => {
     }
   });
 });
+
+describe("isolation view", () => {
+  /** Two nets and the parts on each. */
+  function twoNets(model: BoardModel) {
+    const partsOf = (net: number) => new Set(model.nets[net].pins.map((p) => model.pins[p].part));
+    const nets = model.nets.map((_, i) => i).filter((i) => model.nets[i].kind === "signal" || model.nets[i].kind === "power");
+    for (const a of nets)
+      for (const b of nets) {
+        if (a >= b) continue;
+        const pa = partsOf(a);
+        const pb = partsOf(b);
+        const both = [...pa].filter((p) => pb.has(p));
+        if (both.length > 0 && both.length < new Set([...pa, ...pb]).size) return { a, b, pa, pb, both };
+      }
+    throw new Error("test board has no two nets sharing some parts");
+  }
+
+  it("shows only the chosen nets and their parts, union or intersection", () => {
+    const model = new BoardModel(testBoard());
+    const { a, b, pa, pb, both } = twoNets(model);
+    const union = model.setIsolation([a, b], "union");
+    expect(new Set(union)).toEqual(new Set([...pa, ...pb]));
+    for (let i = 0; i < model.parts.length; i++) expect(model.partHidden(i)).toBe(!pa.has(i) && !pb.has(i));
+    for (let i = 0; i < model.pins.length; i++) {
+      const on = model.pins[i].net === a || model.pins[i].net === b;
+      expect(model.pinHidden(i)).toBe(!on);
+    }
+    for (let n = 0; n < model.nets.length; n++) expect(model.netHidden(n)).toBe(n !== a && n !== b);
+
+    expect(new Set(model.setIsolation([a, b], "intersection"))).toEqual(new Set(both));
+    expect(model.isolationBounds()).toBeDefined();
+
+    model.setIsolation(null);
+    expect(model.isolated).toBe(false);
+    expect(model.parts.some((_, i) => model.partHidden(i))).toBe(false);
+  });
+
+  it("shows ground pins of the shown parts only when asked", () => {
+    const model = new BoardModel(testBoard());
+    const ground = model.nets.findIndex((n) => n.kind === "ground");
+    const groundPin = model.nets[ground].pins[0];
+    const part = model.pins[groundPin].part;
+    const signal = model.pins.find((p, i) => p.part === part && i !== groundPin && model.nets[p.net].kind !== "ground")?.net;
+    expect(signal).toBeDefined();
+    model.setIsolation([signal!], "union");
+    expect(model.pinHidden(groundPin)).toBe(true);
+    model.setIsolation([signal!], "union", (k) => k === "ground");
+    expect(model.pinHidden(groundPin)).toBe(false);
+    // Ground's copper elsewhere stays hidden.
+    expect(model.netHidden(ground)).toBe(true);
+  });
+});

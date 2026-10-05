@@ -257,7 +257,7 @@ function drawPadValues(
   model.testPointIndex.query(visible, (i) => {
     if (items.length >= MAX_PAD_VALUES) return;
     const tp = model.testPoints[i];
-    if (visibleFrom(tp.side, view)) take(tp.x, tp.y, tp.radius, values.testPoint(i), false);
+    if (visibleFrom(tp.side, view) && !model.netHidden(tp.net)) take(tp.x, tp.y, tp.radius, values.testPoint(i), false);
   });
   ctx.save();
   ctx.textAlign = "left";
@@ -355,7 +355,7 @@ function drawMeasured(
     seen.add(i);
     const tp = model.testPoints[i];
     const status = measured.get(tp.net);
-    if (status && visibleFrom(tp.side, view)) dot(tp.x, tp.y, tp.radius, status);
+    if (status && visibleFrom(tp.side, view) && !model.netHidden(tp.net)) dot(tp.x, tp.y, tp.radius, status);
   });
 }
 

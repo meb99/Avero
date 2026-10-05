@@ -110,8 +110,11 @@ export function computeStyle(
     const base = t.kind === "via" ? palette.via : palette.nail;
     const near = visibleFrom(t.side, view);
     // On boards with routing, vias belong to the copper and stay visible.
-    const shown = t.kind !== "via" || options.showVias || model.traces.length > 0;
-    if (selection.kind === "testPoint" && selection.testPoint === i) {
+    // In the isolation view the vias of the nets shown are part of what you look at.
+    const shown = t.kind !== "via" || options.showVias || model.traces.length > 0 || model.isolated;
+    if (model.netHidden(t.net)) {
+      put(testPointColors, i, base, 0);
+    } else if (selection.kind === "testPoint" && selection.testPoint === i) {
       put(testPointColors, i, palette.pinSelected, near ? 1 : farHighlight);
     } else if (net !== undefined && t.net === net && (shown || near)) {
       put(testPointColors, i, palette.pinHighlight, near ? 1 : farHighlight);
@@ -136,7 +139,7 @@ export function computeStyle(
     const t = traces[i];
     const color = layerColors[t.layer] ?? palette.trace;
     const otherSide = t.side !== view && t.side !== "both";
-    if (!options.showTraces || hidden?.has(t.layer) || (otherSide && !options.ghostOtherSide)) {
+    if (!options.showTraces || hidden?.has(t.layer) || (otherSide && !options.ghostOtherSide) || model.netHidden(t.net)) {
       put(traceColors, i, color, 0);
     } else if (net !== undefined && t.net === net) {
       put(traceColors, i, palette.pinHighlight, 1);

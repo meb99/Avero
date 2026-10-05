@@ -4137,3 +4137,38 @@ button.danger {
   justify-content: space-between;
   gap: 8px;
 }
+
+/* Isolation view: what is shown and how to leave. */
+.isolation-bar {
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  transform: translateX(-50%);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 24px);
+  padding: 5px 8px 5px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.isolation-bar .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.isolation-bar label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Wrapper only: overlays keep their own positions. */
+.board-overlays {
+  display: contents;
+}

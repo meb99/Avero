@@ -133,14 +133,83 @@ export class BoardModel {
     return changed;
   }
 
-  /** The part's body is hidden (not drawn, not clickable). */
-  partHidden(part: number): boolean {
-    return (this.hiddenParts[part] ?? 0) > 0;
+  /** Isolation view: only these nets and the parts on them are shown. */
+  private isolation: { nets: Set<number>; parts: Set<number>; pinNets: Set<number> } | null = null;
+
+  /**
+   * Shows only the given nets with their pins, test points, tracks and parts
+   * ("union"), or with the parts on all of them ("intersection": the parts
+   * the nets have in common). `alsoPins` (ground, unconnected) shows those
+   * nets' pins on the parts shown, nothing else of them. `null` ends the
+   * isolation. Returns the parts shown.
+   */
+  setIsolation(
+    nets: readonly number[] | null,
+    mode: "union" | "intersection" = "union",
+    alsoPins: (kind: NetKind) => boolean = () => false,
+  ): number[] {
+    if (!nets || nets.length === 0) {
+      this.isolation = null;
+      return [];
+    }
+    const netSet = new Set(nets);
+    const count = new Map<number, Set<number>>();
+    for (const net of netSet) {
+      for (const pin of this.nets[net].pins) {
+        const part = this.pins[pin].part;
+        let on = count.get(part);
+        if (!on) count.set(part, (on = new Set()));
+        on.add(net);
+      }
+    }
+    const parts = new Set([...count].filter(([, on]) => mode === "union" || on.size === netSet.size).map(([part]) => part));
+    const pinNets = new Set<number>();
+    for (const part of parts) {
+      const { firstPin, pinCount } = this.parts[part];
+      for (let pin = firstPin; pin < firstPin + pinCount; pin++) {
+        const net = this.pins[pin].net;
+        if (!netSet.has(net) && alsoPins(this.nets[net].kind)) pinNets.add(net);
+      }
+    }
+    this.isolation = { nets: netSet, parts, pinNets };
+    return [...parts];
   }
 
-  /** The pin is hidden with its part. */
+  /** Bounds of what the isolation shows. */
+  isolationBounds(): Bounds | undefined {
+    if (!this.isolation) return undefined;
+    const pts: Point[] = [];
+    for (const part of this.isolation.parts) {
+      const b = this.parts[part].bounds;
+      pts.push({ x: b.minX, y: b.minY }, { x: b.maxX, y: b.maxY });
+    }
+    for (const net of this.isolation.nets) {
+      for (const i of this.nets[net].testPoints) pts.push(this.testPoints[i]);
+      for (const i of this.nets[net].traces ?? []) pts.push({ x: this.traces[i].x1, y: this.traces[i].y1 }, { x: this.traces[i].x2, y: this.traces[i].y2 });
+    }
+    return pts.length ? padBounds(boundsOf(pts), 80) : undefined;
+  }
+
+  get isolated(): boolean {
+    return this.isolation !== null;
+  }
+
+  /** The part's body is hidden (not drawn, not clickable): hidden by hand, or outside the isolation. */
+  partHidden(part: number): boolean {
+    return (this.hiddenParts[part] ?? 0) > 0 || (this.isolation !== null && !this.isolation.parts.has(part));
+  }
+
+  /** The pin is hidden with its part, or is on a net outside the isolation. */
   pinHidden(pin: number): boolean {
-    return this.hiddenParts[this.pins[pin].part] === 2;
+    const p = this.pins[pin];
+    if (this.hiddenParts[p.part] === 2) return true;
+    const iso = this.isolation;
+    return iso !== null && (!(iso.nets.has(p.net) || iso.pinNets.has(p.net)) || !iso.parts.has(p.part));
+  }
+
+  /** The net is outside the isolation (its tracks and test points are not shown). */
+  netHidden(net: number): boolean {
+    return this.isolation !== null && !this.isolation.nets.has(net);
   }
 
   get hiddenCount(): number {
@@ -407,7 +476,7 @@ export class BoardModel {
     });
     this.testPointIndex.query(probe, (i) => {
       const t = this.testPoints[i];
-      if (!visibleFrom(t.side, view) || (t.kind === "via" && !showVias)) return;
+      if (!visibleFrom(t.side, view) || (t.kind === "via" && !showVias && !this.isolated) || this.netHidden(t.net)) return;
       const d = Math.hypot(t.x - p.x, t.y - p.y) - t.radius;
       if (d <= tolerance && d < bestDist) {
         bestDist = d;
@@ -436,7 +505,7 @@ export class BoardModel {
     if (showTraces) {
       this.traceIndex.query(probe, (i) => {
         const t = this.traces[i];
-        if (t.side !== view || hiddenLayers.has(t.layer)) return;
+        if (t.side !== view || hiddenLayers.has(t.layer) || this.netHidden(t.net)) return;
         const d = segmentDistance(p, t) - t.width / 2;
         if (d <= tolerance && d < bestDist) {
           bestDist = d;

@@ -893,7 +893,12 @@ export function BoardView({
           {formatLength(cursor.x, settings.units)} · {formatLength(cursor.y, settings.units)}
         </div>
       )}
-      {children}
+      {/* Bars and buttons over the board: their clicks are not board clicks. */}
+      <div className="board-overlays" onPointerDown={stop} onPointerUp={stop} onDoubleClick={stop} onWheel={stop}>
+        {children}
+      </div>
     </div>
   );
 }
+
+const stop = (e: React.SyntheticEvent) => e.stopPropagation();
