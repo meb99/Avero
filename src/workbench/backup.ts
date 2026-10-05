@@ -15,15 +15,27 @@ export function storedSettings(): string {
   return JSON.stringify(out);
 }
 
-export function restoreSettings(json: string | null): void {
+/** Puts the backup's settings back; a full restore also drops Avero settings the backup did not have. */
+export function restoreSettings(json: string | null, mode: RestoreMode = "merge"): void {
   if (!json) return;
   try {
     const data = JSON.parse(json) as Record<string, unknown>;
+    if (mode === "replace") {
+      const ours: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith("avero.") && !(key in data)) ours.push(key);
+      }
+      for (const key of ours) localStorage.removeItem(key);
+    }
     for (const [key, value] of Object.entries(data)) if (key.startsWith("avero.") && typeof value === "string") localStorage.setItem(key, value);
   } catch {
     // ignore
   }
 }
+
+/** "replace": the state of the backup (later files set aside); "merge": the backup over what is there. */
+export type RestoreMode = "replace" | "merge";
 
 export interface BackupSummary {
   files: number;
@@ -44,14 +56,19 @@ export interface RestoreResult extends BackupSummary {
   app: string;
 }
 
-export async function pickAndRestoreBackup(title: string, confirm: (created: string) => Promise<boolean>): Promise<RestoreResult | null> {
+export async function pickAndRestoreBackup(
+  title: string,
+  confirm: (path: string) => Promise<boolean>,
+  chooseMode: () => Promise<RestoreMode>,
+): Promise<RestoreResult | null> {
   const { open } = await import("@tauri-apps/plugin-dialog");
   const path = await open({ title, multiple: false, directory: false, filters: [{ name: "ZIP", extensions: ["zip"] }] });
   if (typeof path !== "string") return null;
   if (!(await confirm(path))) return null;
+  const mode = await chooseMode();
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const result = await invoke<RestoreResult>("backup_restore", { path, stamp });
-  restoreSettings(result.settings);
+  const result = await invoke<RestoreResult>("backup_restore", { path, stamp, mode });
+  restoreSettings(result.settings, mode);
   return result;
 }
 

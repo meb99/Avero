@@ -23,6 +23,10 @@ pub struct Manifest {
     /// Paths on the machine the backup was made on, to rewrite stored paths.
     pub library_dir: String,
     pub data_dir: String,
+    /// Home folder of the machine (backups since 0.9.24): paths outside the
+    /// library and data folder (recent files, extra library folders) follow it.
+    #[serde(default)]
+    pub home_dir: Option<String>,
     pub files: usize,
     pub bytes: u64,
 }
@@ -108,6 +112,7 @@ pub fn create(
         app: app.to_string(),
         library_dir: library.to_string_lossy().into_owned(),
         data_dir: data.to_string_lossy().into_owned(),
+        home_dir: home_dir(),
         files: summary.files,
         bytes: summary.bytes,
     };
@@ -128,10 +133,58 @@ fn safe_join(base: &Path, rel: &str) -> Option<PathBuf> {
     Some(base.join(rel))
 }
 
-/// JSON-escaped form of a path, as it appears inside stored JSON.
-fn json_path(p: &str) -> String {
-    let quoted = serde_json::to_string(p).unwrap_or_default();
-    quoted.trim_matches('"').to_string()
+fn home_dir() -> Option<String> {
+    std::env::var("HOME").ok().filter(|h| !h.is_empty())
+}
+
+/// Replaces the first matching path prefix of every string in a JSON value
+/// (most specific mapping first); strings that hold JSON themselves (the
+/// UI's stored settings) are rewritten inside, too.
+fn rewrite_paths(value: &mut serde_json::Value, map: &[(String, String)]) {
+    use serde_json::Value;
+    match value {
+        Value::String(s) => {
+            if let Ok(mut inner @ (Value::Object(_) | Value::Array(_))) = serde_json::from_str::<Value>(s) {
+                rewrite_paths(&mut inner, map);
+                *s = inner.to_string();
+                return;
+            }
+            for (from, to) in map {
+                // Whole path parts only: "/Users/old" does not match "/Users/older".
+                let Some(rest) = s.strip_prefix(from.as_str()) else { continue };
+                if rest.is_empty() || rest.starts_with(['/', '\\']) {
+                    *s = format!("{to}{rest}");
+                    break;
+                }
+            }
+        }
+        Value::Array(items) => items.iter_mut().for_each(|v| rewrite_paths(v, map)),
+        Value::Object(fields) => fields.values_mut().for_each(|v| rewrite_paths(v, map)),
+        _ => {}
+    }
+}
+
+/// Rewrites stored paths in a JSON file's text; text that is no JSON stays as it is.
+fn rewrite_json_text(text: &str, map: &[(String, String)], pretty: bool) -> String {
+    match serde_json::from_str::<serde_json::Value>(text) {
+        Ok(mut v) => {
+            rewrite_paths(&mut v, map);
+            let out = if pretty { serde_json::to_string_pretty(&v) } else { serde_json::to_string(&v) };
+            out.unwrap_or_else(|_| text.to_string())
+        }
+        Err(_) => text.to_string(),
+    }
+}
+
+/// How a backup comes back.
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Mode {
+    /// The state of the backup: files made later are moved aside (not deleted).
+    #[default]
+    Replace,
+    /// The backup's files over the current ones; later files stay.
+    Merge,
 }
 
 pub struct Restored {
@@ -142,7 +195,13 @@ pub struct Restored {
 
 /// Restores a backup. The current data folder is kept beside it as
 /// `<data>-before-restore-<stamp>`, so a restore can be undone by hand.
-pub fn restore(archive: &Path, library: &Path, data: &Path, stamp: &str) -> Result<Restored, String> {
+pub fn restore(
+    archive: &Path,
+    library: &Path,
+    data: &Path,
+    stamp: &str,
+    mode: Mode,
+) -> Result<Restored, String> {
     let file = File::open(archive).map_err(|e| format!("{}: {e}", archive.display()))?;
     let mut zip = zip::ZipArchive::new(file).map_err(|e| format!("{}: {e}", archive.display()))?;
     let manifest: Manifest = {
@@ -169,11 +228,19 @@ pub fn restore(archive: &Path, library: &Path, data: &Path, stamp: &str) -> Resu
             }
         }
     }
-    // Stored notes hold absolute paths of photos and library files: point them here.
-    let rewrites = [
-        (json_path(&manifest.data_dir), json_path(&data.to_string_lossy())),
-        (json_path(&manifest.library_dir), json_path(&library.to_string_lossy())),
+    // Stored notes and settings hold absolute paths of photos and library
+    // files: point them here. The data and library folders before the home folder.
+    let mut rewrites: Vec<(String, String)> = vec![
+        (manifest.data_dir.clone(), data.to_string_lossy().into_owned()),
+        (manifest.library_dir.clone(), library.to_string_lossy().into_owned()),
     ];
+    if let (Some(from), Some(to)) = (manifest.home_dir.clone(), home_dir()) {
+        rewrites.push((from, to));
+    }
+    rewrites.retain(|(from, to)| !from.is_empty() && from != to);
+    if mode == Mode::Replace {
+        set_aside_newer(&mut zip, library, data, stamp)?;
+    }
     let mut summary = Summary::default();
     let mut settings = None;
     for i in 0..zip.len() {
@@ -187,19 +254,15 @@ pub fn restore(archive: &Path, library: &Path, data: &Path, stamp: &str) -> Resu
         let target = if let Some(rel) = name.strip_prefix("library/") {
             safe_join(library, rel)
         } else if let Some(rel) = name.strip_prefix("data/") {
-            if rel.ends_with(".json") {
-                let mut text = String::from_utf8_lossy(&buf).into_owned();
-                for (from, to) in &rewrites {
-                    if !from.is_empty() && from != to {
-                        text = text.replace(from.as_str(), to);
-                    }
-                }
-                buf = text.into_bytes();
+            if rel.ends_with(".json") && !rewrites.is_empty() {
+                buf = rewrite_json_text(&String::from_utf8_lossy(&buf), &rewrites, true).into_bytes();
             }
             safe_join(data, rel)
         } else {
             if name == "settings.json" {
-                settings = Some(String::from_utf8_lossy(&buf).into_owned());
+                let text = String::from_utf8_lossy(&buf).into_owned();
+                settings =
+                    Some(if rewrites.is_empty() { text } else { rewrite_json_text(&text, &rewrites, false) });
             }
             None
         };
@@ -212,6 +275,42 @@ pub fn restore(archive: &Path, library: &Path, data: &Path, stamp: &str) -> Resu
         summary.bytes += buf.len() as u64;
     }
     Ok(Restored { summary, settings, manifest })
+}
+
+/// Before a full restore: files of the library and the data folder that the
+/// backup does not have move to `<folder>-before-restore-<stamp>` (the data
+/// folder was copied there already), so the result is the backup's state and
+/// nothing is lost.
+fn set_aside_newer(
+    zip: &mut zip::ZipArchive<File>,
+    library: &Path,
+    data: &Path,
+    stamp: &str,
+) -> Result<(), String> {
+    let names: std::collections::HashSet<String> = zip.file_names().map(str::to_string).collect();
+    for (base, prefix, skip) in [(library, "library/", &[][..]), (data, "data/", SKIP_DATA)] {
+        let mut files = Vec::new();
+        walk(base, base, skip, &mut files).map_err(|e| e.to_string())?;
+        let keep = base.with_file_name(format!(
+            "{}-before-restore-{stamp}",
+            base.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()
+        ));
+        for (path, rel) in files {
+            if names.contains(&format!("{prefix}{rel}")) {
+                continue;
+            }
+            if let Some(target) = safe_join(&keep, &rel) {
+                if let Some(parent) = target.parent() {
+                    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+                }
+                if !target.exists() {
+                    std::fs::copy(&path, &target).map_err(|e| format!("{}: {e}", path.display()))?;
+                }
+                std::fs::remove_file(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -260,7 +359,9 @@ mod tests {
         let new_data = root.join("new/data");
         std::fs::create_dir_all(&new_data).unwrap();
         std::fs::write(new_data.join("old.txt"), b"before").unwrap();
-        let back = restore(&archive, &new_library, &new_data, "1").unwrap();
+        std::fs::create_dir_all(new_library.join("Later")).unwrap();
+        std::fs::write(new_library.join("Later/new.brd"), b"later").unwrap();
+        let back = restore(&archive, &new_library, &new_data, "1", Mode::Replace).unwrap();
         assert_eq!(back.summary.files, 3);
         assert_eq!(back.settings.as_deref(), Some("{\"avero.settings.v1\":\"{}\"}"));
         assert_eq!(back.manifest.app, "0.9.20");
@@ -272,7 +373,32 @@ mod tests {
         );
         // The data folder as it was is kept beside it.
         assert_eq!(std::fs::read(root.join("new/data-before-restore-1/old.txt")).unwrap(), b"before");
+        // A full restore is the backup's state: later files are set aside, not mixed in.
+        assert!(!new_data.join("old.txt").exists());
+        assert!(!new_library.join("Later/new.brd").exists());
+        assert_eq!(
+            std::fs::read(root.join("new/Bibliothek-before-restore-1/Later/new.brd")).unwrap(),
+            b"later"
+        );
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn rewrites_paths_inside_stored_settings() {
+        let map = vec![
+            ("/Users/old/Library/Avero".to_string(), "/Users/new/Library/Avero".to_string()),
+            ("/Users/old".to_string(), "/Users/new".to_string()),
+        ];
+        let inner = r#"{"libraryFolders":["/Users/old/Boards"],"x":"/Users/older/y"}"#;
+        let settings = serde_json::json!({ "avero.settings.v1": inner, "avero.recent": "[\"/Users/old/Library/Avero/a.brd\"]" }).to_string();
+        let out: serde_json::Value =
+            serde_json::from_str(&rewrite_json_text(&settings, &map, false)).unwrap();
+        let s: serde_json::Value = serde_json::from_str(out["avero.settings.v1"].as_str().unwrap()).unwrap();
+        assert_eq!(s["libraryFolders"][0], "/Users/new/Boards");
+        // Only whole path parts: "/Users/older" is not "/Users/old".
+        assert_eq!(s["x"], "/Users/older/y");
+        let recent: serde_json::Value = serde_json::from_str(out["avero.recent"].as_str().unwrap()).unwrap();
+        assert_eq!(recent[0], "/Users/new/Library/Avero/a.brd");
     }
 
     #[test]

@@ -40,6 +40,10 @@ struct Source {
     data: Data,
 }
 
+/// A file found for import and the folder or archive directory it came from:
+/// files that share one belong together (an ASC set, a board with its schematic).
+type Found = (Source, String);
+
 fn head_of(path: &Path) -> Vec<u8> {
     let mut head = vec![0u8; 0x20];
     let n = std::fs::File::open(path).and_then(|mut f| f.read(&mut head)).unwrap_or(0);
@@ -55,7 +59,7 @@ fn dir_name(path: &Path) -> String {
     path.parent().and_then(Path::file_name).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
 }
 
-fn collect(path: &Path, depth: usize, out: &mut Vec<Source>, result: &mut ImportResult) {
+fn collect(path: &Path, depth: usize, out: &mut Vec<Found>, result: &mut ImportResult) {
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     if name.starts_with('.') {
         return;
@@ -81,13 +85,19 @@ fn collect(path: &Path, depth: usize, out: &mut Vec<Source>, result: &mut Import
             result.errors.push(format!("{name}: {e}"));
         }
     } else if is_importable(&name, || head_of(path)) {
-        out.push(Source { context: dir_name(path), name, data: Data::File(path.to_path_buf()) });
+        // Files picked one by one stand alone; files inside a picked folder share it.
+        let group = if depth == 0 {
+            path.to_string_lossy().into_owned()
+        } else {
+            path.parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default()
+        };
+        out.push((Source { context: dir_name(path), name, data: Data::File(path.to_path_buf()) }, group));
     } else {
         result.skipped += 1;
     }
 }
 
-fn expand_zip(path: &Path, out: &mut Vec<Source>, result: &mut ImportResult) -> Result<(), String> {
+fn expand_zip(path: &Path, out: &mut Vec<Found>, result: &mut ImportResult) -> Result<(), String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
     let archive_name = path.file_name().map(|n| stem(&n.to_string_lossy()).to_string()).unwrap_or_default();
@@ -114,7 +124,8 @@ fn expand_zip(path: &Path, out: &mut Vec<Source>, result: &mut ImportResult) -> 
         }
         if is_importable(&name, || data.iter().take(0x20).copied().collect()) {
             let context = parts.last().map_or(archive_name.clone(), |p| (*p).to_string());
-            out.push(Source { name, context, data: Data::Bytes(data) });
+            let group = format!("{}#{}", path.display(), parts.join("/"));
+            out.push((Source { name, context, data: Data::Bytes(data) }, group));
         } else {
             result.skipped += 1;
         }
@@ -134,7 +145,7 @@ fn bsdtar() -> Option<&'static str> {
 /// Unpacks a 7z or RAR archive into a temporary folder and reads the
 /// usable files from it. bsdtar refuses absolute paths and `..` in archive
 /// entries; symbolic links from the archive are not followed either.
-fn expand_with_bsdtar(path: &Path, out: &mut Vec<Source>, result: &mut ImportResult) -> Result<(), String> {
+fn expand_with_bsdtar(path: &Path, out: &mut Vec<Found>, result: &mut ImportResult) -> Result<(), String> {
     let tool = bsdtar().ok_or("7z and RAR archives need bsdtar (part of macOS)")?;
     let stamp =
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
@@ -167,7 +178,7 @@ fn expand_with_bsdtar(path: &Path, out: &mut Vec<Source>, result: &mut ImportRes
 
 /// Reads files from an unpacked archive into memory (the folder is removed
 /// right after).
-fn read_unpacked(dir: &Path, context: &str, depth: usize, out: &mut Vec<Source>, result: &mut ImportResult) {
+fn read_unpacked(dir: &Path, context: &str, depth: usize, out: &mut Vec<Found>, result: &mut ImportResult) {
     let Ok(entries) = std::fs::read_dir(dir) else { return };
     for entry in entries.filter_map(Result::ok) {
         let path = entry.path();
@@ -184,7 +195,10 @@ fn read_unpacked(dir: &Path, context: &str, depth: usize, out: &mut Vec<Source>,
             result.errors.push(format!("{name}: too large"));
         } else if is_importable(&name, || head_of(&path)) {
             match std::fs::read(&path) {
-                Ok(data) => out.push(Source { name, context: context.to_string(), data: Data::Bytes(data) }),
+                Ok(data) => out.push((
+                    Source { name, context: context.to_string(), data: Data::Bytes(data) },
+                    dir.to_string_lossy().into_owned(),
+                )),
                 Err(e) => result.errors.push(format!("{name}: {e}")),
             }
         } else {
@@ -358,16 +372,77 @@ pub fn trash(root: &Path, trash: &Path, paths: &[PathBuf]) -> Result<usize, Stri
     Ok(count)
 }
 
+/// Folder for a file of an import: its board number, else the board number
+/// of its folder or archive, else, when other files came from the same
+/// folder, that folder's name (`Trinity/Board.brd` and `Trinity/Schematic.pdf`
+/// stay together), else its own name.
+fn import_folder(source: &Source, shares_folder: bool) -> PathBuf {
+    let own = id_tokens(&stem(&source.name).to_lowercase()).into_iter().next();
+    let token = own.or_else(|| id_tokens(&source.context.to_lowercase()).into_iter().next());
+    if let Some(t) = token {
+        return PathBuf::from(t.to_uppercase());
+    }
+    if shares_folder || is_asc(&source.name) {
+        if let Some(folder) = sanitize_folder(&source.context) {
+            return folder;
+        }
+    }
+    sanitize_folder(stem(&source.name)).unwrap_or_else(|| PathBuf::from("Board"))
+}
+
+fn is_asc(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.ends_with(".asc") || lower.ends_with(".bom")
+}
+
+/// A folder name not used yet next to `dir`: "X1C6", then "X1C6 (2)" …
+fn free_dir(dir: &Path) -> PathBuf {
+    let name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Board".into());
+    let parent = dir.parent().map(Path::to_path_buf).unwrap_or_default();
+    (2..)
+        .map(|n| parent.join(format!("{name} ({n})")))
+        .find(|p| !p.exists())
+        .unwrap_or_else(|| dir.to_path_buf())
+}
+
 pub fn import(root: &Path, paths: &[PathBuf], folder: Option<&str>) -> ImportResult {
+    use std::collections::HashMap;
     let mut result = ImportResult::default();
-    let mut sources = Vec::new();
+    let mut found = Vec::new();
     for p in paths {
-        collect(p, 0, &mut sources, &mut result);
+        collect(p, 0, &mut found, &mut result);
     }
     let fixed = folder.and_then(sanitize_folder);
+    let mut per_group: HashMap<String, usize> = HashMap::new();
+    for (_, group) in &found {
+        *per_group.entry(group.clone()).or_default() += 1;
+    }
+    // An ASC set (pins.asc, format.asc, nails.asc …) moves as one: when any of
+    // its files would clash with another set's file, the whole set gets a
+    // folder of its own, so the reader still finds the files side by side.
+    let mut asc_dirs: HashMap<String, PathBuf> = HashMap::new();
+    for (source, group) in found.iter().filter(|(s, _)| is_asc(&s.name)) {
+        if asc_dirs.contains_key(group) {
+            continue;
+        }
+        let base = root.join(fixed.clone().unwrap_or_else(|| import_folder(source, per_group[group] > 1)));
+        let set: Vec<&Source> =
+            found.iter().filter(|(s, g)| g == group && is_asc(&s.name)).map(|(s, _)| s).collect();
+        let clashes = |dir: &Path| {
+            set.iter().any(|s| {
+                let target = dir.join(&s.name);
+                target.exists() && !same_content(&target, &s.data)
+            })
+        };
+        let dir = if clashes(&base) { free_dir(&base) } else { base };
+        asc_dirs.insert(group.clone(), dir);
+    }
 
-    for source in sources {
-        let dir = root.join(fixed.clone().unwrap_or_else(|| board_folder(&source)));
+    for (source, group) in found {
+        let dir = match asc_dirs.get(&group).filter(|_| is_asc(&source.name)) {
+            Some(d) => d.clone(),
+            None => root.join(fixed.clone().unwrap_or_else(|| import_folder(&source, per_group[&group] > 1))),
+        };
         if let Err(e) = std::fs::create_dir_all(&dir) {
             result.errors.push(format!("{}: {e}", dir.display()));
             continue;
@@ -456,6 +531,61 @@ mod tests {
         ));
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn a_second_asc_set_gets_its_own_folder() {
+        let dir = temp("asc-sets");
+        let lib = dir.join("lib");
+        for (set, content) in [("one", "A"), ("two", "B")] {
+            let folder = dir.join(set).join("BOARD");
+            std::fs::create_dir_all(&folder).unwrap();
+            for name in ["pins.asc", "format.asc", "nails.asc"] {
+                std::fs::write(folder.join(name), format!("{content}{name}")).unwrap();
+            }
+        }
+        import(&lib, &[dir.join("one")], None);
+        let second = import(&lib, &[dir.join("two")], None);
+        assert_eq!(second.imported.len(), 3);
+        let folders: std::collections::HashSet<_> =
+            second.imported.iter().map(|p| Path::new(p).parent().unwrap().to_path_buf()).collect();
+        assert_eq!(folders.len(), 1, "the set stays together");
+        let folder = folders.into_iter().next().unwrap();
+        assert!(folder.ends_with("BOARD (2)"), "{}", folder.display());
+        for name in ["pins.asc", "format.asc", "nails.asc"] {
+            assert_eq!(std::fs::read_to_string(folder.join(name)).unwrap(), format!("B{name}"));
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn files_of_one_archive_folder_stay_together() {
+        use std::io::Write;
+        let dir = temp("zip-folder");
+        let zip_path = dir.join("Konsolen.zip");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
+        let opts = zip::write::SimpleFileOptions::default();
+        zip.start_file("Trinity/Board.brd", opts).unwrap();
+        zip.write_all(b"str_length: 1").unwrap();
+        zip.start_file("Trinity/Schematic.pdf", opts).unwrap();
+        zip.write_all(b"%PDF-1.4").unwrap();
+        zip.finish().unwrap();
+        let lib = dir.join("lib");
+        let result = import(&lib, &[zip_path], None);
+        assert_eq!(result.imported.len(), 2);
+        for p in &result.imported {
+            assert!(Path::new(p).parent().unwrap().ends_with("Trinity"), "{p}");
+        }
+        // Files picked one by one keep their own folders.
+        let loose = dir.join("loose");
+        std::fs::create_dir_all(&loose).unwrap();
+        std::fs::write(loose.join("Alpha.pdf"), b"%PDF-1.4 a").unwrap();
+        std::fs::write(loose.join("Beta.pdf"), b"%PDF-1.4 b").unwrap();
+        let picked = import(&lib, &[loose.join("Alpha.pdf"), loose.join("Beta.pdf")], None);
+        let parents: std::collections::HashSet<_> =
+            picked.imported.iter().map(|p| Path::new(p).parent().unwrap().to_path_buf()).collect();
+        assert_eq!(parents.len(), 2);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     fn files_in(root: &Path) -> Vec<String> {

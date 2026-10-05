@@ -461,10 +461,15 @@ struct RestoreResult {
 
 /// Restores a backup made with `backup_create`; returns the stored settings for the UI.
 #[tauri::command]
-async fn backup_restore(app: tauri::AppHandle, path: String, stamp: String) -> Result<RestoreResult, String> {
+async fn backup_restore(
+    app: tauri::AppHandle,
+    path: String,
+    stamp: String,
+    mode: Option<backup::Mode>,
+) -> Result<RestoreResult, String> {
     let library = library_dir(&app)?;
     let data = data_dir(&app)?;
-    let r = backup::restore(Path::new(&path), &library, &data, &stamp)?;
+    let r = backup::restore(Path::new(&path), &library, &data, &stamp, mode.unwrap_or_default())?;
     Ok(RestoreResult {
         files: r.summary.files,
         bytes: r.summary.bytes,

@@ -264,8 +264,18 @@ function BackupButtons() {
         onClick={() =>
           void run(async () => {
             const { ask } = await import("@tauri-apps/plugin-dialog");
-            const r = await pickAndRestoreBackup(t("backup.restore"), (path) =>
-              ask(t("backup.restoreAsk", { path }), { title: t("backup.restore"), kind: "warning", okLabel: t("backup.restoreOk") }),
+            const r = await pickAndRestoreBackup(
+              t("backup.restore"),
+              (path) => ask(t("backup.restoreAsk", { path }), { title: t("backup.restore"), kind: "warning", okLabel: t("backup.restoreOk") }),
+              async () =>
+                (await ask(t("backup.modeAsk"), {
+                  title: t("backup.restore"),
+                  kind: "info",
+                  okLabel: t("backup.modeReplace"),
+                  cancelLabel: t("backup.modeMerge"),
+                }))
+                  ? "replace"
+                  : "merge",
             );
             if (!r) return null;
             // Everything in memory is stale now: start over with the restored data.

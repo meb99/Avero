@@ -70,7 +70,8 @@ pub(crate) fn is_xzz_head(head: &[u8]) -> bool {
 
 fn read_head(path: &Path) -> Vec<u8> {
     use std::io::Read;
-    let mut head = vec![0u8; 0x20];
+    // Enough for every content check (Allegro's tag sits at 0xF8, Altium's kind in the first lines).
+    let mut head = vec![0u8; 4096];
     let n = std::fs::File::open(path).and_then(|mut f| f.read(&mut head)).unwrap_or(0);
     head.truncate(n);
     head
@@ -86,11 +87,14 @@ fn classify(name: &str, head: impl FnOnce() -> Vec<u8>) -> Option<Kind> {
         "asc" => (name == "pins.asc").then_some(Kind::Board),
         "pcb" => is_xzz_head(&head()).then_some(Kind::Board),
         "tvw" => Some(Kind::Unsupported),
-        // Altium saves text ("PCB ASCII") or an OLE compound file under the same name.
-        "pcbdoc" => {
-            Some(if head().starts_with(&[0xD0, 0xCF, 0x11, 0xE0]) { Kind::Unsupported } else { Kind::Board })
+        // The same detector as opening a file: a binary Allegro .brd or an OLE
+        // .PcbDoc is named as not readable instead of listed as a board.
+        _ if avero_formats::formats::extensions().contains(&ext) => {
+            match avero_formats::detect(&head(), Some(&name)) {
+                avero_formats::Detected::Unsupported(_) => Some(Kind::Unsupported),
+                _ => Some(Kind::Board),
+            }
         }
-        _ if avero_formats::formats::extensions().contains(&ext) => Some(Kind::Board),
         _ => None,
     }
 }
@@ -292,6 +296,14 @@ pub fn scan(roots: &[PathBuf]) -> LibraryScan {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn binary_allegro_boards_are_named_not_listed_as_boards() {
+        let mut allegro = vec![0u8; 0x200];
+        allegro[0xf8..0xfb].copy_from_slice(b"all");
+        assert_eq!(classify("Mainboard.brd", || allegro.clone()), Some(Kind::Unsupported));
+        assert_eq!(classify("Mainboard.brd", || b"str_length: 1".to_vec()), Some(Kind::Board));
+    }
 
     #[test]
     fn altium_text_boards_are_boards_and_binary_ones_are_named() {
