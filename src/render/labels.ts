@@ -10,6 +10,22 @@ export interface LabelOptions {
   netNames: boolean;
 }
 
+/** A measured value shown at a pad: the reading, the reference under it, the comparison as color. */
+export interface PadValue {
+  text: string;
+  /** Second line, e.g. the reference ("ref 0.450 V"). */
+  sub?: string;
+  status?: NetStatus;
+}
+
+/** Values to show at pins and test points (see App: chosen quantity, active case). */
+export interface PadValues {
+  pin(i: number): PadValue | undefined;
+  testPoint(i: number): PadValue | undefined;
+}
+
+const MAX_PAD_VALUES = 900;
+
 const FONT = '-apple-system, "SF Pro Text", "Helvetica Neue", sans-serif';
 const MONO = '"SF Mono", ui-monospace, Menlo, monospace';
 const MAX_PART_LABELS = 700;
@@ -63,6 +79,8 @@ export function drawLabels(
   clear = true,
   /** Values under part names from the schematic, by part index; else the board's device text. */
   values?: ReadonlyMap<number, string>,
+  /** Measured values written at pads, when zoomed in far enough. */
+  padValues?: PadValues,
 ): void {
   const { width, height } = ctx.canvas;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -196,7 +214,99 @@ export function drawLabels(
   }
 
   if (measured && measured.size > 0) drawMeasured(ctx, model, camera, view, visible, measured);
+  if (padValues) drawPadValues(ctx, model, camera, view, visible, padValues, occupied, palette, selection);
   drawSelectionRing(ctx, model, camera, selection, palette);
+}
+
+/**
+ * Numbers at pads: the reading in its status color with the reference under
+ * it, beside the pad so the pad stays visible. Shown from a zoom where they
+ * can be read; labels that would overlap give way, the selected pin's never.
+ */
+function drawPadValues(
+  ctx: CanvasRenderingContext2D,
+  model: BoardModel,
+  camera: Camera,
+  view: ViewSide,
+  visible: ReturnType<Camera["visibleBounds"]>,
+  values: PadValues,
+  occupied: Occupancy,
+  palette: Palette,
+  selection: Selection,
+): void {
+  const s = camera.scale;
+  const items: { x: number; y: number; r: number; v: PadValue; first: boolean }[] = [];
+  const take = (x: number, y: number, radius: number, v: PadValue | undefined, first: boolean) => {
+    if (!v) return;
+    const r = radius * s;
+    // Readable from about a 0402 pad at medium zoom; the selected pin always.
+    if (r < 4 && !first) return;
+    const p = camera.toScreen({ x, y });
+    if (p.x < -40 || p.y < -40 || p.x > camera.width + 40 || p.y > camera.height + 40) return;
+    items.push({ x: p.x, y: p.y, r: Math.max(r, 3), v, first });
+  };
+  if (selection.kind === "pin") {
+    const pin = model.pins[selection.pin];
+    if (visibleFrom(pin.side, view)) take(pin.x, pin.y, pin.radius, values.pin(selection.pin), true);
+  }
+  model.pinIndex.query(visible, (i) => {
+    if (items.length >= MAX_PAD_VALUES || (selection.kind === "pin" && selection.pin === i)) return;
+    const pin = model.pins[i];
+    if (visibleFrom(pin.side, view)) take(pin.x, pin.y, pin.radius, values.pin(i), false);
+  });
+  model.testPointIndex.query(visible, (i) => {
+    if (items.length >= MAX_PAD_VALUES) return;
+    const tp = model.testPoints[i];
+    if (visibleFrom(tp.side, view)) take(tp.x, tp.y, tp.radius, values.testPoint(i), false);
+  });
+  ctx.save();
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  for (const { x, y, r, v, first } of items) {
+    const size = Math.min(Math.max(r * 0.55, 9), 13);
+    const subSize = Math.max(8, size * 0.8);
+    ctx.font = `600 ${size}px ${MONO}`;
+    const w1 = ctx.measureText(v.text).width;
+    ctx.font = `500 ${subSize}px ${MONO}`;
+    const w2 = v.sub ? ctx.measureText(v.sub).width : 0;
+    const w = Math.max(w1, w2) + 8;
+    const h = size + 6 + (v.sub ? subSize + 2 : 0);
+    // Right of the pad, else left, below, above.
+    const spots = [
+      { x0: x + r + 3, y0: y - h / 2 },
+      { x0: x - r - 3 - w, y0: y - h / 2 },
+      { x0: x - w / 2, y0: y + r + 3 },
+      { x0: x - w / 2, y0: y - r - 3 - h },
+    ];
+    let at: { x0: number; y0: number } | undefined;
+    for (const spot of spots) {
+      if (occupied.tryPlace({ x0: spot.x0, y0: spot.y0, x1: spot.x0 + w, y1: spot.y0 + h })) {
+        at = spot;
+        break;
+      }
+    }
+    if (!at) {
+      if (!first) continue;
+      at = spots[0];
+    }
+    const color = v.status ? STATUS_COLOR[v.status] : palette.label;
+    ctx.fillStyle = "rgba(16, 18, 22, 0.86)";
+    ctx.strokeStyle = color;
+    ctx.lineWidth = first ? 2 : 1.2;
+    ctx.beginPath();
+    ctx.roundRect(at.x0, at.y0, w, h, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.font = `600 ${size}px ${MONO}`;
+    ctx.fillStyle = v.status === "reference" ? "#c9d1d9" : color === palette.label ? "#ffffff" : color;
+    ctx.fillText(v.text, at.x0 + 4, at.y0 + 3 + size / 2);
+    if (v.sub) {
+      ctx.font = `500 ${subSize}px ${MONO}`;
+      ctx.fillStyle = "#aab4be";
+      ctx.fillText(v.sub, at.x0 + 4, at.y0 + 3 + size + 2 + subSize / 2);
+    }
+  }
+  ctx.restore();
 }
 
 const STATUS_COLOR: Record<NetStatus, string> = {

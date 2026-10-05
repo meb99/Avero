@@ -12,6 +12,8 @@ export interface Settings {
   /** What two-finger scrolling / the mouse wheel does. Pinching always zooms. */
   scroll: "zoom" | "pan";
   ghostOtherSide: boolean;
+  /** Measured values written at pads: off, or the quantity to show. */
+  padValues?: "off" | "diode" | "voltage" | "resistance";
   /** Top and bottom side at once, the bottom mirrored beside the top. */
   bothSides: boolean;
   /** Both sides in one view, or in two views side by side (zoomed on their own or in step). */

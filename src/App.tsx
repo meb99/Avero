@@ -30,6 +30,7 @@ import { Toolbar } from "./components/Toolbar";
 import { Welcome } from "./components/Welcome";
 import { BoardModel, netSides, visibleFrom, type ViewSide } from "./core/board";
 import { findPoint } from "./core/points";
+import { padValueSource } from "./workbench/padValues";
 import type { Command } from "./core/commands";
 import { mapSelection } from "./core/compare";
 import { search } from "./core/search";
@@ -360,6 +361,21 @@ export function App() {
       off();
     };
   }, [schematic, model]);
+  // Measured values at pads (key V): the chosen quantity of the active case, else the reference.
+  const padQuantity = settings.padValues ?? "off";
+  const padValues = useMemo(
+    () => (model && notesForModel && padQuantity !== "off" ? padValueSource(model, notesForModel, padQuantity, settings.tolerance, lang, t("pad.ref")) : undefined),
+    // namesRevision: own net names change the model's names in place.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [model, notesForModel, padQuantity, settings.tolerance, lang, t, namesRevision],
+  );
+  const cyclePadValues = () => {
+    const order = ["off", "diode", "voltage", "resistance"] as const;
+    const next = order[(order.indexOf(padQuantity) + 1) % order.length];
+    setSettings((s) => ({ ...s, padValues: next }));
+    setToast(next === "off" ? t("pad.off") : t("pad.on", { what: t(`measure.${next}`) }));
+  };
+
   /** Value shown under a part's name on the board: the schematic's when it has one. */
   const partValues = useMemo(() => {
     const out = new Map<number, string>();
@@ -1805,6 +1821,7 @@ export function App() {
       { id: "export-pdf", label: t("menu.exportPdf"), shortcut: "⌥⌘E", enabled: board, run: a.exportPdf },
       { id: "marker", label: t("marker.place"), shortcut: "M", enabled: board && notes !== null, run: () => setPlacingMarker(true) },
       { id: "ruler", label: t("ruler.title"), shortcut: "L", enabled: board, run: () => setRuler({ side, points: [] }) },
+      { id: "pad-values", label: t("pad.command"), shortcut: "V", enabled: board, run: cyclePadValues },
       { id: "draw-line", label: t("draw.line"), enabled: board && notes !== null, run: () => startDrawing("line") },
       { id: "draw-area", label: t("draw.area"), enabled: board && notes !== null, run: () => startDrawing("area") },
       { id: "draw-jumper", label: t("draw.jumper"), enabled: board && notes !== null, run: () => startDrawing("jumper") },
@@ -1958,6 +1975,10 @@ export function App() {
         case "R":
           setRotation((r) => (r + 3) & 3);
           break;
+        case "v":
+        case "V":
+          if (model) cyclePadValues();
+          break;
         case "Enter": {
           if (drawingRef.current?.kind === "area") {
             finishDrawing(drawingRef.current);
@@ -2092,6 +2113,7 @@ export function App() {
                     activeMarker={editingMarker?.id ?? null}
                     onMarkerClick={openMarker}
                     measured={measured}
+                    padValues={padValues}
                     initialView={initialView}
                     photo={bothSides ? undefined : photoLayer}
                     partValues={partValues}
@@ -2116,6 +2138,14 @@ export function App() {
                     extraParts={multiSet}
                   >
                     {placingMarker && <div className="placing-hint">{t("marker.placing")}</div>}
+                    {padQuantity !== "off" && (
+                      <button className="pad-values-legend" onClick={cyclePadValues} title={t("pad.legendHint")}>
+                        {t("pad.legend", {
+                          what: t(`measure.${padQuantity}`),
+                          source: notesForModel && activeCase(notesForModel) ? t("pad.sourceCase", { title: activeCase(notesForModel)!.title }) : t("pad.sourceReference"),
+                        })}
+                      </button>
+                    )}
                     {ruler && (
                       <div className="placing-hint drawing-hint ruler-hint">
                         {rulerText ? <strong>{rulerText.detail}</strong> : t("ruler.hint")}
@@ -2180,6 +2210,7 @@ export function App() {
                       activeMarker={editingMarker?.id ?? null}
                       onMarkerClick={openMarker}
                       measured={measured}
+                      padValues={padValues}
                       partValues={partValues}
                       drawings={boardDrawings}
                       onPointPick={drawing ? pickDrawPoint : ruler ? pickRulerPoint : placingMarker ? placeMarker : undefined}

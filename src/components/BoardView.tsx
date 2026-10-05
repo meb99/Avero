@@ -4,7 +4,7 @@ import { Camera, lerpCamera } from "../core/camera";
 import { bottomCamera, boundsToLayout, dualLayout, fromLayout, sideAt, toLayout, type DualLayout } from "../core/dualView";
 import type { Bounds, Point, Selection } from "../core/types";
 import { useI18n } from "../i18n";
-import { drawDrawings, drawLabels, drawMarkers, markerAt, type DrawingMark, type MarkerMark } from "../render/labels";
+import { drawDrawings, drawLabels, drawMarkers, markerAt, type DrawingMark, type MarkerMark, type PadValues } from "../render/labels";
 import type { Palette, RGBA } from "../render/palette";
 import { BoardRenderer, type RenderView } from "../render/renderer";
 import { computeStyle } from "../render/style";
@@ -72,6 +72,8 @@ interface Props {
   photo?: PhotoLayer;
   /** Values to print under part names (from the schematic), by part index. */
   partValues?: ReadonlyMap<number, string>;
+  /** Measured values written at pads (see labels.ts). */
+  padValues?: PadValues;
   /** Lines, areas and jumpers drawn on the board. */
   drawings?: readonly DrawingMark[];
   /** The drawing being made; its next point follows the cursor. */
@@ -142,6 +144,7 @@ export function BoardView({
   initialView,
   photo,
   partValues,
+  padValues,
   drawings = NO_DRAWINGS,
   draft = null,
   onViewChange,
@@ -178,6 +181,7 @@ export function BoardView({
     markers,
     activeMarker,
     partValues,
+    padValues,
     drawings,
     draft,
     /** Board point under the cursor, for the draft's last segment. */
@@ -335,6 +339,7 @@ export function BoardView({
         s.measured,
         i === 0,
         s.partValues,
+        s.padValues,
       ),
     );
     for (const v of views) {
@@ -627,6 +632,11 @@ export function BoardView({
     stateRef.current.partValues = partValues;
     requestDraw();
   }, [partValues, requestDraw]);
+
+  useEffect(() => {
+    stateRef.current.padValues = padValues;
+    requestDraw();
+  }, [padValues, requestDraw]);
 
   useEffect(() => {
     Object.assign(stateRef.current, { drawings, draft });
