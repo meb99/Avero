@@ -732,19 +732,39 @@ export function App() {
 
   // --- opening files -------------------------------------------------------
 
+  // The newest schematic request per tab: an older one that finishes later is dropped.
+  const schematicRequests = useRef(new Map<number, number>());
   const openSchematicBytes = useCallback(async (bytes: Uint8Array, name: string, path?: string) => {
+    // The schematic belongs to the tab it was opened for, even when another tab is shown by the time it is ready.
+    const tabId = live.current.id;
+    const request = (schematicRequests.current.get(tabId) ?? 0) + 1;
+    schematicRequests.current.set(tabId, request);
     try {
       // pdf.js is large; load it only once a schematic is actually opened.
       const { SchematicDocument } = await import("./schematic/document");
       const doc = await SchematicDocument.open(bytes, name, path);
-      setSchematic((old) => {
-        old?.destroy();
-        return doc;
-      });
-      setPhotoPane(false);
-      setSchematicVisible(true);
+      if (schematicRequests.current.get(tabId) !== request) {
+        doc.destroy();
+        return;
+      }
+      if (live.current.id === tabId) {
+        setSchematic((old) => {
+          if (old !== doc) old?.destroy();
+          return doc;
+        });
+        setPhotoPane(false);
+        setSchematicVisible(true);
+        return;
+      }
+      const tab = tabsRef.current.find((t) => t.id === tabId);
+      if (!tab) {
+        doc.destroy();
+        return;
+      }
+      tab.schematic?.destroy();
+      setTabs((ts) => ts.map((t) => (t.id === tabId ? { ...t, schematic: doc, schematicVisible: true } : t)));
     } catch (e) {
-      setError({ name, error: { code: "schematic", message: e instanceof Error ? e.message : String(e) } });
+      if (live.current.id === tabId) setError({ name, error: { code: "schematic", message: e instanceof Error ? e.message : String(e) } });
     }
   }, []);
 
@@ -984,6 +1004,16 @@ export function App() {
     setBgaPart(null);
     setDonorPart(null);
     setDiffMarks(null);
+    // Tools in progress belong to the board they were started on: another
+    // board (tab switch, new file) ends them instead of finishing them there.
+    setDrawing(null);
+    setRuler(null);
+    setPlacingMarker(false);
+    const a = aligningRef.current;
+    if (a) {
+      if (a.fresh) void invoke("remove_photo", { path: a.file }).catch(() => {});
+      setAligning(null);
+    }
   }, [model]);
   const addPartToSelection = (part: number) => {
     setMultiParts((list) => {
