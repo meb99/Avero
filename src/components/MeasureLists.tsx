@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { askConfirm, askText } from "./Ask";
 import type { BoardModel } from "../core/board";
+import { findPoint, pointLabel, pointOf } from "../core/points";
 import type { Selection } from "../core/types";
 import { useI18n } from "../i18n";
 import { QUANTITIES, type Quantity } from "../workbench/measure";
@@ -13,6 +14,7 @@ import {
   updateList,
   type BoardNotes,
   type ListItem,
+  setPointValue,
 } from "../workbench/notes";
 import { ValueInput } from "./MeasureBlock";
 
@@ -45,6 +47,13 @@ export function MeasureLists({ model, notes, update, selection, onSelect, focus 
   const readings = current?.readings ?? notes.reference;
 
   const selectedNet = model.selectedNet(selection);
+  const selectedPoint = pointOf(model, selection);
+  const pointReadings = (current ? current.points : notes.referencePoints) ?? {};
+  const where = (item: ListItem): Selection | undefined => {
+    if (item.point) return findPoint(model, item.point);
+    const net = model.findNet(item.net);
+    return net === undefined ? undefined : { kind: "net", net };
+  };
   const selectedPart = model.selectedPart(selection);
   const add = (items: ListItem[]) => {
     if (items.length === 0) return;
@@ -71,8 +80,8 @@ export function MeasureLists({ model, notes, update, selection, onSelect, focus 
     if (!list || !progress) return;
     const i = progress.done.indexOf(false);
     if (i < 0) return;
-    const net = model.findNet(list.items[i].net);
-    if (net !== undefined) onSelect({ kind: "net", net }, true);
+    const at = where(list.items[i]);
+    if (at) onSelect(at, true);
     // The value field of that point, ready for typing.
     requestAnimationFrame(() => tableRef.current?.querySelectorAll<HTMLInputElement>("input.value-input")[i]?.focus());
   };
@@ -119,23 +128,33 @@ export function MeasureLists({ model, notes, update, selection, onSelect, focus 
           <table className="wb-table list-table" ref={tableRef}>
             <tbody>
               {list.items.map((item, i) => {
-                const net = model.findNet(item.net);
+                const at = where(item);
                 return (
-                  <tr key={`${item.net}|${item.quantity}`} className={net === undefined ? "missing" : undefined}>
+                  <tr key={`${item.point ?? item.net}|${item.quantity}`} className={at === undefined ? "missing" : undefined}>
                     <td className={progress.done[i] ? "list-done" : "list-open"}>{progress.done[i] ? "✓" : "○"}</td>
                     <td>
-                      <button className="link mono" onClick={() => net !== undefined && onSelect({ kind: "net", net }, true)}>
-                        {item.net}
+                      <button className="link mono" onClick={() => at && onSelect(at, true)}>
+                        {item.point ? pointLabel(model, item.point) : item.net}
                       </button>
+                      {item.point && <div className="muted list-label">{item.net}</div>}
                       {item.label && <div className="muted list-label">{item.label}</div>}
                     </td>
                     <td className="muted">{SHORT[item.quantity]}</td>
                     <td>
                       <ValueInput
-                        value={readings[item.net]?.[item.quantity]}
+                        value={item.point ? pointReadings[item.point]?.[item.quantity] : readings[item.net]?.[item.quantity]}
                         quantity={item.quantity}
-                        label={`${item.net} · ${t(`measure.${item.quantity}`)}`}
-                        onChange={(v) => update((n) => setValue(n, target, item.net, item.quantity, v))}
+                        label={`${item.point ? pointLabel(model, item.point) : item.net} · ${t(`measure.${item.quantity}`)}`}
+                        bind={`${notes.key}|list|${item.point ?? item.net}|${item.quantity}`}
+                        onChange={(v) =>
+                          update((n) =>
+                            n.key !== notes.key
+                              ? n
+                              : item.point
+                                ? setPointValue(n, target, item.point, item.net, item.quantity, v)
+                                : setValue(n, target, item.net, item.quantity, v),
+                          )
+                        }
                       />
                     </td>
                     <td>
@@ -166,6 +185,15 @@ export function MeasureLists({ model, notes, update, selection, onSelect, focus 
         <button className="small" disabled={selectedNet === undefined} onClick={() => selectedNet !== undefined && add([{ net: model.nets[selectedNet].name, quantity }])}>
           + {t("lists.addNet")}
         </button>
+        {selectedPoint && model.nets[selectedPoint.net].kind !== "unconnected" && (
+          <button
+            className="small"
+            onClick={() => add([{ net: model.nets[selectedPoint.net].name, quantity, point: selectedPoint.id }])}
+            title={t("lists.addPointHint")}
+          >
+            + {t("lists.addPoint", { point: selectedPoint.label })}
+          </button>
+        )}
         <button className="small" disabled={selectedPart === undefined} onClick={() => selectedPart !== undefined && add(partNets(selectedPart))}>
           + {selectedPart !== undefined ? t("lists.addPart", { part: model.parts[selectedPart].name }) : t("lists.addPartNone")}
         </button>

@@ -48,6 +48,8 @@ export interface Reading {
   at?: Partial<Record<Quantity, string>>;
   /** Where a value came from when it was not typed here ("Fall: Lenovo 1"). */
   origin?: Partial<Record<Quantity, string>>;
+  /** For a reading at one point (a pin, test point or via): the net it was on when measured. */
+  net?: string;
   /** Conditions of all values, as files before 0.9.24 stored them; read through `condOf`. */
   cond?: Conditions;
   /** Earlier values, oldest first. */

@@ -17,6 +17,9 @@ import {
   removeMarker,
   renameNet,
   setNetKind,
+  setPointValue,
+  pointsOnNet,
+  spread,
   setReading,
   setValue,
   updateMarker,
@@ -255,6 +258,42 @@ describe("measuring conditions and history", () => {
     n = setNetKind(n, "Net10", "ground");
     expect(parseNotes(JSON.stringify(n))?.netKinds).toEqual({ Net10: "ground" });
     expect(setNetKind(n, "Net10", undefined).netKinds).toBeUndefined();
+  });
+
+  it("keeps readings at two points of one net apart, each with its history", () => {
+    let n = base();
+    const target = { caseId: n.activeCase! };
+    n = setPointValue(n, target, "U7.1", "PP3V3", "diode", 0.42);
+    n = setPointValue(n, target, "C12.2", "PP3V3", "diode", "OL");
+    n = setPointValue(n, target, "U7.1", "PP3V3", "diode", 0.43);
+    const points = n.cases[0].points!;
+    expect(points["U7.1"].diode).toBe(0.43);
+    expect(points["U7.1"].history?.[0].diode).toBe(0.42);
+    expect(points["C12.2"].diode).toBe("OL");
+    // The net's own reading is untouched.
+    expect(n.cases[0].readings.PP3V3).toBeUndefined();
+    expect(pointsOnNet(n, target, "PP3V3").map(([id]) => id).sort()).toEqual(["C12.2", "U7.1"]);
+    const s = spread(pointsOnNet(n, target, "PP3V3").map(([, r]) => r), "diode")!;
+    expect(s).toMatchObject({ min: 0.43, max: 0.43, count: 1, open: 1 });
+    // Renaming the net carries the points along; JSON keeps them.
+    n = renameNet(n, "PP3V3", "PP3V3", "VCC3");
+    expect(pointsOnNet(n, target, "VCC3").length).toBe(2);
+    const back = parseNotes(JSON.stringify(n))!;
+    expect(back.cases[0].points?.["U7.1"].net).toBe("VCC3");
+  });
+
+  it("counts a list point as done only by a reading at that point", () => {
+    let n = base();
+    const target = { caseId: n.activeCase! };
+    n = addList(n, "L", [
+      { net: "PP3V3", quantity: "diode", point: "U7.1" },
+      { net: "PP3V3", quantity: "diode" },
+    ]);
+    n = setValue(n, target, "PP3V3", "diode", 0.4);
+    expect(listProgress(n, n.lists![0]).done).toEqual([false, true]);
+    n = setPointValue(n, target, "U7.1", "PP3V3", "diode", 0.41);
+    expect(listProgress(n, n.lists![0]).done).toEqual([true, true]);
+    expect(parseNotes(JSON.stringify(n))?.lists?.[0].items[0].point).toBe("U7.1");
   });
 
   it("round-trips conditions and lists through JSON", () => {

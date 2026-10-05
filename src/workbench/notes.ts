@@ -13,6 +13,8 @@ export interface RepairCase {
   notes: string;
   /** Readings by net name. */
   readings: Record<string, Reading>;
+  /** Readings at single points (pin "U7000.21", test point "TP:TP12", via "VIA@1200,850"), by point. */
+  points?: Record<string, Reading>;
   status?: CaseStatus;
   /** Device model, e.g. "Switch OLED HEG-001". */
   device?: string;
@@ -78,6 +80,8 @@ export interface BoardNotes {
   name: string;
   notes: string;
   reference: Record<string, Reading>;
+  /** Reference readings at single points, by point (see RepairCase.points). */
+  referencePoints?: Record<string, Reading>;
   cases: RepairCase[];
   activeCase: string | null;
   /** Photos of the real board per side, aligned to the boardview. */
@@ -108,6 +112,8 @@ export interface ListItem {
   net: string;
   quantity: Quantity;
   label?: string;
+  /** A single point to measure (pin "U7000.21", test point, via) instead of anywhere on the net. */
+  point?: string;
 }
 
 /** Points to measure in order, e.g. all rails around the charger. */
@@ -333,6 +339,66 @@ export function clearHistory(notes: BoardNotes, target: Target, net: string): Bo
   return { ...notes, cases: notes.cases.map((c) => (c.id === target.caseId ? { ...c, readings: strip(c.readings) } : c)), updated: now() };
 }
 
+// --- readings at single points ------------------------------------------------
+
+export function pointReadingsFor(notes: BoardNotes, target: Target): Record<string, Reading> {
+  if (target === "reference") return notes.referencePoints ?? {};
+  return notes.cases.find((c) => c.id === target.caseId)?.points ?? {};
+}
+
+function withPoints(notes: BoardNotes, target: Target, change: (points: Record<string, Reading>) => Record<string, Reading>): BoardNotes {
+  const tidyPoints = (p: Record<string, Reading>) => (Object.keys(p).length ? p : undefined);
+  if (target === "reference") return { ...notes, referencePoints: tidyPoints(change(notes.referencePoints ?? {})), updated: now() };
+  return {
+    ...notes,
+    cases: notes.cases.map((c) => (c.id === target.caseId ? { ...c, points: tidyPoints(change(c.points ?? {})) } : c)),
+    updated: now(),
+  };
+}
+
+/**
+ * A reading at one point (a pin, test point or via) of `net`, kept apart from
+ * the net's reading: two points of one net may differ (a broken trace, a bad
+ * contact), each with its own conditions and history.
+ */
+export function setPointReading(notes: BoardNotes, target: Target, point: string, net: string, change: Partial<Reading>): BoardNotes {
+  const conditions = conditionsOf(notes, target);
+  return withPoints(notes, target, (points) => {
+    const out = withReading(points, point, change, conditions);
+    if (out[point]) out[point] = { ...out[point], net };
+    return out;
+  });
+}
+
+export function setPointValue(notes: BoardNotes, target: Target, point: string, net: string, q: Quantity, value: Value | undefined): BoardNotes {
+  return setPointReading(notes, target, point, net, { [q]: value });
+}
+
+export function clearPointHistory(notes: BoardNotes, target: Target, point: string): BoardNotes {
+  return withPoints(notes, target, (points) => {
+    const r = points[point];
+    if (!r?.history) return points;
+    const { history: _, ...rest } = r;
+    const out = { ...points };
+    if (hasValues(rest) || rest.note) out[point] = rest;
+    else delete out[point];
+    return out;
+  });
+}
+
+/** Points measured on a net, by point id. */
+export function pointsOnNet(notes: BoardNotes, target: Target, net: string): [string, Reading][] {
+  return Object.entries(pointReadingsFor(notes, target)).filter(([, r]) => r.net === net && hasValues(r));
+}
+
+/** Lowest and highest value of a quantity over points (OL and missing values left out), with how many there were. */
+export function spread(readings: Reading[], q: Quantity): { min: number; max: number; count: number; open: number } | undefined {
+  const numbers = readings.map((r) => r[q]).filter((v): v is number => typeof v === "number");
+  const open = readings.filter((r) => r[q] === "OL").length;
+  if (numbers.length === 0 && open === 0) return undefined;
+  return { min: Math.min(...numbers), max: Math.max(...numbers), count: numbers.length, open };
+}
+
 /** Sets (or clears, with `undefined`) one quantity for a net. */
 export function setValue(notes: BoardNotes, target: Target, net: string, q: Quantity, value: Value | undefined): BoardNotes {
   return setReading(notes, target, net, { [q]: value });
@@ -361,7 +427,7 @@ export function addList(notes: BoardNotes, title: string, items: ListItem[] = []
 function dedupeItems(items: ListItem[]): ListItem[] {
   const seen = new Set<string>();
   return items.filter((i) => {
-    const k = `${i.net}|${i.quantity}`;
+    const k = `${i.point ?? i.net}|${i.quantity}`;
     if (seen.has(k)) return false;
     seen.add(k);
     return true;
@@ -386,8 +452,11 @@ export function removeList(notes: BoardNotes, id: string): BoardNotes {
 
 /** Items of a list measured in the active case (or the reference without one). */
 export function listProgress(notes: BoardNotes, list: MeasureList): { done: boolean[]; count: number } {
-  const readings = activeCase(notes)?.readings ?? notes.reference;
-  const done = list.items.map((i) => readings[i.net]?.[i.quantity] !== undefined);
+  const c = activeCase(notes);
+  const readings = c?.readings ?? notes.reference;
+  const points = (c ? c.points : notes.referencePoints) ?? {};
+  // A point item is done by a reading at that point, a net item by one on the net.
+  const done = list.items.map((i) => (i.point ? points[i.point]?.[i.quantity] : readings[i.net]?.[i.quantity]) !== undefined);
   return { done, count: done.filter(Boolean).length };
 }
 
@@ -431,13 +500,17 @@ export function renameNet(notes: BoardNotes, fileName: string, current: string, 
   const netNames = { ...notes.netNames };
   if (target === fileName) delete netNames[fileName];
   else netNames[fileName] = target;
+  // Points measured on the net carry its new name.
+  const renamePoints = (points: Record<string, Reading> | undefined) =>
+    points && Object.fromEntries(Object.entries(points).map(([k, r]) => [k, r.net === current ? { ...r, net: target } : r]));
   // Measuring lists follow the net, so their progress stays right.
   const lists = notes.lists?.map((l) => ({ ...l, items: dedupeItems(l.items.map((i) => (i.net === current ? { ...i, net: target } : i))) }));
   return {
     ...notes,
     netNames,
     reference: move(notes.reference),
-    cases: notes.cases.map((c) => ({ ...c, readings: move(c.readings) })),
+    referencePoints: renamePoints(notes.referencePoints),
+    cases: notes.cases.map((c) => ({ ...c, readings: move(c.readings), points: renamePoints(c.points) })),
     ...(lists && { lists }),
     updated: now(),
   };
@@ -612,6 +685,7 @@ export function parseReading(value: unknown): Reading | null {
   if (at) r.at = at;
   const origin = perQuantity(value.origin, str);
   if (origin) r.origin = origin;
+  if (str(value.net)) r.net = value.net as string;
   if (Array.isArray(value.history)) {
     const history = value.history.flatMap((h): HistoryEntry[] => {
       if (!isRecord(h) || !str(h.at)) return [];
@@ -640,6 +714,11 @@ export function parseReadings(value: unknown): Record<string, Reading> {
   return out;
 }
 
+function optionalReadings(value: unknown): Record<string, Reading> | undefined {
+  const r = parseReadings(value);
+  return Object.keys(r).length ? r : undefined;
+}
+
 function parseCase(value: unknown): RepairCase | null {
   if (!isRecord(value) || !str(value.id) || !isRecord(value.readings)) return null;
   const c = value as unknown as RepairCase;
@@ -649,6 +728,7 @@ function parseCase(value: unknown): RepairCase | null {
     created: typeof c.created === "string" ? c.created : new Date(0).toISOString(),
     notes: typeof c.notes === "string" ? c.notes : "",
     readings: parseReadings(value.readings),
+    points: optionalReadings(value.points),
     photos: Array.isArray(c.photos) ? c.photos.filter((p) => typeof p === "string") : undefined,
     conditions: parseConditions(c.conditions),
   };
@@ -673,9 +753,14 @@ function parseLists(value: unknown): MeasureList[] | undefined {
     .map((l) => ({
       id: l.id,
       title: l.title,
-      items: l.items.filter(
-        (i): i is ListItem => !!i && typeof i.net === "string" && (QUANTITIES as string[]).includes(i.quantity as string),
-      ),
+      items: l.items
+        .filter((i): i is ListItem => !!i && typeof i.net === "string" && (QUANTITIES as string[]).includes(i.quantity as string))
+        .map((i) => ({
+          net: i.net,
+          quantity: i.quantity,
+          ...(typeof i.label === "string" && i.label && { label: i.label }),
+          ...(typeof i.point === "string" && i.point && { point: i.point }),
+        })),
     }));
   return lists.length ? lists : undefined;
 }
@@ -690,6 +775,7 @@ export function parseNotes(json: string): BoardNotes | null {
       name: typeof d.name === "string" ? d.name : d.key,
       notes: typeof d.notes === "string" ? d.notes : "",
       reference: parseReadings(d.reference),
+      referencePoints: optionalReadings(d.referencePoints),
       cases: d.cases.map(parseCase).filter((c): c is RepairCase => c !== null),
       activeCase: typeof d.activeCase === "string" ? d.activeCase : null,
       photos: parsePhotos(d.photos),
@@ -747,7 +833,14 @@ export function mergeNotes(mine: BoardNotes, theirs: BoardNotes): BoardNotes {
     if (i < 0) cases.push(c);
     else {
       const photos = [...new Set([...(cases[i].photos ?? []), ...(c.photos ?? [])])];
-      cases[i] = { ...c, ...cases[i], readings: mergeReadings(cases[i].readings, c.readings), photos: photos.length ? photos : undefined };
+      const points = mergeReadings(cases[i].points ?? {}, c.points ?? {});
+      cases[i] = {
+        ...c,
+        ...cases[i],
+        readings: mergeReadings(cases[i].readings, c.readings),
+        points: Object.keys(points).length ? points : undefined,
+        photos: photos.length ? photos : undefined,
+      };
     }
   }
   const notes = theirs.notes && !mine.notes.includes(theirs.notes) ? [mine.notes, theirs.notes].filter(Boolean).join("\n\n") : mine.notes;
@@ -755,6 +848,8 @@ export function mergeNotes(mine: BoardNotes, theirs: BoardNotes): BoardNotes {
     ...mine,
     notes,
     reference: mergeReadings(mine.reference, theirs.reference),
+    referencePoints:
+      mine.referencePoints || theirs.referencePoints ? mergeReadings(mine.referencePoints ?? {}, theirs.referencePoints ?? {}) : undefined,
     netNames: theirs.netNames || mine.netNames ? { ...theirs.netNames, ...mine.netNames } : undefined,
     netKinds: theirs.netKinds || mine.netKinds ? { ...theirs.netKinds, ...mine.netKinds } : undefined,
     markers: mergeMarkers(mine.markers, theirs.markers),

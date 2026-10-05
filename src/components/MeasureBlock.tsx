@@ -2,7 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import { useI18n, type MessageKey } from "../i18n";
 import { compare, condOf, conditionsFit, formatValue, parseValue, QUANTITIES, type HistoryEntry, type Quantity, type Reading, type Value } from "../workbench/measure";
 import { conditionsText } from "./Conditions";
-import { activeCase, addCase, clearHistory, setReading, setValue, type BoardNotes, type Target } from "../workbench/notes";
+import {
+  activeCase,
+  addCase,
+  clearHistory,
+  clearPointHistory,
+  pointsOnNet,
+  setPointValue,
+  setReading,
+  setValue,
+  spread,
+  type BoardNotes,
+  type Target,
+} from "../workbench/notes";
 import { METER_VALUE_EVENT, readMeter, useMeter } from "../workbench/meter";
 
 interface Props {
@@ -10,6 +22,8 @@ interface Props {
   notes: BoardNotes;
   update(change: (n: BoardNotes) => BoardNotes): void;
   tolerance: number;
+  /** Heading instead of "Readings" (e.g. "Net PP3V3" under a measuring point). */
+  title?: string;
 }
 
 const LABEL: Record<Quantity, MessageKey> = {
@@ -143,7 +157,7 @@ export function ValueInput({
 }
 
 /** Reference and repair-case readings for one net, in the details panel. */
-export function MeasureBlock({ net, notes, update, tolerance }: Props) {
+export function MeasureBlock({ net, notes, update, tolerance, title }: Props) {
   const { t, lang } = useI18n();
   const current = activeCase(notes);
   const ref = notes.reference[net];
@@ -160,7 +174,7 @@ export function MeasureBlock({ net, notes, update, tolerance }: Props) {
 
   return (
     <section className="details-section measure">
-      <h3>{t("measure.title")}</h3>
+      <h3>{title ?? t("measure.title")}</h3>
       <table className="measure-table">
         <thead>
           <tr>
@@ -236,6 +250,166 @@ export function MeasureBlock({ net, notes, update, tolerance }: Props) {
           <span className="muted">{t("measure.addCaseHint")}</span>
         </p>
       )}
+    </section>
+  );
+}
+
+/**
+ * Readings at one point (a pin, test point or via): its own values next to
+ * the net's. Without a point reference the net's reference is compared,
+ * marked as such.
+ */
+export function PointMeasureBlock({
+  point,
+  label,
+  net,
+  notes,
+  update,
+  tolerance,
+}: {
+  point: string;
+  label: string;
+  net: string;
+  notes: BoardNotes;
+  update(change: (n: BoardNotes) => BoardNotes): void;
+  tolerance: number;
+}) {
+  const { t, lang } = useI18n();
+  const current = activeCase(notes);
+  const ref = notes.referencePoints?.[point];
+  const netRef = notes.reference[net];
+  const mine = current?.points?.[point];
+  const target: Target | null = current ? { caseId: current.id } : null;
+  const key = notes.key;
+  const change = (f: (n: BoardNotes) => BoardNotes) => update((n) => (n.key === key ? f(n) : n));
+  const bindOf = (to: Target, q: Quantity) => `${key}|${to === "reference" ? "ref" : to.caseId}|@${point}|${q}`;
+  return (
+    <section className="details-section measure measure-point">
+      <h3 title={t("point.hint")}>
+        {t("point.title")} <span className="mono">{label}</span>
+      </h3>
+      <table className="measure-table">
+        <thead>
+          <tr>
+            <th />
+            <th title={t("measure.referenceHint")}>{t("measure.reference")}</th>
+            {current && <th>{current.title}</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {QUANTITIES.map((q) => {
+            // The point's own reference, else the net's (shown as such).
+            const usedRef = ref?.[q] !== undefined ? ref : netRef;
+            const fromNet = ref?.[q] === undefined && netRef?.[q] !== undefined;
+            return (
+              <tr key={q}>
+                <th scope="row">{t(LABEL[q])}</th>
+                <td>
+                  <ValueInput
+                    value={ref?.[q]}
+                    quantity={q}
+                    label={`${t(LABEL[q])} · ${label} · ${t("measure.reference")}`}
+                    bind={bindOf("reference", q)}
+                    onChange={(v) => change((n) => setPointValue(n, "reference", point, net, q, v))}
+                  />
+                  {fromNet && (
+                    <span className="muted point-net-ref" title={t("point.netRefHint")}>
+                      {" "}
+                      {t("point.netRef", { value: formatValue(netRef?.[q], q, lang) })}
+                    </span>
+                  )}
+                </td>
+                {target && current && (
+                  <td>
+                    <ValueInput
+                      value={mine?.[q]}
+                      quantity={q}
+                      label={`${t(LABEL[q])} · ${label} · ${current.title}`}
+                      bind={bindOf(target, q)}
+                      status={
+                        usedRef?.[q] !== undefined && mine?.[q] !== undefined && !conditionsFit(condOf(usedRef, q), condOf(mine, q), q)
+                          ? "mismatch"
+                          : compare(usedRef?.[q], mine?.[q], q, tolerance)
+                      }
+                      onChange={(v) => change((n) => setPointValue(n, target, point, net, q, v))}
+                    />
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {(conditionsLine(ref, t) || (current && conditionsLine(mine, t))) && (
+        <p className="muted measure-cond">
+          {conditionsLine(ref, t) && (
+            <span>
+              {t("measure.reference")}: {conditionsLine(ref, t)}
+            </span>
+          )}
+          {current && conditionsLine(mine, t) && (
+            <span>
+              {current.title}: {conditionsLine(mine, t)}
+            </span>
+          )}
+        </p>
+      )}
+      <History reading={ref} title={`${label} · ${t("measure.reference")}`} lang={lang} onClear={() => change((n) => clearPointHistory(n, "reference", point))} />
+      {current && target && (
+        <History reading={mine} title={`${label} · ${current.title}`} lang={lang} onClear={() => change((n) => clearPointHistory(n, target, point))} />
+      )}
+    </section>
+  );
+}
+
+/** The points measured on a net: each with its values, and the spread over them. */
+export function NetPoints({
+  net,
+  notes,
+  labelOf,
+  onPoint,
+}: {
+  net: string;
+  notes: BoardNotes;
+  labelOf(id: string): string;
+  onPoint(id: string): void;
+}) {
+  const { t, lang } = useI18n();
+  const current = activeCase(notes);
+  const target: Target = current ? { caseId: current.id } : "reference";
+  const points = pointsOnNet(notes, target, net);
+  if (points.length === 0) return null;
+  const readings = points.map(([, r]) => r);
+  return (
+    <section className="details-section net-points">
+      <h3 title={t("point.netHint")}>
+        {t("point.onNet", { n: points.length })} <span className="muted">{current?.title ?? t("measure.reference")}</span>
+      </h3>
+      <ul className="net-points-list">
+        {points
+          .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+          .map(([id, r]) => (
+            <li key={id}>
+              <button className="link mono" onClick={() => onPoint(id)}>
+                {labelOf(id)}
+              </button>{" "}
+              <span className="muted">
+                {QUANTITIES.filter((q) => r[q] !== undefined)
+                  .map((q) => `${SHORT[q]} ${formatValue(r[q], q, lang)}`)
+                  .join(" · ")}
+              </span>
+            </li>
+          ))}
+      </ul>
+      <p className="muted point-spread">
+        {QUANTITIES.flatMap((q) => {
+          const s = spread(readings, q);
+          if (!s) return [];
+          const range = s.count === 0 ? "" : s.min === s.max ? formatValue(s.min, q, lang) : `${formatValue(s.min, q, lang)} – ${formatValue(s.max, q, lang)}`;
+          const open = s.open ? t("point.open", { n: s.open }) : "";
+          return [`${SHORT[q]}: ${[range, open].filter(Boolean).join(", ")} (${t("point.count", { n: s.count + s.open })})`];
+        }).join(" · ")}
+      </p>
     </section>
   );
 }

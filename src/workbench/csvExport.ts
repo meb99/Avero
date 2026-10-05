@@ -6,7 +6,7 @@
  */
 import { partCenter, type BoardModel } from "../core/board";
 import type { SchematicFacts } from "../schematic/partInfo";
-import { QUANTITIES, type Value } from "./measure";
+import { QUANTITIES, type Reading, type Value } from "./measure";
 import { activeCase, type BoardNotes } from "./notes";
 
 const cell = (v: string | number | undefined | null): string => {
@@ -44,13 +44,20 @@ export function netsCsv(model: BoardModel): Uint8Array {
 
 export function readingsCsv(notes: BoardNotes): Uint8Array {
   const c = activeCase(notes);
-  const head = ["Net", ...QUANTITIES.map((q) => `Reference ${q}`), ...(c ? QUANTITIES.map((q) => `${c.title} ${q}`) : []), "Note"];
-  const nets = [...new Set([...Object.keys(notes.reference), ...Object.keys(c?.readings ?? {})])].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const head = ["Net", "Point", ...QUANTITIES.map((q) => `Reference ${q}`), ...(c ? QUANTITIES.map((q) => `${c.title} ${q}`) : []), "Note"];
+  const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
+  const nets = [...new Set([...Object.keys(notes.reference), ...Object.keys(c?.readings ?? {})])].sort(byName);
   const rows: string[][] = [head];
-  for (const net of nets) {
-    const r = notes.reference[net];
-    const m = c?.readings[net];
-    rows.push([net, ...QUANTITIES.map((q) => val(r?.[q])), ...(c ? QUANTITIES.map((q) => val(m?.[q])) : []), m?.note ?? r?.note ?? ""]);
+  const row = (net: string, point: string, r: Reading | undefined, m: Reading | undefined) =>
+    rows.push([net, point, ...QUANTITIES.map((q) => val(r?.[q])), ...(c ? QUANTITIES.map((q) => val(m?.[q])) : []), m?.note ?? r?.note ?? ""]);
+  for (const net of nets) row(net, "", notes.reference[net], c?.readings[net]);
+  // Readings at single points, after the nets.
+  const refPoints = notes.referencePoints ?? {};
+  const casePoints = c?.points ?? {};
+  for (const point of [...new Set([...Object.keys(refPoints), ...Object.keys(casePoints)])].sort(byName)) {
+    const r = refPoints[point];
+    const m = casePoints[point];
+    row(m?.net ?? r?.net ?? "", point, r, m);
   }
   return csv(rows);
 }

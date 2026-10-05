@@ -20,7 +20,8 @@ import { activeCase, addDrawing, readingsFor, type BoardNotes } from "../workben
 import { jumperTargets } from "../core/jumper";
 import { datasheetsFor, partNumbers, type Datasheet } from "../workbench/datasheets";
 import { formatValue } from "../workbench/measure";
-import { MeasureBlock } from "./MeasureBlock";
+import { MeasureBlock, NetPoints, PointMeasureBlock } from "./MeasureBlock";
+import { findPoint, pointLabel, pointOf } from "../core/points";
 
 interface Props {
   model: BoardModel;
@@ -307,14 +308,47 @@ export function Details({
     );
   };
 
-  const measure = (net: number) => (
-    <>
-      {obdNet(net)}
-      {notes && model.nets[net].kind !== "unconnected" ? (
-        <MeasureBlock key={model.nets[net].name} net={model.nets[net].name} notes={notes} update={updateNotes} tolerance={settings.tolerance} />
-      ) : null}
-    </>
-  );
+  const measure = (net: number) => {
+    const point = selection.kind === "pin" || selection.kind === "testPoint" ? pointOf(model, selection) : undefined;
+    const usable = notes && model.nets[net].kind !== "unconnected";
+    return (
+      <>
+        {obdNet(net)}
+        {usable && point && (
+          <PointMeasureBlock
+            key={`point-${point.id}`}
+            point={point.id}
+            label={point.label}
+            net={model.nets[net].name}
+            notes={notes}
+            update={updateNotes}
+            tolerance={settings.tolerance}
+          />
+        )}
+        {usable ? (
+          <MeasureBlock
+            key={model.nets[net].name}
+            net={model.nets[net].name}
+            notes={notes}
+            update={updateNotes}
+            tolerance={settings.tolerance}
+            title={point ? t("point.netTitle", { net: model.nets[net].name }) : undefined}
+          />
+        ) : null}
+        {usable && (
+          <NetPoints
+            net={model.nets[net].name}
+            notes={notes}
+            labelOf={(id) => pointLabel(model, id)}
+            onPoint={(id) => {
+              const sel = findPoint(model, id);
+              if (sel) onSelect(sel, true);
+            }}
+          />
+        )}
+      </>
+    );
+  };
 
   const netMembers = (net: number, currentPin?: number) => {
     const n = model.nets[net];

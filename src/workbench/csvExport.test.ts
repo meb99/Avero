@@ -18,7 +18,12 @@ describe("CSV export", () => {
   it("writes readings with decimal commas and quotes when needed", () => {
     const notes = { ...emptyNotes("k", "x"), reference: { PP3V3: { diode: 0.452, voltage: 3.3, note: 'a; "b"' } } };
     const out = text(readingsCsv(notes));
-    expect(out).toContain("PP3V3;0,452;3,3;;");
+    expect(out).toContain("PP3V3;;0,452;3,3;;");
     expect(out).toContain('"a; ""b"""');
+  });
+
+  it("lists readings at single points after the nets", () => {
+    const notes = { ...emptyNotes("k", "x"), referencePoints: { "U7.1": { diode: 0.41, net: "PP3V3" } } };
+    expect(text(readingsCsv(notes))).toContain("PP3V3;U7.1;0,41;;");
   });
 });

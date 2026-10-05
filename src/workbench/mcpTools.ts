@@ -79,6 +79,16 @@ function readingsFor(ctx: McpContext, net: string) {
   return reference || measured ? { reference, measured, repair_case: c?.title } : undefined;
 }
 
+/** Readings at one point (pin "U7000.21", test point, via): reference and repair case. */
+function pointReadings(ctx: McpContext, point: string) {
+  const n = ctx.notes;
+  if (!n) return undefined;
+  const c = activeCase(n);
+  const reference = readingOut(n.referencePoints?.[point]);
+  const measured = c ? readingOut(c.points?.[point]) : undefined;
+  return reference || measured ? { reference, measured } : undefined;
+}
+
 function partOf(model: BoardModel, name: string): number {
   const i = model.findPart(name);
   if (i === undefined) throw new ToolError(`No part "${name}" on this board. Use the search tool to find names.`);
@@ -160,7 +170,8 @@ export const MCP_TOOLS: Tool[] = [
   {
     name: "get_part",
     title: "Part details",
-    description: "A part: device text, side, value and part number from the schematic, and every pin with its net and the readings of that net.",
+    description:
+      "A part: device text, side, value and part number from the schematic, and every pin with its net, the readings of that net and readings taken at exactly that pin.",
     inputSchema: { type: "object", properties: { name: { type: "string", description: "Designator, e.g. U7000" } }, required: ["name"] },
     run(ctx, args) {
       const m = needBoard(ctx);
@@ -171,7 +182,14 @@ export const MCP_TOOLS: Tool[] = [
       for (let k = p.firstPin; k < p.firstPin + p.pinCount; k++) {
         const pin = m.pins[k];
         const net = m.nets[pin.net];
-        pins.push({ pin: pin.number, ...(pin.name && { name: pin.name }), net: net.name, kind: net.kind, readings: net.kind === "unconnected" ? undefined : readingsFor(ctx, net.name) });
+        pins.push({
+          pin: pin.number,
+          ...(pin.name && { name: pin.name }),
+          net: net.name,
+          kind: net.kind,
+          readings: net.kind === "unconnected" ? undefined : readingsFor(ctx, net.name),
+          readings_at_this_pin: pointReadings(ctx, m.pinLabel(k)),
+        });
       }
       return {
         name: p.name,
@@ -204,6 +222,15 @@ export const MCP_TOOLS: Tool[] = [
           .slice(0, 60)
           .map((l) => ({ net: m.nets[l.net].name, via: m.parts[l.via].name, kind: l.kind, steps: l.depth })),
         readings: readingsFor(ctx, n.name),
+        readings_at_points: (() => {
+          const notes = ctx.notes;
+          if (!notes) return undefined;
+          const c = activeCase(notes);
+          const ids = new Set(
+            [...Object.entries(notes.referencePoints ?? {}), ...Object.entries(c?.points ?? {})].filter(([, r]) => r.net === n.name).map(([id]) => id),
+          );
+          return ids.size ? [...ids].sort().map((id) => ({ point: id, ...pointReadings(ctx, id) })) : undefined;
+        })(),
       };
     },
   },
