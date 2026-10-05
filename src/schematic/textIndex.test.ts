@@ -64,4 +64,14 @@ describe("WordIndex", () => {
     expect(index.wordAt(1, 120, 96)?.key).toBe("U3000");
     expect(index.wordAt(1, 120, 300)).toBeUndefined();
   });
+
+  it("finds the units of a multi-part symbol, not other parts", () => {
+    const index = new WordIndex();
+    const w = (key: string, page: number) => ({ key, text: key, page, box: { x0: 0, y0: 0, x1: 1, y1: 1 } });
+    index.add([w("U2A", 0), w("U2B", 1), w("U2-C", 2), w("U20", 0), w("U21A", 3)]);
+    expect(index.findPart("U2").map((x) => x.key)).toEqual(["U2A", "U2B", "U2-C"]);
+    index.add([w("U2", 4)]);
+    expect(index.findPart("U2").map((x) => x.key)).toEqual(["U2"]);
+    expect(index.findPart("VBUS")).toEqual([]);
+  });
 });

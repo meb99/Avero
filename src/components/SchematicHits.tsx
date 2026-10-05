@@ -32,7 +32,7 @@ export function SchematicHits({ doc, names, onJump }: Props) {
       if (!key || seen.has(key)) continue;
       seen.add(key);
       // Same order as the schematic view uses, so `first` is its hit index.
-      doc.index.find(name).forEach((w, i) => {
+      doc.index.findPart(name).forEach((w, i) => {
         const last = out[out.length - 1];
         if (last && last.text === name && last.page === w.page) last.count++;
         else out.push({ text: name, page: w.page, first: i, count: 1 });

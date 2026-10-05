@@ -6,7 +6,7 @@ import { MultiSelection } from "./MultiSelection";
 import { matchesQuery, parsePartQuery, partSpecs } from "../core/partSearch";
 import type { ObdData } from "../knowledge/obdata";
 import type { BoardModel, ViewSide } from "../core/board";
-import type { Net, Selection } from "../core/types";
+import type { Net, NetKind, Selection } from "../core/types";
 import { partRole, type PartRole } from "../core/partRole";
 import { useI18n } from "../i18n";
 import type { Settings } from "../settings";
@@ -52,6 +52,7 @@ interface Props {
   schematic: SchematicDocument | null;
   onSchematicJump(text: string, hit: number): void;
   onRenameNet(net: number, name: string): string | null;
+  onSetNetKind?(net: number, kind: NetKind | undefined): void;
   /** Changes when net names change, so name-sorted lists refresh. */
   namesRevision: number;
   pinnedNets: ReadonlyMap<number, RGBA>;
@@ -110,6 +111,7 @@ export function Sidebar({
   schematic,
   onSchematicJump,
   onRenameNet,
+  onSetNetKind,
   namesRevision,
   pinnedNets,
   onTogglePin,
@@ -342,6 +344,7 @@ export function Sidebar({
             schematic={schematic}
             onSchematicJump={onSchematicJump}
             onRenameNet={onRenameNet}
+            onSetNetKind={onSetNetKind}
             pinnedNets={pinnedNets}
             onTogglePin={onTogglePin}
             onPinNets={onPinNets}

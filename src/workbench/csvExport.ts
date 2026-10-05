@@ -37,7 +37,7 @@ export function netsCsv(model: BoardModel): Uint8Array {
   model.nets.forEach((n, i) => {
     if (n.kind === "unconnected") return;
     const parts = model.netMembers(i).map((m) => model.parts[m.part].name);
-    rows.push([n.name, n.kind, n.pins.length, parts.slice(0, 200).join(" ")]);
+    rows.push([n.name, n.kind, n.pins.length, parts.join(" ")]);
   });
   return csv(rows);
 }

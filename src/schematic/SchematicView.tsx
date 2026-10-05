@@ -462,7 +462,7 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
   const jumpedFor = useRef<number | string>(-1);
   const typed = query.trim();
   useEffect(() => {
-    const found = typed ? doc.index.search(typed) : focus ? doc.index.find(focus.text) : [];
+    const found = typed ? doc.index.search(typed) : focus ? doc.index.findPart(focus.text) : [];
     hitsRef.current = found;
     pinSpotRef.current = !typed && focus?.pin && found.length ? findPinSpot(doc.index, found, focus.pin.number, focus.pin.nets) : null;
     setHits(found);

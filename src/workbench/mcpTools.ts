@@ -317,7 +317,7 @@ export const MCP_TOOLS: Tool[] = [
     run(ctx, args) {
       const doc = ctx.schematic;
       if (!doc) throw new ToolError("No schematic is open in Avero.");
-      const hits = doc.index.find(str(args.text, "text"));
+      const hits = doc.index.findPart(str(args.text, "text"));
       const pages = new Map<number, number>();
       for (const w of hits) pages.set(w.page + 1, (pages.get(w.page + 1) ?? 0) + 1);
       return { schematic: doc.name, pages: [...pages].map(([page, count]) => ({ page, count })), indexed_completely: doc.indexComplete };

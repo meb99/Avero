@@ -553,6 +553,18 @@ async fn meter_send(app: tauri::AppHandle, commands: Vec<String>) -> Result<Vec<
     .map_err(|e| e.to_string())?
 }
 
+/// Size and modification time (seconds) of a file, as the library lists them.
+#[tauri::command]
+fn file_stamp(path: String) -> Result<(u64, u64), String> {
+    let meta = std::fs::metadata(&path).map_err(|e| format!("{path}: {e}"))?;
+    let modified = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_secs());
+    Ok((meta.len(), modified))
+}
+
 /// Text recognised on the scanned pages of a schematic, kept so a PDF is read once.
 #[tauri::command]
 fn load_ocr(app: tauri::AppHandle, key: String) -> Result<Option<String>, String> {
@@ -857,6 +869,7 @@ pub fn run() {
             close_schematic_window,
             take_pending_paths,
             quit_app,
+            file_stamp,
             quit_ack,
             quit_cancel
         ])

@@ -16,6 +16,7 @@ import {
   removeCase,
   removeMarker,
   renameNet,
+  setNetKind,
   setReading,
   setValue,
   updateMarker,
@@ -242,6 +243,18 @@ describe("measuring conditions and history", () => {
     const parsed = parseNotes(JSON.stringify(broken))!;
     expect(parsed.cases.map((c) => c.id)).toEqual(["b"]);
     expect(() => caseToReference(parsed, "b")).not.toThrow();
+  });
+
+  it("moves list items along with a renamed net and keeps own kinds", () => {
+    let n = base();
+    n = addList(n, "L", [{ net: "Net10", quantity: "voltage" }]);
+    n = setValue(n, { caseId: n.activeCase! }, "Net10", "voltage", 3.3);
+    n = renameNet(n, "Net10", "Net10", "VCC");
+    expect(n.lists?.[0].items[0].net).toBe("VCC");
+    expect(listProgress(n, n.lists![0]).count).toBe(1);
+    n = setNetKind(n, "Net10", "ground");
+    expect(parseNotes(JSON.stringify(n))?.netKinds).toEqual({ Net10: "ground" });
+    expect(setNetKind(n, "Net10", undefined).netKinds).toBeUndefined();
   });
 
   it("round-trips conditions and lists through JSON", () => {

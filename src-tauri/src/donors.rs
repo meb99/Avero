@@ -56,6 +56,76 @@ pub fn part_numbers(device: &str) -> Vec<String> {
         .collect()
 }
 
+/// The value of a resistor, capacitor or coil in a device text, as (kind, base
+/// units): "RC0402 10K 1%" → ('R', 10000), "4U7_0603" → ('C', 4.7e-6),
+/// "2.2UH" → ('L', 2.2e-6). None for anything that is no passive value.
+pub fn passive_value(device: &str) -> Option<(char, f64)> {
+    let upper = device.to_uppercase().replace(['Μ', 'µ'], "U");
+    for token in upper.split(|c: char| !(c.is_ascii_alphanumeric() || c == '.')) {
+        let t = token.trim_end_matches("OHMS").trim_end_matches("OHM");
+        let ohms_written = t.len() != token.len();
+        let digits_end = t.find(|c: char| !(c.is_ascii_digit() || c == '.')).unwrap_or(t.len());
+        if digits_end == 0 {
+            continue;
+        }
+        if digits_end == t.len() {
+            // "10OHM" is a value; a bare number ("0402") is a case code or a count.
+            if ohms_written {
+                if let Ok(v) = t.parse::<f64>() {
+                    return Some(('R', v));
+                }
+            }
+            continue;
+        }
+        let (number, rest) = t.split_at(digits_end);
+        let mut chars = rest.chars();
+        let unit = chars.next()?;
+        let tail: String = chars.collect();
+        // "4K7", "2R2", "4U7": the letter is the decimal point.
+        let (value, tail) = match tail.find(|c: char| !c.is_ascii_digit()) {
+            Some(0) | None if !tail.is_empty() && tail.chars().all(|c| c.is_ascii_digit()) => {
+                (format!("{number}.{tail}").parse::<f64>().ok()?, String::new())
+            }
+            _ => (number.parse::<f64>().ok()?, tail),
+        };
+        let scaled = |m: f64| value * m;
+        let found = match (unit, tail.as_str()) {
+            ('R' | 'E', "") => Some(('R', value)),
+            ('K', "") => Some(('R', scaled(1e3))),
+            ('M', "") => Some(('R', scaled(1e6))),
+            ('P', "" | "F") => Some(('C', scaled(1e-12))),
+            ('N', "F") => Some(('C', scaled(1e-9))),
+            ('U', "" | "F") => Some(('C', scaled(1e-6))),
+            ('N', "H") => Some(('L', scaled(1e-9))),
+            ('U', "H") => Some(('L', scaled(1e-6))),
+            ('M', "H") => Some(('L', scaled(1e-3))),
+            _ => None,
+        };
+        if found.is_some() {
+            return found;
+        }
+    }
+    None
+}
+
+/// The imperial case code in a device text ("RC0402 10K" → "0402").
+pub fn package_code(device: &str) -> Option<&'static str> {
+    const CODES: [&str; 10] =
+        ["01005", "0201", "0402", "0603", "0805", "1206", "1210", "1812", "2010", "2512"];
+    let bytes = device.as_bytes();
+    CODES.into_iter().find(|code| {
+        device.match_indices(code).any(|(i, _)| {
+            let before = i.checked_sub(1).map(|j| bytes[j]);
+            let after = bytes.get(i + code.len()).copied();
+            !before.is_some_and(|b| b.is_ascii_digit()) && !after.is_some_and(|b| b.is_ascii_digit())
+        })
+    })
+}
+
+fn same_value(a: f64, b: f64) -> bool {
+    (a - b).abs() <= a.abs().max(b.abs()) * 1e-6
+}
+
 fn kind_letter(kind: NetKind) -> char {
     match kind {
         NetKind::Ground => 'G',
@@ -69,6 +139,10 @@ fn kind_letter(kind: NetKind) -> char {
 pub fn find_in(board: &Board, path: &str, q: &DonorQuery) -> Vec<DonorHit> {
     let wanted = normalize(&q.device);
     let numbers = part_numbers(&q.device);
+    // Resistors, capacitors and coils: the value (and the case, when both say it)
+    // decides, never a shared series code like "RC0402".
+    let value = passive_value(&q.device);
+    let package = package_code(&q.device);
     if wanted.is_empty() {
         return Vec::new();
     }
@@ -78,6 +152,17 @@ pub fn find_in(board: &Board, path: &str, q: &DonorQuery) -> Vec<DonorHit> {
         let pins = board.part_pins(index);
         let score = if normalize(device) == wanted {
             2
+        } else if let Some((kind, v)) = value {
+            let fits = passive_value(device).is_some_and(|(k, w)| k == kind && same_value(v, w));
+            let case_fits = match (package, package_code(device)) {
+                (Some(a), Some(b)) => a == b,
+                _ => true,
+            };
+            if fits && case_fits {
+                1
+            } else {
+                continue;
+            }
         } else if !numbers.is_empty() && part_numbers(device).iter().any(|n| numbers.contains(n)) {
             1
         } else {
@@ -122,6 +207,36 @@ pub fn rank(hits: &mut [DonorHit]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_passive_values() {
+        assert_eq!(passive_value("RC0402 10K 1%"), Some(('R', 10_000.0)));
+        assert_eq!(passive_value("RC0402 100K 1%"), Some(('R', 100_000.0)));
+        assert_eq!(passive_value("4K7_0402"), Some(('R', 4700.0)));
+        assert_eq!(passive_value("R0402_0R"), Some(('R', 0.0)));
+        let (k, v) = passive_value("100NF_0402_16V").unwrap();
+        assert!(k == 'C' && (v - 1e-7).abs() < 1e-15);
+        let (k, v) = passive_value("4U7_0603").unwrap();
+        assert!(k == 'C' && (v - 4.7e-6).abs() < 1e-12);
+        assert_eq!(passive_value("ISL88739AHRZ-T_QFN32"), None);
+        assert_eq!(package_code("RC0402 10K"), Some("0402"));
+        assert_eq!(package_code("C_10402"), None);
+    }
+
+    #[test]
+    fn passives_need_the_same_value() {
+        let mut board = avero_formats::demo::board();
+        let (index, _) = board.parts.iter().enumerate().find(|(_, p)| p.pin_count == 2).unwrap();
+        let q =
+            |device: &str| DonorQuery { device: device.into(), pin_count: 2, pins: vec![], exclude: None };
+        board.parts[index].device = Some("RC0402 100K 1%".into());
+        let name = board.parts[index].name.clone();
+        assert!(!find_in(&board, "/x", &q("RC0402 10K 1%")).iter().any(|h| h.part == name));
+        board.parts[index].device = Some("RES 10K 0402".into());
+        assert!(find_in(&board, "/x", &q("RC0402 10K 1%")).iter().any(|h| h.part == name && h.score == 1));
+        board.parts[index].device = Some("RES 10K 0603".into());
+        assert!(!find_in(&board, "/x", &q("RC0402 10K 1%")).iter().any(|h| h.part == name));
+    }
 
     #[test]
     fn finds_part_numbers_not_packages() {

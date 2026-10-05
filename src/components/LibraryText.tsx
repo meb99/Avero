@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { readFileBytes } from "../core/loader";
 import { loadSettings } from "../settings";
 import { useI18n } from "../i18n";
-import { cachedIndex, searchText, storeIndex, type PdfTextIndex } from "../workbench/fulltext";
+import { cachedIndex, searchText, storeIndex, withOcrWords, type OcrPages, type PdfTextIndex } from "../workbench/fulltext";
 import type { LibraryEntry, LibraryFile } from "../workbench/library";
 import { VirtualList } from "./VirtualList";
 
@@ -18,8 +18,20 @@ const isPdf = (file: LibraryFile) => /\.pdf$/i.test(file.name);
 /** Words of one library file: schematic text by page, or a board's part and net names. */
 async function buildIndex(file: LibraryFile, stop: () => boolean): Promise<PdfTextIndex | null> {
   if (isPdf(file)) {
-    const { extractTextIndex } = await import("../schematic/document");
-    return extractTextIndex(await readFileBytes(file.path), stop);
+    const { contentId, extractTextIndex } = await import("../schematic/document");
+    const bytes = await readFileBytes(file.path);
+    // Words recognised on scanned pages (OCR in the viewer) are found here too.
+    const id = await contentId(bytes);
+    const index = await extractTextIndex(bytes, stop);
+    const ocr = await invoke<string | null>("load_ocr", { key: `ocr-${id}` }).catch(() => null);
+    let pages: OcrPages | null = null;
+    try {
+      const parsed = ocr ? (JSON.parse(ocr) as Partial<OcrPages>) : null;
+      if (parsed?.pages && typeof parsed.pages === "object") pages = parsed as OcrPages;
+    } catch {
+      // A broken OCR cache adds nothing.
+    }
+    return index && withOcrWords(index, pages);
   }
   const { xzzKey, fzKey } = loadSettings();
   const names = await invoke<string[]>("board_words", { path: file.path, xzzKey: xzzKey || null, fzKey: fzKey || null });

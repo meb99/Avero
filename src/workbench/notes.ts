@@ -1,5 +1,6 @@
 import { compareReadings, condOf, hasValues, HISTORY_MAX, QUANTITIES, takenAt, type Comparison, type Conditions, type HistoryEntry, type Quantity, type Reading, type Value } from "./measure";
 import { parsePhoto, type BoardPhoto, type PhotoSide } from "./photo";
+import type { NetKind } from "../core/types";
 
 export type CaseStatus = "open" | "waiting" | "repaired" | "unrepairable";
 export const CASE_STATUSES: CaseStatus[] = ["open", "waiting", "repaired", "unrepairable"];
@@ -83,6 +84,8 @@ export interface BoardNotes {
   photos?: Partial<Record<PhotoSide, BoardPhoto>>;
   /** Own net names: name in the file -> name to show (Net10 -> GND). */
   netNames?: Record<string, string>;
+  /** Own net kinds by file net name, where the file is wrong (a signal that is ground). */
+  netKinds?: Record<string, NetKind>;
   /** Notes pinned to spots on the board. */
   markers?: BoardMarker[];
   /** Lines, areas and jumpers drawn on the board. */
@@ -428,11 +431,14 @@ export function renameNet(notes: BoardNotes, fileName: string, current: string, 
   const netNames = { ...notes.netNames };
   if (target === fileName) delete netNames[fileName];
   else netNames[fileName] = target;
+  // Measuring lists follow the net, so their progress stays right.
+  const lists = notes.lists?.map((l) => ({ ...l, items: dedupeItems(l.items.map((i) => (i.net === current ? { ...i, net: target } : i))) }));
   return {
     ...notes,
     netNames,
     reference: move(notes.reference),
     cases: notes.cases.map((c) => ({ ...c, readings: move(c.readings) })),
+    ...(lists && { lists }),
     updated: now(),
   };
 }
@@ -532,6 +538,21 @@ function parseMarkers(value: unknown): BoardMarker[] | undefined {
       typeof m.text === "string",
   );
   return out.length ? out.map((m) => ({ ...m, created: typeof m.created === "string" ? m.created : new Date(0).toISOString() })) : undefined;
+}
+
+function parseNetKinds(value: unknown): Record<string, NetKind> | undefined {
+  if (!isRecord(value)) return undefined;
+  const out: Record<string, NetKind> = {};
+  for (const [k, v] of Object.entries(value)) if (v === "signal" || v === "power" || v === "ground") out[k] = v;
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** Corrects (or, with `undefined`, resets) the kind of a net. */
+export function setNetKind(notes: BoardNotes, fileName: string, kind: NetKind | undefined): BoardNotes {
+  const netKinds = { ...notes.netKinds };
+  if (kind) netKinds[fileName] = kind;
+  else delete netKinds[fileName];
+  return { ...notes, netKinds: Object.keys(netKinds).length ? netKinds : undefined, updated: now() };
 }
 
 function parseNetNames(value: unknown): Record<string, string> | undefined {
@@ -673,6 +694,7 @@ export function parseNotes(json: string): BoardNotes | null {
       activeCase: typeof d.activeCase === "string" ? d.activeCase : null,
       photos: parsePhotos(d.photos),
       netNames: parseNetNames(d.netNames),
+      netKinds: parseNetKinds(d.netKinds),
       markers: parseMarkers(d.markers),
       drawings: parseDrawings(d.drawings),
       bookmarks: parseBookmarks(d.bookmarks),
@@ -734,6 +756,7 @@ export function mergeNotes(mine: BoardNotes, theirs: BoardNotes): BoardNotes {
     notes,
     reference: mergeReadings(mine.reference, theirs.reference),
     netNames: theirs.netNames || mine.netNames ? { ...theirs.netNames, ...mine.netNames } : undefined,
+    netKinds: theirs.netKinds || mine.netKinds ? { ...theirs.netKinds, ...mine.netKinds } : undefined,
     markers: mergeMarkers(mine.markers, theirs.markers),
     drawings: mergeById(mine.drawings, theirs.drawings),
     bookmarks: mergeById(mine.bookmarks, theirs.bookmarks),

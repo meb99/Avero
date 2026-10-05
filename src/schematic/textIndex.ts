@@ -117,6 +117,20 @@ export class WordIndex {
     return [...list].sort(readingOrder);
   }
 
+  /**
+   * A designator's occurrences; when it has none, the units of a multi-part
+   * symbol (U2 → U2A, U2B, U2-C), never another part (U2 is not U20).
+   */
+  findPart(text: string): Word[] {
+    const exact = this.find(text);
+    const name = text.trim().toUpperCase();
+    if (exact.length || !/^[A-Z]{1,3}\d+$/.test(name)) return exact;
+    const unit = new RegExp(`^${name}[-_.]?[A-H]$`);
+    const out: Word[] = [];
+    for (const [key, list] of this.byKey) if (unit.test(key)) out.push(...list);
+    return out.sort(readingOrder);
+  }
+
   /** Words containing `text`, ignoring case, in reading order. */
   search(text: string, limit = 5000): Word[] {
     const q = text.trim().toUpperCase();

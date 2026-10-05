@@ -56,6 +56,19 @@ function openPdf(bytes: Uint8Array, name = "", ask = false): Promise<PDFDocument
  * Which words appear on which pages, for the library's full-text search.
  * Stops early when `cancelled` turns true.
  */
+/** A short hash of a file's bytes (SHA-256, hex, first 16 characters). */
+export async function contentId(bytes: Uint8Array): Promise<string> {
+  try {
+    const digest = await crypto.subtle.digest("SHA-256", bytes as BufferSource);
+    return [...new Uint8Array(digest).slice(0, 8)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  } catch {
+    // No WebCrypto: FNV-1a over the length and all bytes.
+    let h = 0x811c9dc5 ^ bytes.length;
+    for (let i = 0; i < bytes.length; i++) h = Math.imul(h ^ bytes[i], 0x01000193) >>> 0;
+    return `f${h.toString(16)}`;
+  }
+}
+
 export async function extractTextIndex(bytes: Uint8Array, cancelled: () => boolean): Promise<PdfTextIndex | null> {
   const pdf = await openPdf(bytes);
   try {
@@ -110,13 +123,17 @@ export class SchematicDocument {
     readonly pdf: PDFDocumentProxy,
     readonly name: string,
     readonly path: string | undefined,
+    /** Hash of the file's bytes: another PDF under the same name and path has another one. */
+    readonly contentId?: string,
   ) {
     this.sizes = new Array(pdf.numPages);
   }
 
   static async open(bytes: Uint8Array, name: string, path?: string): Promise<SchematicDocument> {
+    // Before pdf.js takes the bytes: the content decides which recognised text belongs to the file.
+    const id = await contentId(bytes);
     const pdf = await openPdf(bytes, name, true);
-    const doc = new SchematicDocument(pdf, name, path);
+    const doc = new SchematicDocument(pdf, name, path, id);
     void doc.buildIndex();
     return doc;
   }

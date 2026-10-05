@@ -47,16 +47,17 @@ impl Mcp {
     /// Starts listening on `port` (or keeps the running server on that port).
     pub fn start(&self, port: u16, forward: Forward) -> Result<(), String> {
         let mut running = self.running.lock().map_err(|e| e.to_string())?;
-        if let Some(r) = running.as_ref() {
-            if r.port == port {
-                return Ok(());
-            }
+        if running.as_ref().is_some_and(|r| r.port == port) {
+            return Ok(());
+        }
+        // The new port first: when it is taken, the server keeps running where it was.
+        let listener =
+            TcpListener::bind(("127.0.0.1", port)).map_err(|e| format!("127.0.0.1:{port}: {e}"))?;
+        if let Some(r) = running.take() {
             r.stop.store(true, Ordering::SeqCst);
             // Wake the old accept loop so it sees the stop flag.
             let _ = TcpStream::connect(("127.0.0.1", r.port));
         }
-        let listener =
-            TcpListener::bind(("127.0.0.1", port)).map_err(|e| format!("127.0.0.1:{port}: {e}"))?;
         let stop = Arc::new(AtomicBool::new(false));
         let (pending, next, flag) = (self.pending.clone(), self.next.clone(), stop.clone());
         std::thread::spawn(move || {
@@ -157,10 +158,20 @@ fn respond(
 /// Requests from web pages are refused: only local programs may ask
 /// (a page could otherwise reach 127.0.0.1 from the browser).
 fn origin_allowed(headers: &HashMap<String, String>) -> bool {
-    match headers.get("origin") {
-        None => true,
-        Some(o) => o == "null" || o.starts_with("http://127.0.0.1") || o.starts_with("http://localhost"),
-    }
+    let Some(origin) = headers.get("origin") else { return true };
+    // Exactly a local host, with or without a port: "http://localhost.evil.example"
+    // and opaque origins ("null", sandboxed pages) are not.
+    let Some(rest) = origin.strip_prefix("http://").or_else(|| origin.strip_prefix("https://")) else {
+        return false;
+    };
+    let host = match rest.strip_prefix('[') {
+        Some(v6) => v6.split_once(']'),
+        None => Some(rest.split_once(':').map_or((rest, ""), |(h, p)| (h, p))),
+    };
+    let Some((host, after)) = host else { return false };
+    let port_ok = |p: &str| p.is_empty() || (p.len() <= 5 && p.bytes().all(|b| b.is_ascii_digit()));
+    let after = after.strip_prefix(':').unwrap_or(after);
+    matches!(host.to_ascii_lowercase().as_str(), "127.0.0.1" | "localhost" | "::1") && port_ok(after)
 }
 
 fn serve(
@@ -293,6 +304,44 @@ fn post(port: u16, body: &str) -> Result<Option<String>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn origins_must_be_exactly_local() {
+        let with = |o: &str| HashMap::from([("origin".to_string(), o.to_string())]);
+        assert!(origin_allowed(&HashMap::new()));
+        for ok in
+            ["http://localhost", "http://127.0.0.1:47321", "http://[::1]:8080", "https://localhost:3000"]
+        {
+            assert!(origin_allowed(&with(ok)), "{ok}");
+        }
+        for bad in [
+            "http://localhost.evil.example",
+            "http://127.0.0.1.evil.example",
+            "null",
+            "http://evil.example",
+            "http://localhost:80x",
+            "file://",
+        ] {
+            assert!(!origin_allowed(&with(bad)), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_taken_port_leaves_the_running_server_alone() {
+        let mcp = Mcp::default();
+        let forward: Forward = Arc::new(|_, _| {});
+        let a = TcpListener::bind("127.0.0.1:0").unwrap();
+        let free = a.local_addr().unwrap().port();
+        drop(a);
+        mcp.start(free, forward.clone()).unwrap();
+        let taken = TcpListener::bind("127.0.0.1:0").unwrap();
+        let busy = taken.local_addr().unwrap().port();
+        assert!(mcp.start(busy, forward.clone()).is_err());
+        assert_eq!(mcp.port(), Some(free));
+        // Still listening there.
+        assert!(TcpStream::connect(("127.0.0.1", free)).is_ok());
+        mcp.stop();
+    }
 
     fn forward_echo(pending: Pending) -> Forward {
         Arc::new(move |call, msg: Value| {

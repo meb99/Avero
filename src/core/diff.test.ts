@@ -25,4 +25,17 @@ describe("diffBoards", () => {
     expect(d.onlyB.map((c) => c.name)).toContain("R99");
     expect(d.pins).toContainEqual(expect.objectContaining({ part: "R1", netA: "PP3V3", netB: "I2C_SDA" }));
   });
+
+  it("sees other pin numbers and rewired parts as changes", () => {
+    const a = new BoardModel(testBoard());
+    const renumbered = structuredClone(testBoard());
+    renumbered.pins[renumbered.parts[0].firstPin].number = "3";
+    expect(diffBoards(a, new BoardModel(renumbered)).changed.find((c) => c.name === "R1")?.changes).toContain("pins");
+    const rewired = structuredClone(testBoard());
+    const sda = rewired.nets.findIndex((n) => n.name === "I2C_SDA");
+    rewired.pins[rewired.parts[0].firstPin].net = sda;
+    const d = diffBoards(a, new BoardModel(rewired));
+    expect(d.changed.find((c) => c.name === "R1")?.changes).toEqual(["nets"]);
+    expect(d.same).toBe(testBoard().parts.length - 1);
+  });
 });

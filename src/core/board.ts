@@ -1,6 +1,6 @@
 import { GridIndex } from "./spatial";
 import { passesThrough } from "./partRole";
-import type { Board, Bounds, Net, Part, Pin, Point, Selection, Side, TestPoint, Trace, Layer } from "./types";
+import type { Board, Bounds, Net, Part, Pin, Point, Selection, Side, TestPoint, Trace, Layer, NetKind } from "./types";
 
 export type ViewSide = "top" | "bottom";
 
@@ -60,6 +60,7 @@ export class BoardModel {
   private netsByName = new Map<string, number>();
   /** Net names as the file has them; `nets[i].name` may be the user's own. */
   private readonly fileNetNames: string[];
+  private readonly fileNetKinds: NetKind[];
   /** Parts sorted by name for list views. */
   readonly sortedParts: number[];
   /** Nets sorted by name, unconnected last. */
@@ -82,6 +83,7 @@ export class BoardModel {
     board.testPoints.forEach((t, i) => this.testPointIndex.insert(i, circleBounds(t)));
     this.traces.forEach((t, i) => this.traceIndex.insert(i, traceBounds(t)));
     this.fileNetNames = board.nets.map((n) => n.name);
+    this.fileNetKinds = board.nets.map((n) => n.kind);
 
     const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
     this.sortedParts = board.parts.map((_, i) => i).sort((a, b) => collator.compare(board.parts[a].name, board.parts[b].name));
@@ -113,6 +115,28 @@ export class BoardModel {
    * Applies the user's own net names (file name -> own name). Nets missing
    * from `names` get their file name back. Returns true when a name changed.
    */
+  /** The kind the file gave a net (before own corrections). */
+  fileNetKind(net: number): NetKind {
+    return this.fileNetKinds[net];
+  }
+
+  /**
+   * Own corrections of net kinds (by file net name): a net the file calls a
+   * signal that is ground, or the other way round. True when anything changed.
+   */
+  applyNetKinds(kinds: Readonly<Record<string, NetKind>>): boolean {
+    let changed = false;
+    this.board.nets.forEach((n, i) => {
+      const want = kinds[this.fileNetNames[i]] ?? this.fileNetKinds[i];
+      if (n.kind !== want) {
+        n.kind = want;
+        changed = true;
+      }
+    });
+    if (changed) this.indexNets();
+    return changed;
+  }
+
   applyNetNames(names: Readonly<Record<string, string>>): boolean {
     let changed = false;
     this.board.nets.forEach((n, i) => {

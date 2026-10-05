@@ -35,6 +35,8 @@ interface Props {
   onSchematicJump?(text: string, hit: number): void;
   /** Gives a net its own name; returns an error message or null. */
   onRenameNet?(net: number, name: string): string | null;
+  /** Corrects the net's kind (undefined: back to the file's). */
+  onSetNetKind?(net: number, kind: NetKind | undefined): void;
   /** Nets pinned in their own colors on the board. */
   pinnedNets?: ReadonlyMap<number, RGBA>;
   onTogglePin?(net: number): void;
@@ -192,6 +194,7 @@ export function Details({
   schematic,
   onSchematicJump,
   onRenameNet,
+  onSetNetKind,
   pinnedNets,
   onTogglePin,
   onPinNets,
@@ -711,7 +714,18 @@ export function Details({
             )}
           </header>
           <dl className="props">
-            <Row label={t("details.kind")}>{t(kindKey[net.kind])}</Row>
+            <Row label={t("details.kind")}>
+              {onSetNetKind && net.kind !== "unconnected" ? (
+                <NetKindPick
+                  kind={net.kind}
+                  fileKind={model.fileNetKind(selection.net)}
+                  name={net.name}
+                  onChange={(k) => onSetNetKind(selection.net, k === model.fileNetKind(selection.net) ? undefined : k)}
+                />
+              ) : (
+                t(kindKey[net.kind])
+              )}
+            </Row>
             {(() => {
               const v =
                 schematicFacts?.netVoltages.get(net.name.toUpperCase()) ??
@@ -732,4 +746,30 @@ export function Details({
       );
     }
   }
+}
+
+/**
+ * The net's kind, correctable when the file is wrong: a name alone ("GND")
+ * changes nothing about colours and filters, the kind does.
+ */
+function NetKindPick({ kind, fileKind, name, onChange }: { kind: NetKind; fileKind: NetKind; name: string; onChange(kind: NetKind): void }) {
+  const { t } = useI18n();
+  const looksGround = /^(A|D|P|S)?(GND|GROUND|VSS|AGND|DGND|PGND)\d*$/i.test(name);
+  return (
+    <span className="net-kind-pick">
+      <select value={kind} onChange={(e) => onChange(e.target.value as NetKind)} aria-label={t("details.kind")}>
+        {(["signal", "power", "ground"] as const).map((k) => (
+          <option key={k} value={k}>
+            {t(kindKey[k])}
+          </option>
+        ))}
+      </select>
+      {kind !== fileKind && <span className="muted"> {t("details.kindOwn", { kind: t(kindKey[fileKind]) })}</span>}
+      {looksGround && kind !== "ground" && (
+        <button className="link" onClick={() => onChange("ground")}>
+          {t("details.kindSuggestGround")}
+        </button>
+      )}
+    </span>
+  );
 }

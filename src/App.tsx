@@ -79,6 +79,7 @@ import {
   type Bookmark,
   type DrawingKind,
   type NetStatus,
+  setNetKind,
 } from "./workbench/notes";
 import { MarkerEditor, PinnedLegend } from "./components/Markers";
 import { KnowledgePanel } from "./components/KnowledgePanel";
@@ -323,10 +324,13 @@ export function App() {
   const [namesRevision, setNamesRevision] = useState(0);
   const notesForModel = notes && source && notes.key === boardKey(source) ? notes : null;
   const netNames = notesForModel?.netNames;
+  const netKinds = notesForModel?.netKinds;
   useEffect(() => {
-    if (model && notesForModel && model.applyNetNames(netNames ?? {})) setNamesRevision((r) => r + 1);
+    if (!model || !notesForModel) return;
+    const kinds = model.applyNetKinds(netKinds ?? {});
+    if (model.applyNetNames(netNames ?? {}) || kinds) setNamesRevision((r) => r + 1);
     // notesForModel only matters as "the notes of this board have loaded".
-  }, [model, netNames, notesForModel !== null]);
+  }, [model, netNames, netKinds, notesForModel !== null]);
 
   // --- facts from the schematic's text ---------------------------------------
   // Values, part numbers and net voltages, read once the schematic is indexed.
@@ -2355,6 +2359,7 @@ export function App() {
                   schematic={schematic}
                   onSchematicJump={jumpInSchematic}
                   onRenameNet={renameModelNet}
+                  onSetNetKind={(net, kind) => model && updateNotes((n) => setNetKind(n, model.fileNetName(net), kind))}
                   namesRevision={namesRevision}
                   pinnedNets={pinnedNets}
                   onTogglePin={togglePinned}

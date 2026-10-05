@@ -2,7 +2,8 @@
  * What differs between two boards (revisions of one design, or a board and
  * a donor): parts added, removed or changed, pins that land on another net,
  * and nets only one board has. Parts and pins are matched by designator and
- * pin number, nets by their name in the file.
+ * pin number, nets by their name in the file. A part counts as changed when
+ * its pin numbers differ (not only their count) or any pin is on another net.
  */
 import { partCenter, type BoardModel } from "./board";
 
@@ -11,7 +12,7 @@ export interface PartChange {
   /** Part index on board A (or B for parts only B has). */
   a?: number;
   b?: number;
-  changes: ("device" | "pins" | "side" | "moved")[];
+  changes: ("device" | "pins" | "side" | "moved" | "nets")[];
   deviceA?: string;
   deviceB?: string;
 }
@@ -52,12 +53,22 @@ export function diffBoards(a: BoardModel, b: BoardModel): BoardDiff {
     const q = b.parts[j];
     const changes: PartChange["changes"] = [];
     if ((p.device ?? "").trim().toUpperCase() !== (q.device ?? "").trim().toUpperCase()) changes.push("device");
-    if (p.pinCount !== q.pinCount) changes.push("pins");
+    // The same pin numbers, not just as many: "1,2" against "3,2" is a change.
+    const numbers = (m: BoardModel, part: number) => {
+      const x = m.parts[part];
+      return m.pins
+        .slice(x.firstPin, x.firstPin + x.pinCount)
+        .map((pin) => pin.number.toUpperCase())
+        .sort()
+        .join("|");
+    };
+    if (p.pinCount !== q.pinCount || numbers(a, i) !== numbers(b, j)) changes.push("pins");
     if (p.side !== q.side) changes.push("side");
     const ca = partCenter(p);
     const cb = partCenter(q);
     if (Math.hypot(ca.x - cb.x, ca.y - cb.y) > MOVE) changes.push("moved");
     // Pins present on both: the net each lands on.
+    const pinsBefore = diff.pins.length;
     for (let k = p.firstPin; k < p.firstPin + p.pinCount; k++) {
       const pin = a.pins[k];
       const other = b.findPin(j, pin.number);
@@ -67,6 +78,8 @@ export function diffBoards(a: BoardModel, b: BoardModel): BoardDiff {
       const unconnected = a.nets[pin.net].kind === "unconnected" && b.nets[b.pins[other].net].kind === "unconnected";
       if (na.toUpperCase() !== nb.toUpperCase() && !unconnected) diff.pins.push({ part: p.name, pin: pin.number, a: k, netA: na, netB: nb });
     }
+    // A part wired differently is changed, even when nothing else is.
+    if (diff.pins.length > pinsBefore) changes.push("nets");
     if (changes.length) diff.changed.push({ name: p.name, a: i, b: j, changes, deviceA: p.device, deviceB: q.device });
     else diff.same++;
   });

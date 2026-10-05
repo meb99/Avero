@@ -89,3 +89,35 @@ export async function storeIndex(file: LibraryFile, index: PdfTextIndex): Promis
   loaded.set(key, index);
   await invoke("save_text_index", { key, data: JSON.stringify(index) });
 }
+
+/** Recognised words per page, as the OCR cache keeps them. */
+export interface OcrPages {
+  pages: Record<string, [string, ...number[]][]>;
+}
+
+/** A text index with the words recognised on scanned pages added. */
+export function withOcrWords(index: PdfTextIndex, ocr: OcrPages | null): PdfTextIndex {
+  if (!ocr) return index;
+  const words: Record<string, number[]> = { ...index.words };
+  let pages = index.pages;
+  for (const [page, list] of Object.entries(ocr.pages)) {
+    const p = Number(page);
+    if (!Number.isInteger(p) || p < 0) continue;
+    pages = Math.max(pages, p + 1);
+    for (const [text] of list) {
+      const word = text.toUpperCase();
+      const on = words[word] ? [...words[word]] : [];
+      if (!on.includes(p)) on.push(p);
+      words[word] = on.sort((a, b) => a - b);
+    }
+  }
+  return { ...index, pages, words };
+}
+
+/** Adds recognised words of an open schematic to the library's index of that file. */
+export async function addOcrToLibraryIndex(path: string, ocr: OcrPages, pageCount: number): Promise<void> {
+  const [size, modified] = await invoke<[number, number]>("file_stamp", { path });
+  const file = { path, name: path.split("/").pop() ?? path, size, modified };
+  const base = (await cachedIndex(file)) ?? { v: 1 as const, pages: pageCount, words: {} };
+  await storeIndex(file, withOcrWords(base, ocr));
+}

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { addOcrToLibraryIndex } from "../workbench/fulltext";
 import { useEffect, useRef, useState } from "react";
 import type { SchematicDocument } from "./document";
 import { fixRecognised, recognizePages, type OcrProgress } from "./ocr";
@@ -10,8 +11,13 @@ interface OcrCache {
   pages: Record<string, [string, number, number, number, number][]>;
 }
 
-/** A short key for a PDF: its name, path and page count. */
-export function ocrKey(doc: Pick<SchematicDocument, "name" | "path" | "pageCount">): string {
+/**
+ * The cache key of a PDF's recognised text: its content, so a replaced file
+ * under the same name and path is read again (name, path and page count only
+ * when the content is unknown).
+ */
+export function ocrKey(doc: Pick<SchematicDocument, "name" | "path" | "pageCount" | "contentId">): string {
+  if (doc.contentId) return `ocr-${doc.contentId}`;
   const s = `${doc.path ?? ""}|${doc.name}|${doc.pageCount}`;
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193) >>> 0;
@@ -103,6 +109,8 @@ export function useOcr(doc: SchematicDocument, indexComplete: boolean, known?: (
         cacheRef.current.pages[page] = words.map((w) => [w.text, round(w.box.x0), round(w.box.y0), round(w.box.x1), round(w.box.y1)]);
         // Saved after every page: a long document is not read twice.
         void invoke("save_ocr", { key, data: JSON.stringify(cacheRef.current) }).catch(() => {});
+        // The library's text search finds recognised words too.
+        if (doc.path) void addOcrToLibraryIndex(doc.path, cacheRef.current, doc.pageCount).catch(() => {});
         setProgress(p);
       },
       () => stop.current,
