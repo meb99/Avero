@@ -31,9 +31,9 @@ interface Props {
   notes: BoardNotes | null;
   updateNotes(change: (n: BoardNotes) => BoardNotes): void;
   onSelect(selection: Selection, zoom: boolean): void;
-  /** Open schematic, for the list of occurrences. */
-  schematic?: SchematicDocument | null;
-  onSchematicJump?(text: string, hit: number): void;
+  /** The board's open documents (the one shown first), for the list of occurrences. */
+  documents?: SchematicDocument[];
+  onSchematicJump?(text: string, hit: number, doc: SchematicDocument): void;
   /** Gives a net its own name; returns an error message or null. */
   onRenameNet?(net: number, name: string): string | null;
   /** Corrects the net's kind (undefined: back to the file's). */
@@ -192,7 +192,7 @@ export function Details({
   notes,
   updateNotes,
   onSelect,
-  schematic,
+  documents,
   onSchematicJump,
   onRenameNet,
   onSetNetKind,
@@ -435,7 +435,7 @@ export function Details({
   };
 
   const hits = (names: string[]) =>
-    schematic && onSchematicJump ? <SchematicHits doc={schematic} names={names} onJump={onSchematicJump} /> : null;
+    documents?.length && onSchematicJump ? <SchematicHits docs={documents} names={names} onJump={onSchematicJump} /> : null;
 
   switch (selection.kind) {
     case "none":

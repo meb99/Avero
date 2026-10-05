@@ -50,8 +50,9 @@ interface Props {
   palette: Palette;
   hiddenLayers: ReadonlySet<number>;
   onHiddenLayers(hidden: ReadonlySet<number>): void;
-  schematic: SchematicDocument | null;
-  onSchematicJump(text: string, hit: number): void;
+  /** The board's open documents, the one shown first. */
+  documents: SchematicDocument[];
+  onSchematicJump(text: string, hit: number, doc: SchematicDocument): void;
   onRenameNet(net: number, name: string): string | null;
   onSetNetKind?(net: number, kind: NetKind | undefined): void;
   /** Changes when net names change, so name-sorted lists refresh. */
@@ -109,7 +110,7 @@ export function Sidebar({
   palette,
   hiddenLayers,
   onHiddenLayers,
-  schematic,
+  documents,
   onSchematicJump,
   onRenameNet,
   onSetNetKind,
@@ -342,7 +343,7 @@ export function Sidebar({
             notes={notes}
             updateNotes={updateNotes}
             onSelect={onSelect}
-            schematic={schematic}
+            documents={documents}
             onSchematicJump={onSchematicJump}
             onRenameNet={onRenameNet}
             onSetNetKind={onSetNetKind}

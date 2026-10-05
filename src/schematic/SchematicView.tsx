@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
+import { useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import type { RenderTask } from "pdfjs-dist/legacy/build/pdf.mjs";
 import {
   ChevronLeftIcon,
@@ -59,6 +59,8 @@ interface Props {
   onPopOut?: () => void;
   /** Shown while the board is hidden: brings it back. */
   onShowBoard?: () => void;
+  /** Tabs of the board's other documents, in place of the document's name. */
+  switcher?: ReactNode;
   ref?: Ref<SchematicViewHandle>;
 }
 
@@ -127,7 +129,7 @@ function isCancel(e: unknown): boolean {
   return !!e && typeof e === "object" && "name" in e && (e as { name: string }).name === "RenderingCancelledException";
 }
 
-export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, onPopOut, onShowBoard, ref }: Props) {
+export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, onPopOut, onShowBoard, switcher, ref }: Props) {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -493,6 +495,8 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
     let first = true;
     const observer = new ResizeObserver(() => {
       const r = el.getBoundingClientRect();
+      // Put aside (another document shown): keep the view for when it comes back.
+      if (r.width === 0 || r.height === 0) return;
       const dpr = window.devicePixelRatio || 1;
       dprRef.current = dpr;
       canvas.width = Math.max(1, Math.round(r.width * dpr));
@@ -633,10 +637,12 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
     <section className="schematic" aria-label={t("schematic.title")}>
       <header className="schematic-bar">
         <div className="schematic-bar-main">
-        <span className="schematic-name" title={doc.path ?? doc.name}>
-          <SchematicIcon />
-          <span>{doc.name}</span>
-        </span>
+        {switcher ?? (
+          <span className="schematic-name" title={doc.path ?? doc.name}>
+            <SchematicIcon />
+            <span>{doc.name}</span>
+          </span>
+        )}
         <div className="pager">
           <button className="tool icon-only" onClick={() => void showPage(page - 1)} disabled={page === 0} aria-label={t("schematic.prevPage")} title={t("schematic.prevPage")}>
             <ChevronLeftIcon />

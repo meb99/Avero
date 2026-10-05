@@ -6,7 +6,10 @@ import type { ViewSide } from "../core/board";
 
 export interface WorkspaceTab {
   path: string;
+  /** The document shown. */
   schematicPath?: string;
+  /** All documents open for the board, in their order (the shown one among them). */
+  schematicPaths?: string[];
   schematicVisible: boolean;
   side: ViewSide;
   rotation: number;
@@ -42,6 +45,9 @@ export function parseWorkspace(json: string | null): Workspace | null {
         {
           path: t.path,
           ...(typeof t.schematicPath === "string" && t.schematicPath && { schematicPath: t.schematicPath }),
+          ...(Array.isArray(t.schematicPaths) && {
+            schematicPaths: t.schematicPaths.filter((x): x is string => typeof x === "string" && x.length > 0).slice(0, 24),
+          }),
           schematicVisible: t.schematicVisible !== false,
           side: t.side === "bottom" ? "bottom" : "top",
           rotation: finite(t.rotation) ? t.rotation & 3 : 0,

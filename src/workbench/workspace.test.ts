@@ -23,6 +23,18 @@ describe("parseWorkspace", () => {
     expect(ws.window).toEqual({ x: 10, y: 20, width: 1400, height: 900, maximized: false });
   });
 
+  it("keeps all documents of a board, in their order", () => {
+    const ws = parseWorkspace(
+      JSON.stringify({
+        version: 1,
+        active: 0,
+        tabs: [{ path: "/b.brd", schematicPath: "/rev-b.pdf", schematicPaths: ["/rev-a.pdf", "/rev-b.pdf", 7, ""], side: "top" }],
+      }),
+    );
+    expect(ws?.tabs[0].schematicPaths).toEqual(["/rev-a.pdf", "/rev-b.pdf"]);
+    expect(ws?.tabs[0].schematicPath).toBe("/rev-b.pdf");
+  });
+
   it("refuses other data", () => {
     expect(parseWorkspace(null)).toBeNull();
     expect(parseWorkspace("[]")).toBeNull();

@@ -58,6 +58,7 @@ import { DARK, LIGHT, withColors } from "./render/palette";
 import { setPdfPasswordPrompt, type SchematicDocument } from "./schematic/document";
 import { readSchematicFacts, type SchematicFacts } from "./schematic/partInfo";
 import { SchematicView, type SchematicFocus, type SchematicViewHandle, type WordTarget } from "./schematic/SchematicView";
+import { DocTabs } from "./schematic/DocTabs";
 import type { Word } from "./schematic/textIndex";
 import { clearRecent, loadRecent, loadSettings, rememberRecent, saveSettings, type Settings } from "./settings";
 import { useTheme } from "./theme";
@@ -143,7 +144,10 @@ interface Tab {
   side: ViewSide;
   rotation: number;
   selection: Selection;
-  schematic: SchematicDocument | null;
+  /** Schematics, datasheets, layouts and revisions open for this board. */
+  docs: SchematicDocument[];
+  /** The document shown (the others keep their page, zoom and search). */
+  docIndex: number;
   schematicVisible: boolean;
   view?: ViewState;
 }
@@ -155,9 +159,14 @@ const emptyTab = (id: number): Tab => ({
   side: "top",
   rotation: 0,
   selection: NONE,
-  schematic: null,
+  docs: [],
+  docIndex: 0,
   schematicVisible: true,
 });
+
+/** The same file, or the same content under another name. */
+const sameDocument = (a: SchematicDocument, b: SchematicDocument) =>
+  (!!a.path && a.path === b.path) || (!!a.contentId && a.contentId === b.contentId);
 
 function isTyping(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
@@ -260,7 +269,9 @@ export function App() {
   const [lockedDismissed, setLockedDismissed] = useState<BoardModel | null>(null);
   const [update, setUpdate] = useState<Update | null>(null);
   const [installing, setInstalling] = useState(false);
-  const [schematic, setSchematic] = useState<SchematicDocument | null>(null);
+  const [docs, setDocs] = useState<SchematicDocument[]>([]);
+  const [docIndex, setDocIndex] = useState(0);
+  const schematic = docs[Math.min(docIndex, docs.length - 1)] ?? null;
   const [schematicVisible, setSchematicVisible] = useState(true);
   // The aligned photo beside the board (click a part on it to select it);
   // it takes the schematic's place, two panes would squeeze the board.
@@ -289,13 +300,17 @@ export function App() {
   const [paletteQuery, setPaletteQuery] = useState("");
   const nextTabId = useRef(1);
   const live = useRef<Tab>(emptyTab(0));
-  live.current = { id: activeTab, model, source, side, rotation, selection, schematic, schematicVisible };
+  live.current = { id: activeTab, model, source, side, rotation, selection, docs, docIndex, schematicVisible };
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
   const viewRef = useRef<BoardViewHandle>(null);
   // The bottom side's own view when both sides are shown in two views.
   const viewRef2 = useRef<BoardViewHandle>(null);
   const schematicViewRef = useRef<SchematicViewHandle>(null);
+  // The document shown while its pane is put aside (for its current page).
+  const docViewRef = useRef<SchematicViewHandle>(null);
+  // What each document last highlighted, kept while another one is shown.
+  const docFocus = useRef(new WeakMap<SchematicDocument, SchematicFocus | null>());
   const searchRef = useRef<HTMLInputElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const focusNonce = useRef(0);
@@ -311,6 +326,7 @@ export function App() {
   const palette = useMemo(() => withColors(theme === "dark" ? DARK : LIGHT, ownColors), [theme, ownColors]);
   const compared = compareTab !== null && compareTab !== activeTab ? tabs.find((t) => t.id === compareTab) : undefined;
   const compareModel = compared?.model ?? null;
+  const documentsShownFirst = useMemo(() => (schematic ? [schematic, ...docs.filter((d) => d !== schematic)] : []), [docs, schematic]);
   const showSchematic = schematic !== null && schematicVisible && !detached && !compareModel && !photoPane && !sheetPane && !cameraPane;
   const compareSelection = useMemo(
     () => (model && compareModel ? mapSelection(model, compareModel, selection) : NONE),
@@ -507,7 +523,7 @@ export function App() {
   const photoFromPdf = async () => {
     if (!model || !notes || !schematic) return;
     try {
-      const page = schematicViewRef.current?.currentPage() ?? 0;
+      const page = (schematicViewRef.current ?? docViewRef.current)?.currentPage() ?? 0;
       const { canvas, png } = await renderPageImage(schematic, page);
       const file = await invoke<string>("store_photo_png", png, {
         headers: { "x-key": encodeURIComponent(notes.key), "x-side": side },
@@ -800,7 +816,9 @@ export function App() {
   }, [knowledge, t]);
 
   // A page in the occurrence list: show the schematic there.
-  const jumpInSchematic = useCallback((text: string, hit: number) => {
+  const jumpInSchematic = useCallback((text: string, hit: number, doc?: SchematicDocument) => {
+    const index = doc ? live.current.docs.indexOf(doc) : -1;
+    if (index >= 0) setDocIndex(index);
     setPhotoPane(false);
     setSchematicVisible(true);
     setFocus({ text, jump: true, hit, nonce: ++focusNonce.current });
@@ -835,11 +853,16 @@ export function App() {
         doc.destroy();
         return;
       }
+      // Another document joins the open ones; one already open is shown instead.
+      const add = (list: SchematicDocument[]) => {
+        const same = list.findIndex((d) => sameDocument(d, doc));
+        if (same >= 0) doc.destroy();
+        return same >= 0 ? { docs: list, docIndex: same } : { docs: [...list, doc], docIndex: list.length };
+      };
       if (live.current.id === tabId) {
-        setSchematic((old) => {
-          if (old !== doc) old?.destroy();
-          return doc;
-        });
+        const next = add(live.current.docs);
+        setDocs(next.docs);
+        setDocIndex(next.docIndex);
         setPhotoPane(false);
         setSchematicVisible(true);
         return;
@@ -849,8 +872,8 @@ export function App() {
         doc.destroy();
         return;
       }
-      tab.schematic?.destroy();
-      setTabs((ts) => ts.map((t) => (t.id === tabId ? { ...t, schematic: doc, schematicVisible: true } : t)));
+      const next = add(tab.docs);
+      setTabs((ts) => ts.map((t) => (t.id === tabId ? { ...t, ...next, schematicVisible: true } : t)));
     } catch (e) {
       if (live.current.id === tabId) setError({ name, error: { code: "schematic", message: e instanceof Error ? e.message : String(e) } });
     }
@@ -858,6 +881,14 @@ export function App() {
 
   const openSchematicPath = useCallback(
     async (path: string) => {
+      // Already open for this board: show it.
+      const open = live.current.docs.findIndex((d) => d.path === path);
+      if (open >= 0) {
+        setDocIndex(open);
+        setPhotoPane(false);
+        setSchematicVisible(true);
+        return;
+      }
       try {
         await openSchematicBytes(await readFileBytes(path), fileName(path), path);
       } catch (e) {
@@ -903,7 +934,8 @@ export function App() {
     setSide(tab.side);
     setRotation(tab.rotation);
     setSelection(tab.selection);
-    setSchematic(tab.schematic);
+    setDocs(tab.docs);
+    setDocIndex(tab.docIndex);
     setSchematicVisible(tab.schematicVisible);
     setInitialView(tab.view);
     setError(null);
@@ -940,7 +972,7 @@ export function App() {
     const index = all.findIndex((t) => t.id === id);
     if (index < 0) return;
     const active = id === live.current.id;
-    (active ? live.current : all[index]).schematic?.destroy();
+    for (const doc of (active ? live.current : all[index]).docs) doc.destroy();
     const rest = all.filter((t) => t.id !== id);
     if (!active) {
       setTabs(rest);
@@ -961,20 +993,20 @@ export function App() {
       // Already open in a tab: show that tab (with the requested schematic).
       const openIn = tabsRef.current.find((t) => (t.id === live.current.id ? live.current : t).source?.path === path);
       if (openIn) {
-        const shown = (openIn.id === live.current.id ? live.current : openIn).schematic?.path;
         switchTab(openIn.id);
-        if (schematicPath && schematicPath !== shown) await openSchematicPath(schematicPath);
+        // Shown, or added, when asked for (an open one is not read again).
+        if (schematicPath) await openSchematicPath(schematicPath);
         return;
       }
       setLoading(fileName(path));
       const loaded = await loadPath(path, { xzzKey: settings.xzzKey, fzKey: settings.fzKey });
       // An open board stays; the new one gets its own tab.
       const inNewTab = loaded.result.ok && live.current.model !== null;
-      const shownSchematic = inNewTab ? undefined : live.current.schematic?.path;
+      const shownSchematic = inNewTab ? undefined : live.current.docs.map((d) => d.path);
       if (inNewTab) newTab();
       if (!finishLoad(loaded)) return;
       const wanted = schematicPath ?? (settings.autoSchematic ? (await schematicsFor(path).catch(() => []))[0] : undefined);
-      if (wanted && wanted !== shownSchematic) await openSchematicPath(wanted);
+      if (wanted && !shownSchematic?.includes(wanted)) await openSchematicPath(wanted);
     },
     // switchTab and newTab only use refs and setters.
     [finishLoad, openSchematicPath, settings.autoSchematic, settings.xzzKey, settings.fzKey],
@@ -985,6 +1017,8 @@ export function App() {
   openPathRef.current = openPath;
   const switchTabRef = useRef(switchTab);
   switchTabRef.current = switchTab;
+  const openSchematicPathRef = useRef(openSchematicPath);
+  openSchematicPathRef.current = openSchematicPath;
 
   const openDialog = useCallback(async () => {
     const path = await pickPath(t("welcome.open"), "any");
@@ -1039,12 +1073,21 @@ export function App() {
 
   const closeBoard = () => closeTab(live.current.id);
 
-  const closeSchematic = useCallback(() => {
-    setSchematic((old) => {
-      old?.destroy();
-      return null;
-    });
+  /** Closes one document (the one shown when no index is given). */
+  const closeSchematic = useCallback((index?: number) => {
+    const { docs: list, docIndex: shown } = live.current;
+    const i = index ?? Math.min(shown, list.length - 1);
+    if (!list[i]) return;
+    list[i].destroy();
+    setDocs(list.filter((_, k) => k !== i));
+    setDocIndex(Math.max(0, i < shown || shown >= list.length - 1 ? shown - 1 : shown));
   }, []);
+
+  /** Another schematic, datasheet or layout for this board, next to the open ones. */
+  const addDocument = useCallback(async () => {
+    const path = await pickPath(t("docs.add"), "pdf");
+    if (path) await openSchematicPath(path);
+  }, [openSchematicPath, t]);
 
   const toggleSchematic = useCallback(async () => {
     if (detached) {
@@ -1584,7 +1627,8 @@ export function App() {
       version: 1,
       tabs: withFiles.map((t) => ({
         path: t.source!.path!,
-        ...(t.schematic?.path && { schematicPath: t.schematic.path }),
+        ...(t.docs[t.docIndex]?.path && { schematicPath: t.docs[t.docIndex].path }),
+        ...(t.docs.length > 1 && { schematicPaths: t.docs.flatMap((d) => (d.path ? [d.path] : [])) }),
         schematicVisible: t.schematicVisible,
         side: t.side,
         rotation: t.rotation,
@@ -1633,7 +1677,11 @@ export function App() {
       }
       for (const tab of ws.tabs) {
         pendingRestore.current = tab;
-        await openPathRef.current(tab.path, tab.schematicPath);
+        // All documents in their order, then the one that was shown.
+        const paths = tab.schematicPaths?.length ? tab.schematicPaths : tab.schematicPath ? [tab.schematicPath] : [];
+        await openPathRef.current(tab.path, paths[0]);
+        for (const path of paths.slice(1)) await openSchematicPathRef.current(path);
+        if (tab.schematicPath && paths.length > 1) await openSchematicPathRef.current(tab.schematicPath);
         if (!tab.schematicVisible) setSchematicVisible(false);
       }
       const active = tabsRef.current.filter((t) => (t.id === live.current.id ? live.current : t).source?.path)[ws.active];
@@ -1668,7 +1716,7 @@ export function App() {
 
   const tabInfos: TabInfo[] = tabs.map((tab) => {
     const shown = tab.id === activeTab ? live.current : tab;
-    return { id: tab.id, title: shown.source?.name ?? shown.schematic?.name ?? t("tabs.empty"), detail: shown.source?.path };
+    return { id: tab.id, title: shown.source?.name ?? shown.docs[shown.docIndex]?.name ?? t("tabs.empty"), detail: shown.source?.path };
   });
 
   const exportImage = useCallback(async () => {
@@ -2456,9 +2504,10 @@ export function App() {
                     </div>
                   </>
                 )}
-                {schematic && showSchematic && (
+                {/* Every document stays mounted (put aside while another pane is shown), keeping its page, zoom and search. */}
+                {docs.length > 0 && !detached && (
                   <>
-                    {model && (
+                    {model && showSchematic && (
                       <Splitter
                         container={workAreaRef}
                         share={share}
@@ -2466,18 +2515,40 @@ export function App() {
                         onDone={(s) => setSettings((old) => ({ ...old, schematicShare: s }))}
                       />
                     )}
-                    <div className="schematic-pane" style={model ? { width: `${share * 100}%` } : { flex: 1 }}>
-                      <SchematicView
-                        ref={schematicViewRef}
-                        doc={schematic}
-                        focus={focus}
-                        scroll={settings.scroll}
-                        classify={classifyWord}
-                        onPick={pickWord}
-                        onClose={closeSchematic}
-                        onPopOut={() => void popOutSchematic()}
-                        onShowBoard={boardAway ? () => setBoardHidden(false) : undefined}
-                      />
+                    <div
+                      className="schematic-pane"
+                      style={!showSchematic ? { display: "none" } : model ? { width: `${share * 100}%` } : { flex: 1 }}
+                    >
+                      {docs.map((doc, i) => {
+                        const shown = i === Math.min(docIndex, docs.length - 1);
+                        // The board's selection goes to the document shown; the others keep theirs.
+                        if (shown) docFocus.current.set(doc, focus);
+                        return (
+                          <div key={doc.id} className="schematic-doc" style={shown ? undefined : { display: "none" }}>
+                            <SchematicView
+                              ref={shown ? (showSchematic ? schematicViewRef : docViewRef) : undefined}
+                              doc={doc}
+                              focus={shown ? focus : (docFocus.current.get(doc) ?? null)}
+                              scroll={settings.scroll}
+                              classify={classifyWord}
+                              onPick={pickWord}
+                              onClose={() => closeSchematic(i)}
+                              onPopOut={() => void popOutSchematic()}
+                              onShowBoard={boardAway ? () => setBoardHidden(false) : undefined}
+                              switcher={
+                                <DocTabs
+                                  docs={docs}
+                                  active={i}
+                                  text={focus?.partial ? undefined : focus?.text}
+                                  onSwitch={setDocIndex}
+                                  onAdd={() => void addDocument()}
+                                  onClose={closeSchematic}
+                                />
+                              }
+                            />
+                          </div>
+                        );
+                      })}
                     </div>
                   </>
                 )}
@@ -2496,7 +2567,7 @@ export function App() {
                   palette={palette}
                   hiddenLayers={hiddenLayers}
                   onHiddenLayers={(hidden) => setLayerChoice({ model, hidden })}
-                  schematic={schematic}
+                  documents={documentsShownFirst}
                   onSchematicJump={jumpInSchematic}
                   onRenameNet={renameModelNet}
                   onSetNetKind={(net, kind) => model && updateNotes((n) => setNetKind(n, model.fileNetName(net), kind))}

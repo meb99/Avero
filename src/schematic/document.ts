@@ -57,6 +57,8 @@ function openPdf(bytes: Uint8Array, name = "", ask = false): Promise<PDFDocument
  * Stops early when `cancelled` turns true.
  */
 /** A short hash of a file's bytes (SHA-256, hex, first 16 characters). */
+let documentCount = 0;
+
 export async function contentId(bytes: Uint8Array): Promise<string> {
   try {
     const digest = await crypto.subtle.digest("SHA-256", bytes as BufferSource);
@@ -118,6 +120,8 @@ export class SchematicDocument {
   private readonly sizes: (PageSize | undefined)[];
   private readonly listeners = new Set<() => void>();
   private cancelled = false;
+  /** Tells open documents apart (the same file may be opened for two boards). */
+  readonly id = ++documentCount;
 
   private constructor(
     readonly pdf: PDFDocumentProxy,

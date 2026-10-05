@@ -1233,7 +1233,7 @@ body.resizing .schematic-canvas {
   flex-shrink: 1;
 }
 
-.schematic-bar-main > :not(.schematic-name, .schematic-spacer, .hits-none) {
+.schematic-bar-main > :not(.schematic-name, .schematic-spacer, .hits-none, .doc-tabs) {
   flex-shrink: 0;
 }
 
@@ -4171,4 +4171,97 @@ button.danger {
 /* Wrapper only: overlays keep their own positions. */
 .board-overlays {
   display: contents;
+}
+
+/* One board's documents: each in its own view, one shown at a time. */
+.schematic-doc {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.doc-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex-shrink: 1;
+}
+.doc-tab {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  max-width: 220px;
+  min-width: 0;
+}
+.doc-tab.active {
+  border-color: var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.doc-tab-name {
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 12px;
+  padding: 3px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  cursor: pointer;
+}
+.doc-tab:not(.active) .doc-tab-name {
+  font-weight: 500;
+  color: var(--text-muted, var(--text));
+}
+.doc-count {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  font-size: 11px;
+}
+.doc-tab-close {
+  border: 0;
+  background: none;
+  color: var(--text);
+  padding: 2px 4px;
+  opacity: 0.6;
+  cursor: pointer;
+  display: inline-flex;
+}
+.doc-tab-close:hover {
+  opacity: 1;
+}
+.doc-tab-close svg {
+  width: 11px;
+  height: 11px;
+}
+.doc-add {
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  padding: 1px 8px;
+  font-size: 14px;
+  line-height: 18px;
+  cursor: pointer;
+}
+.doc-elsewhere {
+  border: 1px solid #e6a100;
+  border-radius: 6px;
+  background: color-mix(in srgb, #e6a100 18%, transparent);
+  color: var(--text);
+  font-size: 12px;
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
