@@ -61,3 +61,21 @@ export function readingsCsv(notes: BoardNotes): Uint8Array {
   }
   return csv(rows);
 }
+
+/**
+ * Notes and drawings with what they belong to: kind, side, the part, pin or
+ * net a note is bound to, text, group, style, whether locked, photos, and
+ * the positions in mm.
+ */
+export function annotationsCsv(notes: BoardNotes): Uint8Array {
+  const rows: (string | number | undefined)[][] = [["Kind", "Side", "Bound to", "Text", "Group", "Color", "Width", "Locked", "Photos", "Points (mm)", "Created"]];
+  const at = (pts: { x: number; y: number }[]) => pts.map((p) => `${mm(p.x)}/${mm(p.y)}`).join(" ");
+  for (const m of notes.markers ?? []) {
+    rows.push(["note", m.side, m.target ?? "", m.text, "", "", "", "", (m.photos ?? []).length || "", at([m]), m.created]);
+  }
+  for (const d of notes.drawings ?? []) {
+    const text = d.kind === "jumper" && d.from && d.to ? [d.text, `${d.from} → ${d.to}`].filter(Boolean).join(" · ") : d.text;
+    rows.push([d.kind, d.side, "", text ?? "", d.group ?? "", d.color ?? "", d.width ?? "", d.locked ? "yes" : "", "", at(d.points), d.created]);
+  }
+  return csv(rows);
+}

@@ -4566,3 +4566,32 @@ body.resizing-rows {
 .own-info {
   margin-bottom: 8px;
 }
+
+/* Drawing styles in the list. */
+.drawing-style {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+.swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  padding: 0;
+  cursor: pointer;
+}
+.swatch.on {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.drawing-list li.locked {
+  opacity: 0.8;
+}
+.drawing-filter select {
+  font-size: 12px;
+}
+.bound-note {
+  margin-bottom: 6px;
+}

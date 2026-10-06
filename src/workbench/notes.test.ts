@@ -19,6 +19,12 @@ import {
   setNetKind,
   setOwnPart,
   setOwnPin,
+  addDrawing,
+  lockDrawing,
+  moveDrawing,
+  removeDrawing,
+  setDrawingFields,
+  setMarkerPhotos,
   setPointValue,
   pointsOnNet,
   spread,
@@ -361,5 +367,34 @@ describe("own facts over the file's", () => {
     expect(again.ownPins).toEqual({ "U7.GND#2": { label: "PGND" } });
     expect(setOwnPart(again, "U7", undefined).ownParts).toBeUndefined();
     expect(setOwnPin(again, "U7.GND#2", { label: "  " }).ownPins).toBeUndefined();
+  });
+});
+
+describe("drawings with style, groups and lock", () => {
+  const base = () => parseNotes(JSON.stringify({ version: 1, key: "B", reference: {}, cases: [] }))!;
+  it("move and lock together as a group, and a locked one stays", () => {
+    let n = addDrawing(base(), { kind: "arrow", side: "top", points: [{ x: 0, y: 0 }, { x: 10, y: 0 }] });
+    n = addDrawing(n, { kind: "rect", side: "top", points: [{ x: 5, y: 5 }, { x: 20, y: 20 }] });
+    const [a, b] = n.drawings!;
+    n = setDrawingFields(n, a.id, { group: "C12 area", color: "blue", width: 3 });
+    n = setDrawingFields(n, b.id, { group: "C12 area" });
+    n = moveDrawing(n, a.id, 100, 50);
+    expect(n.drawings!.map((d) => d.points[0])).toEqual([{ x: 100, y: 50 }, { x: 105, y: 55 }]);
+    n = lockDrawing(n, b.id, true);
+    expect(n.drawings!.every((d) => d.locked)).toBe(true);
+    expect(moveDrawing(n, a.id, 1, 1)).toBe(n);
+    expect(removeDrawing(n, a.id).drawings).toHaveLength(2);
+    expect(setDrawingFields(n, a.id, { color: "red" }).drawings![0].color).toBe("blue");
+    n = lockDrawing(n, a.id, false);
+    expect(n.drawings!.some((d) => d.locked)).toBe(false);
+    // Kept through saving.
+    const again = parseNotes(JSON.stringify(n))!;
+    expect(again.drawings![0]).toMatchObject({ kind: "arrow", color: "blue", width: 3, group: "C12 area" });
+  });
+
+  it("keeps notes bound to a pin with their photos", () => {
+    let n = addMarker(base(), { id: "m1", x: 1, y: 2, side: "top", text: "cold joint", target: "U7.21" });
+    n = setMarkerPhotos(n, "m1", ["a.jpg"]);
+    expect(parseNotes(JSON.stringify(n))!.markers![0]).toMatchObject({ target: "U7.21", photos: ["a.jpg"] });
   });
 });

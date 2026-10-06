@@ -28,7 +28,7 @@ function Field({ label, value, onSave }: { label: string; value: string; onSave(
 }
 
 /** Small preview of a stored photo. */
-function Thumb({ file, onRemove, label }: { file: string; onRemove(): void; label: string }) {
+export function Thumb({ file, onRemove, label }: { file: string; onRemove(): void; label: string }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;

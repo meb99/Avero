@@ -14,7 +14,7 @@ export interface MenuActions {
   prevTab(): void;
   exportImage(): void;
   exportPdf(): void;
-  exportCsv(what: "parts" | "nets" | "readings"): void;
+  exportCsv(what: "parts" | "nets" | "readings" | "annotations"): void;
   settings(): void;
   search(): void;
   searchSchematic(): void;
@@ -158,6 +158,7 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
             item("csv-parts", t("csv.parts"), (a) => a.exportCsv("parts")),
             item("csv-nets", t("csv.nets"), (a) => a.exportCsv("nets")),
             item("csv-readings", t("csv.readings"), (a) => a.exportCsv("readings")),
+            item("csv-annotations", t("csv.annotations"), (a) => a.exportCsv("annotations")),
           ],
         },
         SEP,

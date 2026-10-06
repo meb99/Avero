@@ -11,13 +11,18 @@ import {
   netStatuses,
   removeBookmark,
   removeCase,
+  DRAWING_COLORS,
+  lockDrawing,
   removeDrawing,
   renameBookmark,
   setConditions,
+  setDrawingFields,
   updateCase,
   updateDrawing,
   type BoardNotes,
   type Bookmark,
+  type DrawingColor,
+  type DrawingKind,
   type NetStatus,
 } from "../workbench/notes";
 import { formatLength } from "../format";
@@ -72,6 +77,7 @@ function NotesField({ value, onSave, placeholder }: { value: string; onSave(v: s
 /** The "Measure" tab: repair cases, all measured nets, notes, import/export. */
 export function Workbench({ model, notes, update, tolerance, onTolerance, onSelect, onShowMarker, onShowDrawing, onShowBookmark, onAddBookmark, error, selection, units, listFocus }: Props) {
   const { t, lang } = useI18n();
+  const boundLabel = useBoundLabel();
   const [onlyDeviations, setOnlyDeviations] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -277,9 +283,15 @@ export function Workbench({ model, notes, update, tolerance, onTolerance, onSele
           <ul className="marker-list">
             {notes.markers!.map((m) => (
               <li key={m.id}>
-                <button className="link" onClick={() => onShowMarker(m.id)}>
-                  {m.text || t("marker.empty")}
-                </button>
+                {m.target?.startsWith("net:") ? (
+                  <span>{m.text || t("marker.empty")}</span>
+                ) : (
+                  <button className="link" onClick={() => onShowMarker(m.id)}>
+                    {m.text || t("marker.empty")}
+                  </button>
+                )}
+                {m.target && <span className="src-tag">{boundLabel(m.target)}</span>}
+                {(m.photos?.length ?? 0) > 0 && <span className="muted"> 📷 {m.photos!.length}</span>}
                 <span className="muted">{t(m.side === "top" ? "side.top" : "side.bottom")}</span>
               </li>
             ))}
@@ -288,36 +300,7 @@ export function Workbench({ model, notes, update, tolerance, onTolerance, onSele
       )}
 
       {(notes.drawings?.length ?? 0) > 0 && (
-        <section className="wb-section">
-          <h3>
-            {t("draw.list")} <span className="muted">{notes.drawings!.length}</span>
-          </h3>
-          <ul className="marker-list drawing-list">
-            {notes.drawings!.map((d) => {
-              const length = d.points.slice(1).reduce((s, p, i) => s + Math.hypot(p.x - d.points[i].x, p.y - d.points[i].y), 0);
-              return (
-                <li key={d.id}>
-                  <button className="link" onClick={() => onShowDrawing(d.id)}>
-                    {t(`draw.kind.${d.kind}`)}
-                    {d.kind === "jumper" && d.from && d.to ? `: ${d.from} → ${d.to}` : ""}
-                  </button>
-                  {d.kind !== "area" && <span className="muted"> {t("draw.length", { length: formatLength(length, units) })}</span>}
-                  <span className="muted"> · {t(d.side === "top" ? "side.top" : "side.bottom")}</span>
-                  <input
-                    className="drawing-text"
-                    defaultValue={d.text ?? ""}
-                    placeholder={t("draw.text")}
-                    onBlur={(e) => e.target.value !== (d.text ?? "") && update((n) => updateDrawing(n, d.id, e.target.value.trim()))}
-                    onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-                  />
-                  <button className="tool icon-only danger" onClick={() => update((n) => removeDrawing(n, d.id))} title={t("draw.delete")} aria-label={t("draw.delete")}>
-                    ×
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+        <DrawingList notes={notes} update={update} units={units} onShowDrawing={onShowDrawing} />
       )}
 
       <section className="wb-section">
@@ -347,5 +330,161 @@ export function Workbench({ model, notes, update, tolerance, onTolerance, onSele
       </section>
       {(message || error) && <p className="wb-error">{message ?? t("measure.saveError", { message: error ?? "" })}</p>}
     </div>
+  );
+}
+
+/** "Bauteil U7", "Pin U7.21", "Netz PP3V3" for a note's binding. */
+function useBoundLabel() {
+  const { t } = useI18n();
+  return (target: string) =>
+    target.startsWith("part:")
+      ? t("bound.part", { name: target.slice(5) })
+      : target.startsWith("net:")
+        ? t("bound.net", { name: target.slice(4) })
+        : t("bound.point", { name: target.replace(/^TP:/, "") });
+}
+
+const COLOR_HEX: Record<DrawingColor, string> = { orange: "#ff9800", red: "#ef5350", green: "#22c55e", blue: "#42a5f5", yellow: "#ffd600", white: "#ffffff" };
+
+/**
+ * The board's drawings, filterable by kind and group: text, color and
+ * width per drawing, groups that move and lock together, a lock against
+ * changes, moving to a new spot on the board, deleting.
+ */
+function DrawingList({
+  notes,
+  update,
+  units,
+  onShowDrawing,
+}: {
+  notes: BoardNotes;
+  update(change: (n: BoardNotes) => BoardNotes): void;
+  units: "mm" | "mil";
+  onShowDrawing(id: string): void;
+}) {
+  const { t } = useI18n();
+  const [kind, setKind] = useState<DrawingKind | "">("");
+  const [group, setGroup] = useState("");
+  const all = notes.drawings ?? [];
+  const groups = [...new Set(all.flatMap((d) => (d.group ? [d.group] : [])))].sort();
+  const kinds = [...new Set(all.map((d) => d.kind))];
+  const shown = all.filter((d) => (!kind || d.kind === kind) && (!group || d.group === group));
+  return (
+    <section className="wb-section">
+      <h3>
+        {t("draw.list")} <span className="muted">{shown.length === all.length ? all.length : `${shown.length}/${all.length}`}</span>
+      </h3>
+      {(kinds.length > 1 || groups.length > 0) && (
+        <div className="wb-row drawing-filter">
+          <select value={kind} onChange={(e) => setKind(e.target.value as DrawingKind | "")} aria-label={t("draw.filterKind")}>
+            <option value="">{t("draw.allKinds")}</option>
+            {kinds.map((k) => (
+              <option key={k} value={k}>
+                {t(`draw.kind.${k}`)}
+              </option>
+            ))}
+          </select>
+          {groups.length > 0 && (
+            <select value={group} onChange={(e) => setGroup(e.target.value)} aria-label={t("draw.filterGroup")}>
+              <option value="">{t("draw.allGroups")}</option>
+              {groups.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+      <ul className="marker-list drawing-list">
+        {shown.map((d) => {
+          const length = d.points.slice(1).reduce((s, p, i) => s + Math.hypot(p.x - d.points[i].x, p.y - d.points[i].y), 0);
+          const locked = !!d.locked;
+          return (
+            <li key={d.id} className={locked ? "locked" : undefined}>
+              <button className="link" onClick={() => onShowDrawing(d.id)}>
+                {t(`draw.kind.${d.kind}`)}
+                {d.kind === "jumper" && d.from && d.to ? `: ${d.from} → ${d.to}` : ""}
+              </button>
+              {(d.kind === "line" || d.kind === "jumper" || d.kind === "arrow") && (
+                <span className="muted"> {t("draw.length", { length: formatLength(length, units) })}</span>
+              )}
+              <span className="muted"> · {t(d.side === "top" ? "side.top" : "side.bottom")}</span>
+              {d.group && <span className="src-tag">{d.group}</span>}
+              <input
+                className="drawing-text"
+                defaultValue={d.text ?? ""}
+                disabled={locked}
+                placeholder={t("draw.text")}
+                onBlur={(e) => e.target.value !== (d.text ?? "") && update((n) => updateDrawing(n, d.id, e.target.value.trim()))}
+                onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+              />
+              <span className="drawing-style">
+                {DRAWING_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    className={`swatch${(d.color ?? "") === c ? " on" : ""}`}
+                    style={{ background: COLOR_HEX[c] }}
+                    disabled={locked}
+                    title={t(`draw.color.${c}`)}
+                    aria-label={t(`draw.color.${c}`)}
+                    onClick={() => update((n) => setDrawingFields(n, d.id, { color: d.color === c ? undefined : c }))}
+                  />
+                ))}
+                <select
+                  value={d.width ?? 2}
+                  disabled={locked}
+                  aria-label={t("draw.width")}
+                  onChange={(e) => update((n) => setDrawingFields(n, d.id, { width: Number(e.target.value) as 1 | 2 | 3 }))}
+                >
+                  <option value={1}>{t("draw.thin")}</option>
+                  <option value={2}>{t("draw.normal")}</option>
+                  <option value={3}>{t("draw.thick")}</option>
+                </select>
+                <button
+                  className="tool icon-only"
+                  disabled={locked}
+                  title={t("draw.groupHint")}
+                  aria-label={t("draw.group")}
+                  onClick={async () => {
+                    const name = await askText(t("draw.groupAsk"), d.group ?? "", { title: t("draw.group") });
+                    if (name !== null) update((n) => setDrawingFields(n, d.id, { group: name.trim() || undefined }));
+                  }}
+                >
+                  ⧉
+                </button>
+                <button
+                  className="tool icon-only"
+                  disabled={locked}
+                  title={t("draw.moveHint")}
+                  aria-label={t("draw.move")}
+                  onClick={() => window.dispatchEvent(new CustomEvent("avero:move-drawing", { detail: d.id }))}
+                >
+                  ✥
+                </button>
+                <button
+                  className={`tool icon-only${locked ? " on" : ""}`}
+                  aria-pressed={locked}
+                  title={t(locked ? "draw.unlock" : "draw.lock")}
+                  aria-label={t(locked ? "draw.unlock" : "draw.lock")}
+                  onClick={() => update((n) => lockDrawing(n, d.id, !locked))}
+                >
+                  {locked ? "🔒" : "🔓"}
+                </button>
+                <button
+                  className="tool icon-only danger"
+                  disabled={locked}
+                  onClick={() => update((n) => removeDrawing(n, d.id))}
+                  title={t("draw.delete")}
+                  aria-label={t("draw.delete")}
+                >
+                  ×
+                </button>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

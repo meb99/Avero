@@ -480,15 +480,41 @@ export function drawMarkers(
 /** A drawing as shown on the board (see `Drawing` in notes.ts). */
 export interface DrawingMark {
   id: string;
-  kind: "line" | "area" | "jumper";
+  kind: "line" | "area" | "jumper" | "arrow" | "rect" | "circle" | "text";
   side: ViewSide;
   points: { x: number; y: number }[];
   text?: string;
+  color?: string;
+  width?: number;
 }
 
-const DRAW_COLORS = { line: "#ff9800", area: "#ef5350", jumper: "#22c55e" } as const;
+const DRAW_COLORS: Record<DrawingMark["kind"], string> = {
+  line: "#ff9800",
+  area: "#ef5350",
+  jumper: "#22c55e",
+  arrow: "#ff9800",
+  rect: "#ef5350",
+  circle: "#ef5350",
+  text: "#ffffff",
+};
 
-/** Lines, areas and jumpers of the side in view; `draft` is the one being drawn (its last point follows the cursor). */
+/** Named drawing colors (see DRAWING_COLORS in notes). */
+const NAMED_COLORS: Record<string, string> = {
+  orange: "#ff9800",
+  red: "#ef5350",
+  green: "#22c55e",
+  blue: "#42a5f5",
+  yellow: "#ffd600",
+  white: "#ffffff",
+};
+
+/** Fill of an area-like drawing in its own color. */
+const fillOf = (hex: string) => {
+  const n = Number.parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, 0.2)`;
+};
+
+/** Lines, areas, jumpers, arrows, boxes, circles and texts of the side in view; `draft` is the one being drawn (its last point follows the cursor). */
 export function drawDrawings(
   ctx: CanvasRenderingContext2D,
   camera: Camera,
@@ -502,24 +528,53 @@ export function drawDrawings(
   for (const d of all) {
     if (d.side !== view || d.points.length === 0) continue;
     const pts = d.points.map((p) => camera.toScreen(p));
-    const color = DRAW_COLORS[d.kind];
+    const color = (d.color && NAMED_COLORS[d.color]) ?? DRAW_COLORS[d.kind];
+    const w = d.width ?? 2;
+    const line = (d.kind === "jumper" ? 3.5 : 2) * (w / 2);
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
+    // The outline of the drawing, by kind.
     ctx.beginPath();
-    pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
-    if (d.kind === "area" && pts.length >= 3 && d !== draft) ctx.closePath();
-    if (d.kind === "area") {
-      ctx.fillStyle = "rgba(239, 83, 80, 0.22)";
-      ctx.fill();
+    if (d.kind === "rect" && pts.length >= 2) {
+      const [a, b] = pts;
+      ctx.rect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+    } else if (d.kind === "circle" && pts.length >= 2) {
+      const [c, r] = pts;
+      ctx.arc(c.x, c.y, Math.hypot(r.x - c.x, r.y - c.y), 0, Math.PI * 2);
+    } else if (d.kind !== "text") {
+      pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      if (d.kind === "area" && pts.length >= 3 && d !== draft) ctx.closePath();
     }
-    ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
-    ctx.lineWidth = d.kind === "jumper" ? 6 : 4;
-    ctx.stroke();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = d.kind === "jumper" ? 3.5 : 2;
-    if (d.kind === "line") ctx.setLineDash([7, 4]);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    if (d.kind !== "text") {
+      if (d.kind === "area" || d.kind === "rect" || d.kind === "circle") {
+        ctx.fillStyle = fillOf(color);
+        ctx.fill();
+      }
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+      ctx.lineWidth = line + 2;
+      ctx.stroke();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = line;
+      if (d.kind === "line") ctx.setLineDash([7, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (d.kind === "arrow" && pts.length >= 2) {
+      // The head at the second point.
+      const [a, b] = [pts[pts.length - 2], pts[pts.length - 1]];
+      const angle = Math.atan2(b.y - a.y, b.x - a.x);
+      const head = 9 + line * 2;
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y);
+      ctx.lineTo(b.x - head * Math.cos(angle - 0.45), b.y - head * Math.sin(angle - 0.45));
+      ctx.lineTo(b.x - head * Math.cos(angle + 0.45), b.y - head * Math.sin(angle + 0.45));
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
     if (d.kind === "jumper")
       for (const p of [pts[0], pts[pts.length - 1]]) {
         ctx.beginPath();
@@ -530,12 +585,25 @@ export function drawDrawings(
         ctx.lineWidth = 1;
         ctx.stroke();
       }
-    if (d.text) {
+    if (d.kind === "text") {
+      // Text standing by itself at its point.
+      const p = pts[0];
+      const size = 11 + w * 2;
+      ctx.font = `600 ${size}px ${FONT}`;
+      const text = d.text || "…";
+      const tw = ctx.measureText(text).width + 10;
+      ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
+      ctx.fillRect(p.x - 5, p.y - size / 2 - 4, tw, size + 8);
+      ctx.fillStyle = color;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, p.x, p.y);
+    } else if (d.text) {
       const c = pts.reduce((s, p) => ({ x: s.x + p.x / pts.length, y: s.y + p.y / pts.length }), { x: 0, y: 0 });
       ctx.font = `600 12px ${FONT}`;
-      const w = ctx.measureText(d.text).width + 10;
+      const tw = ctx.measureText(d.text).width + 10;
       ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
-      ctx.fillRect(c.x - w / 2, c.y - 22, w, 18);
+      ctx.fillRect(c.x - tw / 2, c.y - 22, tw, 18);
       ctx.fillStyle = "#fff";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";

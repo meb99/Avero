@@ -1,3 +1,4 @@
+import type { DrawingKind } from "../workbench/notes";
 import type { Ref } from "react";
 import type { BoardModel, ViewSide } from "../core/board";
 import type { Selection } from "../core/types";
@@ -47,8 +48,8 @@ interface Props {
   placingMarker: boolean;
   onMarker(): void;
   /** Drawing tool in use, and starting or stopping one. */
-  drawing: "line" | "area" | "jumper" | "ruler" | null;
-  onDraw(kind: "line" | "area" | "jumper" | "ruler" | null): void;
+  drawing: DrawingKind | "ruler" | null;
+  onDraw(kind: DrawingKind | "ruler" | null): void;
 }
 
 export function Toolbar(p: Props) {
@@ -128,11 +129,15 @@ export function Toolbar(p: Props) {
               value={p.drawing ?? ""}
               title={t("draw.title")}
               aria-label={t("draw.title")}
-              onChange={(e) => p.onDraw((e.target.value || null) as "line" | "area" | "jumper" | "ruler" | null)}
+              onChange={(e) => p.onDraw((e.target.value || null) as DrawingKind | "ruler" | null)}
             >
               <option value="">✎ {t("draw.title")}</option>
               <option value="line">{t("draw.line")}</option>
+              <option value="arrow">{t("draw.arrow")}</option>
+              <option value="rect">{t("draw.rect")}</option>
+              <option value="circle">{t("draw.circle")}</option>
               <option value="area">{t("draw.area")}</option>
+              <option value="text">{t("draw.textTool")}</option>
               <option value="jumper">{t("draw.jumper")}</option>
               <option value="ruler">{t("ruler.title")} (L)</option>
             </select>

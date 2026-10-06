@@ -55,15 +55,30 @@ export type CaseFields = Partial<Pick<RepairCase, "title" | "notes" | "status" |
 /** A note pinned to a spot on the board, e.g. "short to ground here". */
 export interface BoardMarker {
   id: string;
-  /** Board position in mils. */
+  /** Board position in mils (for a bound note: where its object was when it was made). */
   x: number;
   y: number;
   side: "top" | "bottom";
   text: string;
   created: string;
+  /**
+   * What the note belongs to: a pin or test point by its point id
+   * ("U7.21", "TP:TP12"), a part ("part:U7") or a net ("net:PP3V3"). A
+   * bound note goes with its object, and is listed with it.
+   */
+  target?: string;
+  /** Photos stored with the note. */
+  photos?: string[];
 }
 
-export type DrawingKind = "line" | "area" | "jumper";
+export type DrawingKind = "line" | "area" | "jumper" | "arrow" | "rect" | "circle" | "text";
+
+/** Points each kind of drawing needs. */
+export const DRAWING_POINTS: Record<DrawingKind, number> = { line: 2, area: 3, jumper: 2, arrow: 2, rect: 2, circle: 2, text: 1 };
+
+/** Colors a drawing can have, by name. */
+export const DRAWING_COLORS = ["orange", "red", "green", "blue", "yellow", "white"] as const;
+export type DrawingColor = (typeof DRAWING_COLORS)[number];
 
 /**
  * Something drawn on the board: a line (a cut trace), an area (corrosion,
@@ -80,6 +95,13 @@ export interface Drawing {
   from?: string;
   to?: string;
   created: string;
+  color?: DrawingColor;
+  /** Line width: 1 thin, 2 normal, 3 thick. */
+  width?: 1 | 2 | 3;
+  /** Locked: not moved, changed or deleted until unlocked. */
+  locked?: boolean;
+  /** Drawings of one group move and lock together. */
+  group?: string;
 }
 
 /** A saved place on the board: the view, the side, and what was selected. */
@@ -581,19 +603,65 @@ export function addDrawing(notes: BoardNotes, drawing: Omit<Drawing, "id" | "cre
 }
 
 export function updateDrawing(notes: BoardNotes, id: string, text: string): BoardNotes {
-  return { ...notes, drawings: (notes.drawings ?? []).map((d) => (d.id === id ? { ...d, text: text || undefined } : d)), updated: now() };
+  return setDrawingFields(notes, id, { text: text || undefined });
+}
+
+/** The drawing and the others of its group. */
+const groupOf = (all: Drawing[], id: string): Set<string> => {
+  const d = all.find((x) => x.id === id);
+  if (!d) return new Set();
+  return new Set(d.group ? all.filter((x) => x.group === d.group).map((x) => x.id) : [id]);
+};
+
+/** Changes style, text, group or lock of one drawing (a locked one only by unlocking it). */
+export function setDrawingFields(
+  notes: BoardNotes,
+  id: string,
+  fields: Partial<Pick<Drawing, "text" | "color" | "width" | "group" | "locked">>,
+): BoardNotes {
+  const drawings = (notes.drawings ?? []).map((d) => {
+    if (d.id !== id || (d.locked && fields.locked !== false)) return d;
+    const next: Drawing = { ...d, ...fields };
+    for (const k of Object.keys(fields) as (keyof Drawing)[]) if (next[k] === undefined || next[k] === "") delete next[k];
+    return next;
+  });
+  return { ...notes, drawings, updated: now() };
+}
+
+/** Locks or unlocks a drawing with its group. */
+export function lockDrawing(notes: BoardNotes, id: string, locked: boolean): BoardNotes {
+  const ids = groupOf(notes.drawings ?? [], id);
+  return { ...notes, drawings: (notes.drawings ?? []).map((d) => (ids.has(d.id) ? { ...d, locked: locked || undefined } : d)), updated: now() };
+}
+
+/** Moves a drawing and its group by dx, dy (locked ones stay). */
+export function moveDrawing(notes: BoardNotes, id: string, dx: number, dy: number): BoardNotes {
+  const all = notes.drawings ?? [];
+  const ids = groupOf(all, id);
+  if (all.some((d) => ids.has(d.id) && d.locked)) return notes;
+  return {
+    ...notes,
+    drawings: all.map((d) => (ids.has(d.id) ? { ...d, points: d.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) } : d)),
+    updated: now(),
+  };
 }
 
 export function removeDrawing(notes: BoardNotes, id: string): BoardNotes {
+  if (notes.drawings?.find((d) => d.id === id)?.locked) return notes;
   return { ...notes, drawings: (notes.drawings ?? []).filter((d) => d.id !== id), updated: now() };
+}
+
+/** Adds or removes a photo of a note. */
+export function setMarkerPhotos(notes: BoardNotes, id: string, photos: string[]): BoardNotes {
+  return { ...notes, markers: (notes.markers ?? []).map((m) => (m.id === id ? { ...m, photos: photos.length ? photos : undefined } : m)), updated: now() };
 }
 
 function parseDrawings(value: unknown): Drawing[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const out = value.flatMap((d): Drawing[] => {
-    if (!d || typeof d.id !== "string" || !["line", "area", "jumper"].includes(d.kind) || (d.side !== "top" && d.side !== "bottom")) return [];
+    if (!d || typeof d.id !== "string" || !(d.kind in DRAWING_POINTS) || (d.side !== "top" && d.side !== "bottom")) return [];
     const points = Array.isArray(d.points) ? d.points.filter((p: { x: unknown; y: unknown }) => Number.isFinite(p?.x) && Number.isFinite(p?.y)) : [];
-    if (points.length < (d.kind === "area" ? 3 : 2)) return [];
+    if (points.length < DRAWING_POINTS[d.kind as DrawingKind]) return [];
     return [
       {
         id: d.id,
@@ -603,6 +671,10 @@ function parseDrawings(value: unknown): Drawing[] | undefined {
         ...(typeof d.text === "string" && d.text && { text: d.text }),
         ...(typeof d.from === "string" && { from: d.from }),
         ...(typeof d.to === "string" && { to: d.to }),
+        ...(DRAWING_COLORS.includes(d.color) && { color: d.color }),
+        ...([1, 2, 3].includes(d.width) && { width: d.width }),
+        ...(d.locked === true && { locked: true }),
+        ...(typeof d.group === "string" && d.group && { group: d.group }),
         created: typeof d.created === "string" ? d.created : new Date(0).toISOString(),
       },
     ];
@@ -657,7 +729,18 @@ function parseMarkers(value: unknown): BoardMarker[] | undefined {
       (m.side === "top" || m.side === "bottom") &&
       typeof m.text === "string",
   );
-  return out.length ? out.map((m) => ({ ...m, created: typeof m.created === "string" ? m.created : new Date(0).toISOString() })) : undefined;
+  return out.length
+    ? out.map((m) => ({
+        id: m.id,
+        x: m.x,
+        y: m.y,
+        side: m.side,
+        text: m.text,
+        created: typeof m.created === "string" ? m.created : new Date(0).toISOString(),
+        ...(typeof m.target === "string" && m.target && { target: m.target }),
+        ...(Array.isArray(m.photos) && m.photos.some((p) => typeof p === "string") && { photos: m.photos.filter((p) => typeof p === "string") }),
+      }))
+    : undefined;
 }
 
 function parseHidden(value: unknown): BoardNotes["hidden"] {

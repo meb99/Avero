@@ -18,6 +18,7 @@ import { useI18n, type MessageKey } from "../i18n";
 import type { Settings } from "../settings";
 import { activeCase, addDrawing, readingsFor, setOwnPart, setOwnPin, updateDocLinks, type BoardNotes } from "../workbench/notes";
 import { OwnPartInfo, OwnPinInfo } from "./OwnInfo";
+import { BoundNotes } from "./BoundNotes";
 import { jumperTargets } from "../core/jumper";
 import { datasheetsFor, partNumbers, type Datasheet } from "../workbench/datasheets";
 import { formatValue } from "../workbench/measure";
@@ -554,6 +555,14 @@ export function Details({
           {notes && (
             <OwnPartInfo info={notes.ownParts?.[part.name.toUpperCase()]} onSave={(info) => updateNotes((n) => setOwnPart(n, part.name, info))} />
           )}
+          {notes && (
+            <BoundNotes
+              notes={notes}
+              update={updateNotes}
+              target={`part:${part.name}`}
+              at={{ x: (b.minX + b.maxX) / 2, y: b.maxY, side: part.side === "bottom" ? "bottom" : part.side === "top" ? "top" : side === "bottom" ? "bottom" : "top" }}
+            />
+          )}
           {obdValues.length > 0 && (
             <section className="details-section obd">
               <h3>
@@ -714,6 +723,14 @@ export function Details({
           {notes && (
             <OwnPinInfo info={notes.ownPins?.[pinKey(model, selection.pin)]} onSave={(info) => updateNotes((n) => setOwnPin(n, pinKey(model, selection.pin), info))} />
           )}
+          {notes && (
+            <BoundNotes
+              notes={notes}
+              update={updateNotes}
+              target={pinKey(model, selection.pin)}
+              at={{ x: pin.x, y: pin.y, side: pin.side === "bottom" ? "bottom" : pin.side === "top" ? "top" : side === "bottom" ? "bottom" : "top" }}
+            />
+          )}
           {hits([part.name], mapping(part.name, { number: pin.number, nets: [...new Set([net.name, model.fileNetName(pin.net)])] }))}
           {netMembers(pin.net, selection.pin)}
         </div>
@@ -800,6 +817,14 @@ export function Details({
           </dl>
           {measure(selection.net)}
           {hits([net.name, model.fileNetName(selection.net)])}
+          {notes && net.pins.length > 0 && (
+            <BoundNotes
+              notes={notes}
+              update={updateNotes}
+              target={`net:${net.name}`}
+              at={{ x: model.pins[net.pins[0]].x, y: model.pins[net.pins[0]].y, side: side === "bottom" ? "bottom" : "top" }}
+            />
+          )}
           {netMembers(selection.net)}
         </div>
       );

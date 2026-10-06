@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AskHost, askConfirm, askText } from "./components/Ask";
 import { copyText } from "./core/clipboard";
-import { netsCsv, partsCsv, readingsCsv } from "./workbench/csvExport";
+import { annotationsCsv, netsCsv, partsCsv, readingsCsv } from "./workbench/csvExport";
 import { answerMcp, type McpContext } from "./workbench/mcpTools";
 import { MCP_DEFAULT_PORT } from "./workbench/mcp";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -84,9 +84,11 @@ import {
   updateMarker,
   type Bookmark,
   type DrawingKind,
+  DRAWING_POINTS,
   type NetStatus,
   setNetKind,
   hideParts,
+  moveDrawing,
   setOrigin,
   showParts,
 } from "./workbench/notes";
@@ -687,7 +689,26 @@ export function App() {
   const [placingMarker, setPlacingMarker] = useState(false);
   const [editingMarker, setEditingMarker] = useState<{ id: string; at: Point } | null>(null);
   const boardMarkers = notesForModel?.markers;
-  const markerMarks = useMemo(() => boardMarkers ?? [], [boardMarkers]);
+  // Notes bound to a part or pin sit where that object is; notes of a net are listed with the net.
+  const markerMarks = useMemo(
+    () =>
+      (boardMarkers ?? []).flatMap((m) => {
+        if (!m.target || !model) return [m];
+        if (m.target.startsWith("net:")) return [];
+        const sideOf = (s: string) => (s === "top" || s === "bottom" ? s : m.side);
+        if (m.target.startsWith("part:")) {
+          const i = model.findPart(m.target.slice(5));
+          if (i === undefined) return [m];
+          const p = model.parts[i];
+          return [{ ...m, x: (p.bounds.minX + p.bounds.maxX) / 2, y: p.bounds.maxY, side: sideOf(p.side) }];
+        }
+        const at = findPoint(model, m.target);
+        if (at?.kind === "pin") return [{ ...m, x: model.pins[at.pin].x, y: model.pins[at.pin].y, side: sideOf(model.pins[at.pin].side) }];
+        if (at?.kind === "testPoint") return [{ ...m, x: model.testPoints[at.testPoint].x, y: model.testPoints[at.testPoint].y, side: sideOf(model.testPoints[at.testPoint].side) }];
+        return [m];
+      }),
+    [boardMarkers, model],
+  );
   const editedMarker = editingMarker ? boardMarkers?.find((m) => m.id === editingMarker.id) : undefined;
   const openMarker = useCallback((id: string) => {
     const m = boardMarkers?.find((x) => x.id === id);
@@ -723,26 +744,51 @@ export function App() {
   const finishDrawing = useCallback(
     (d: { kind: DrawingKind; side: ViewSide; points: Point[]; ends: string[] }) => {
       setDrawing(null);
-      if (d.points.length < (d.kind === "area" ? 3 : 2)) return;
-      updateNotes((n) =>
-        addDrawing(n, {
-          kind: d.kind,
-          side: d.side,
-          points: d.points,
-          ...(d.kind === "jumper" && { from: d.ends[0] || undefined, to: d.ends[1] || undefined }),
-        }),
-      );
+      if (d.points.length < DRAWING_POINTS[d.kind]) return;
+      const add = (text?: string) =>
+        updateNotes((n) =>
+          addDrawing(n, {
+            kind: d.kind,
+            side: d.side,
+            points: d.points,
+            ...(text && { text }),
+            ...(d.kind === "jumper" && { from: d.ends[0] || undefined, to: d.ends[1] || undefined }),
+          }),
+        );
+      // A text needs its words before it is worth keeping.
+      if (d.kind === "text") void askText(t("draw.textAsk"), "", { title: t("draw.textTool") }).then((text) => text?.trim() && add(text.trim()));
+      else add();
     },
-    [updateNotes],
+    [updateNotes, t],
   );
   const pickDrawPoint = (point: Point, clicked: ViewSide) => {
     const d = drawingRef.current;
     if (!d) return;
     const next = { ...d, side: d.points.length ? d.side : clicked, points: [...d.points, point], ends: [...d.ends, pointLabel(point)] };
-    if (next.kind !== "area" && next.points.length >= 2) finishDrawing(next);
+    if (next.kind !== "area" && next.points.length >= DRAWING_POINTS[next.kind]) finishDrawing(next);
     else setDrawing(next);
   };
+  // Moving a drawing (and its group): the next click on the board is where its first point goes.
+  const [movingDrawing, setMovingDrawing] = useState<string | null>(null);
+  const movingRef = useRef(movingDrawing);
+  movingRef.current = movingDrawing;
+  useEffect(() => {
+    const onMove = (e: Event) => {
+      setDrawing(null);
+      setMovingDrawing((e as CustomEvent<string>).detail);
+    };
+    window.addEventListener("avero:move-drawing", onMove);
+    return () => window.removeEventListener("avero:move-drawing", onMove);
+  }, []);
+  const placeMovedDrawing = (point: Point) => {
+    const id = movingRef.current;
+    setMovingDrawing(null);
+    const d = notesForModel?.drawings?.find((x) => x.id === id);
+    if (!id || !d) return;
+    updateNotes((n) => moveDrawing(n, id, point.x - d.points[0].x, point.y - d.points[0].y));
+  };
   const startDrawing = (kind: DrawingKind) => {
+    setMovingDrawing(null);
     setPlacingMarker(false);
     setDrawing({ kind, side, points: [], ends: [] });
   };
@@ -766,7 +812,8 @@ export function App() {
   const rulerMark =
     ruler && ruler.points.length === 2 && rulerText ? { id: "ruler", kind: "line" as const, side: ruler.side, points: ruler.points, text: rulerText.label } : null;
   const drawingMarks = useMemo(
-    () => (notesForModel?.drawings ?? []).map((d) => ({ id: d.id, kind: d.kind, side: d.side, points: d.points, text: d.text ?? (d.kind === "jumper" ? undefined : undefined) })),
+    () =>
+      (notesForModel?.drawings ?? []).map((d) => ({ id: d.id, kind: d.kind, side: d.side, points: d.points, text: d.text, color: d.color, width: d.width })),
     [notesForModel?.drawings],
   );
   const boardDrawings = useMemo(() => (rulerMark ? [...drawingMarks, rulerMark] : drawingMarks), [drawingMarks, rulerMark?.text, rulerMark?.points]);
@@ -1276,10 +1323,19 @@ export function App() {
   };
 
   // --- CSV lists for spreadsheets ---------------------------------------------------
-  const exportCsv = async (what: "parts" | "nets" | "readings") => {
+  const exportCsv = async (what: "parts" | "nets" | "readings" | "annotations") => {
     if (!model) return;
     const base = (source?.name ?? "board").replace(/\.[^.]+$/, "");
-    const bytes = what === "parts" ? partsCsv(model, schematicFacts) : what === "nets" ? netsCsv(model) : notesForModel ? readingsCsv(notesForModel) : null;
+    const bytes =
+      what === "parts"
+        ? partsCsv(model, schematicFacts)
+        : what === "nets"
+          ? netsCsv(model)
+          : !notesForModel
+            ? null
+            : what === "readings"
+              ? readingsCsv(notesForModel)
+              : annotationsCsv(notesForModel);
     if (!bytes) return;
     try {
       const path = await saveBytes(bytes, t(`csv.${what}`), `${base} ${t(`csv.file.${what}`)}.csv`, { name: "CSV", extensions: ["csv"] });
@@ -2012,6 +2068,10 @@ export function App() {
       { id: "draw-line", label: t("draw.line"), enabled: board && notes !== null, run: () => startDrawing("line") },
       { id: "draw-area", label: t("draw.area"), enabled: board && notes !== null, run: () => startDrawing("area") },
       { id: "draw-jumper", label: t("draw.jumper"), enabled: board && notes !== null, run: () => startDrawing("jumper") },
+      { id: "draw-arrow", label: t("draw.arrow"), enabled: board && notes !== null, run: () => startDrawing("arrow") },
+      { id: "draw-rect", label: t("draw.rect"), enabled: board && notes !== null, run: () => startDrawing("rect") },
+      { id: "draw-circle", label: t("draw.circle"), enabled: board && notes !== null, run: () => startDrawing("circle") },
+      { id: "draw-text", label: t("draw.textTool"), enabled: board && notes !== null, run: () => startDrawing("text") },
       { id: "photo-add", label: t("photo.add"), enabled: board && notes !== null, run: a.addPhoto },
       { id: "photo-toggle", label: t("photo.toggle"), enabled: !!storedPhoto, run: a.togglePhoto },
       { id: "photo-pane", label: t("photo.paneCommand"), enabled: !!model, run: () => {
@@ -2019,6 +2079,7 @@ export function App() {
         } },
       { id: "csv-parts", label: t("csv.parts"), enabled: board, run: () => void exportCsv("parts") },
       { id: "csv-nets", label: t("csv.nets"), enabled: board, run: () => void exportCsv("nets") },
+      { id: "csv-annotations", label: t("csv.annotations"), enabled: board && notesForModel !== null, run: () => void exportCsv("annotations") },
       { id: "csv-readings", label: t("csv.readings"), enabled: board && notes !== null, run: () => void exportCsv("readings") },
       { id: "nav-back", label: t("nav.back"), shortcut: "⌘[", enabled: board, run: () => navigate(-1) },
       { id: "nav-forward", label: t("nav.forward"), shortcut: "⌘]", enabled: board, run: () => navigate(1) },
@@ -2152,7 +2213,8 @@ export function App() {
           if (model) setRuler((r) => (r ? null : { side, points: [] }));
           break;
         case "Escape":
-          if (isolationRef.current) isolationRef.current();
+          if (movingRef.current) setMovingDrawing(null);
+          else if (isolationRef.current) isolationRef.current();
           else if (rulerRef.current) setRuler(null);
           else if (drawingRef.current) setDrawing(null);
           else if (aligningRef.current) cancelAlignment();
@@ -2405,15 +2467,17 @@ export function App() {
                     photo={bothSides ? undefined : photoLayer}
                     partValues={partValues}
                     onPointPick={
-                      drawing
-                        ? pickDrawPoint
-                        : ruler
-                          ? pickRulerPoint
-                          : placingMarker
-                            ? placeMarker
-                            : aligning && aligning.photoPoints.length >= aligning.count
-                              ? pickBoardPoint
-                              : undefined
+                      movingDrawing
+                        ? placeMovedDrawing
+                        : drawing
+                          ? pickDrawPoint
+                          : ruler
+                            ? pickRulerPoint
+                            : placingMarker
+                              ? placeMarker
+                              : aligning && aligning.photoPoints.length >= aligning.count
+                                ? pickBoardPoint
+                                : undefined
                     }
                     drawings={boardDrawings}
                     draft={drawing && drawing.points.length ? { id: "draft", kind: drawing.kind, side: drawing.side, points: drawing.points } : null}
@@ -2425,6 +2489,14 @@ export function App() {
                     extraParts={multiSet}
                   >
                     {placingMarker && <div className="placing-hint">{t("marker.placing")}</div>}
+                    {movingDrawing && (
+                      <div className="placing-hint drawing-hint">
+                        {t("draw.moving")}
+                        <button className="small" onClick={() => setMovingDrawing(null)}>
+                          {t("draw.cancel")}
+                        </button>
+                      </div>
+                    )}
                     {isolationFor && (
                       <div className="isolation-bar">
                         <strong>{t("isolate.title", { nets: isolationFor.nets.length, parts: isolatedParts })}</strong>
