@@ -4799,3 +4799,98 @@ body.resizing-rows {
 .bench-last.status-ok {
   color: #43a047;
 }
+
+/* Power tree: sources, corrections, expected order and measured course. */
+.pt-checked {
+  color: var(--accent);
+}
+
+.pt-control {
+  font-size: 11px;
+  margin-left: 6px;
+}
+
+.pt-edit {
+  margin-left: 4px;
+}
+
+.pt-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.pt-field {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 2px 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.pt-field > input,
+.pt-field > select {
+  min-width: 0;
+}
+
+.pt-field > .pt-prov,
+.pt-field > input:nth-child(3) {
+  grid-column: 2;
+  font-size: 11px;
+}
+
+.pt-add {
+  margin-top: 8px;
+}
+
+.pt-add input {
+  flex: 1;
+  min-width: 0;
+}
+
+.pt-sequence h4,
+.pt-course h4 {
+  margin: 12px 0 4px;
+  font-size: 12px;
+}
+
+.pt-steps {
+  margin: 0;
+  padding-left: 22px;
+  font-size: 12px;
+}
+
+.pt-steps li {
+  margin: 2px 0;
+}
+
+.pt-steps li.pt-stop {
+  outline: 1px solid var(--danger);
+  border-radius: 4px;
+}
+
+.pt-course-table td {
+  font-size: 12px;
+}
+
+.pt-course-absent td:last-child,
+.pt-course-low td:last-child,
+.pt-course-high td:last-child {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.pt-course-ok td:last-child {
+  color: var(--accent);
+}
+
+.pt-break {
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 600;
+}

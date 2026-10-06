@@ -380,7 +380,7 @@ export function Sidebar({
 
       {tab === "diagnose" && (
         <div className="panel scroll">
-          <PowerTree model={model} notes={notes} schematicFacts={schematicFacts} onSelect={onSelect} />
+          <PowerTree model={model} notes={notes} schematicFacts={schematicFacts} onSelect={onSelect} update={notes ? updateNotes : undefined} />
           <Diagnosis model={model} notes={notes} update={updateNotes} onSelect={onSelect} schematicFacts={schematicFacts} selection={selection} />
         </div>
       )}

@@ -14,6 +14,12 @@
  * Direction goes from the higher voltage to the lower; between rails of the
  * same voltage from the always-on one (ALW, AON, S5, G3 …) to the switched
  * one (S3, S0, VS …). What cannot be ordered is left out rather than guessed.
+ *
+ * All of this is read from the copper, not known: each converter says why
+ * its input and outputs were taken (`why`), and the other inputs it could
+ * have (`inputChoices`). A boost converter, a charger or a charge pump makes
+ * a higher voltage from a lower one, so the highest rail is not always the
+ * input – corrections with their sources come on top (see workbench/power).
  */
 import type { BoardModel } from "./board";
 import { partRole, passesThrough } from "./partRole";
@@ -36,12 +42,24 @@ export interface Supply {
   volts?: number;
 }
 
+export type ConverterKind = "regulator" | "linear" | "switch" | "boost" | "charger";
+
+/** Why the copper reading took a converter's input. */
+export type InputWhy = "highest" | "mosfet" | "unnamed" | "order";
+
 export interface Converter {
   part: number;
-  kind: "regulator" | "linear" | "switch";
+  kind: ConverterKind;
   /** Supply index, or undefined when the source is not found. */
   input?: number;
   outputs: number[];
+  /** Enable and power-good nets, by their names on the part's pins. */
+  enable?: number;
+  powerGood?: number;
+  /** Why input and outputs were taken from the copper (absent where set by hand). */
+  why?: { input?: InputWhy; outputs?: "coil" | "between" };
+  /** Other supplies on the part that could be the input. */
+  inputChoices?: number[];
 }
 
 export interface PowerTree {
@@ -58,6 +76,20 @@ export function railRank(name: string): number {
   if (/S4|S3|SUS|_M$|DDR|SLP/.test(n)) return 2;
   if (/S0|VS\b|VS_|VS$|RUN|_SW|SW$|_ON\b/.test(n)) return 1;
   return 0;
+}
+
+const ENABLE = /(^|_)(EN|ENABLE|ON|SHDN|SHDN#|ON_OFF)\d*(_|#|$)/i;
+const POWER_GOOD = /(^|_)(PG|PGOOD|PWRGD|PWROK|PWR_OK|POK|PGD)\d*(_|#|$)/i;
+
+/** The part's enable and power-good nets, by name (the first of each). */
+function controls(model: BoardModel, part: number): Pick<Converter, "enable" | "powerGood"> {
+  const out: Pick<Converter, "enable" | "powerGood"> = {};
+  for (const net of partNets(model, part)) {
+    const name = model.nets[net].name;
+    if (out.powerGood === undefined && POWER_GOOD.test(name)) out.powerGood = net;
+    else if (out.enable === undefined && ENABLE.test(name)) out.enable = net;
+  }
+  return out;
 }
 
 function partNets(model: BoardModel, part: number): number[] {
@@ -160,7 +192,8 @@ export function buildPowerTree(model: BoardModel, schematicVolts?: ReadonlyMap<n
       const signals = nets.filter((n) => usable(n) && !isRail(n));
       if (signals.length > 1) return;
       const o = order(direct[0], direct[1]);
-      if (o) converters.push({ part, kind: "switch", input: o[0], outputs: [o[1]] });
+      // A MOSFET switch: its gate is the enable.
+      if (o) converters.push({ part, kind: "switch", input: o[0], outputs: [o[1]], ...(signals[0] !== undefined && { enable: signals[0] }), why: { input: "order", outputs: "between" } });
       return;
     }
     if (role !== "ic") return;
@@ -202,13 +235,24 @@ export function buildPowerTree(model: BoardModel, schematicVolts?: ReadonlyMap<n
       // Else a rail without a voltage in its name (PWR_SRC, PPBUS).
       const unnamed = [...new Set([...drains, ...direct])].filter((s) => !outputs.has(s) && vOf(s) === undefined);
       unnamed.sort((a, b) => Number(drains.has(b)) - Number(drains.has(a)) || rankOf(b) - rankOf(a) || pinsOf(b) - pinsOf(a));
-      converters.push({ part, kind: "regulator", input: inputs[0] ?? unnamed[0], outputs: [...outputs] });
+      const input = inputs[0] ?? unnamed[0];
+      const why: InputWhy | undefined = input === undefined ? undefined : inputs[0] === undefined ? "unnamed" : drains.has(input) ? "mosfet" : "highest";
+      const choices = [...new Set([...inputs, ...unnamed, ...direct])].filter((s) => s !== input && !outputs.has(s));
+      converters.push({
+        part,
+        kind: "regulator",
+        input,
+        outputs: [...outputs],
+        ...controls(model, part),
+        why: { ...(why && { input: why }), outputs: "coil" },
+        ...(choices.length && { inputChoices: choices }),
+      });
       return;
     }
     // Linear regulators and load-switch chips: small, between two rails.
     if (p.pinCount > 12 || direct.length !== 2) return;
     const o = order(direct[0], direct[1]);
-    if (o) converters.push({ part, kind: "linear", input: o[0], outputs: [o[1]] });
+    if (o) converters.push({ part, kind: "linear", input: o[0], outputs: [o[1]], ...controls(model, part), why: { input: "order", outputs: "between" }, inputChoices: [o[1]] });
   });
 
   return { supplies, converters, supplyOf };

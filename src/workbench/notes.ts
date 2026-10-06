@@ -1,3 +1,4 @@
+import { parsePower, type PowerNotes } from "./power";
 import { parseDocLinks, type DocLinks } from "../schematic/mapping";
 import { expectedFor, hasMoreReferences, judgeExpected, parseLimits, type Limits } from "./expected";
 import { compareReadings, condOf, hasValues, HISTORY_MAX, QUANTITIES, takenAt, type Comparison, type Conditions, type HistoryEntry, type Quantity, type Reading, type Value } from "./measure";
@@ -160,6 +161,8 @@ export interface BoardNotes {
    * (values deleted here stay deleted) but a changed one is.
    */
   fileImports?: Record<string, string>;
+  /** The power tree as corrected and confirmed by hand, with sources, and the expected power-up order. */
+  power?: PowerNotes;
   /** Conditions new reference readings are taken under. */
   referenceConditions?: Conditions;
   /** Lists of points to measure, worked through one after the other. */
@@ -1065,6 +1068,7 @@ export function parseNotes(json: string): BoardNotes | null {
       drawings: parseDrawings(d.drawings),
       bookmarks: parseBookmarks(d.bookmarks),
       obdata: typeof d.obdata === "string" && d.obdata ? d.obdata : undefined,
+      power: parsePower(d.power),
       fileImports: isRecord(d.fileImports)
         ? Object.fromEntries(Object.entries(d.fileImports).filter((e): e is [string, string] => typeof e[1] === "string"))
         : undefined,
@@ -1146,6 +1150,7 @@ export function mergeNotes(mine: BoardNotes, theirs: BoardNotes): BoardNotes {
     bookmarks: mergeById(mine.bookmarks, theirs.bookmarks),
     obdata: mine.obdata ?? theirs.obdata,
     ...((mine.fileImports || theirs.fileImports) && { fileImports: { ...theirs.fileImports, ...mine.fileImports } }),
+    ...((mine.power || theirs.power) && { power: mine.power ?? theirs.power }),
     referenceConditions: mine.referenceConditions ?? theirs.referenceConditions,
     lists: mergeLists(mine.lists, theirs.lists),
     cases,
