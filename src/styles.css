@@ -4654,3 +4654,41 @@ body.resizing-rows {
 .cross-board .net-chip {
   margin-left: 4px;
 }
+
+/* The board over the microscope picture. */
+.camera-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.camera-overlay.live {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+.cam-hint {
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.cam-moved {
+  background: color-mix(in srgb, #e6a100 22%, transparent);
+}
+/* Over the picture, so the picture does not move while aligning. */
+.cam-hints {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.cam-hints .cam-hint {
+  pointer-events: auto;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+.cam-hints .cam-moved {
+  background: color-mix(in srgb, #e6a100 40%, var(--surface));
+}

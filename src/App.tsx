@@ -2786,7 +2786,17 @@ export function App() {
                                   }
                                 />
                               )}
-                              {p === "camera" && <CameraPane onSnapshot={(png, use) => void cameraSnapshot(png, use)} onClose={() => setCameraPane(false)} />}
+                              {p === "camera" && (
+                                <CameraPane
+                                  onSnapshot={(png, use) => void cameraSnapshot(png, use)}
+                                  onClose={() => setCameraPane(false)}
+                                  model={model ?? undefined}
+                                  boardKey={notesForModel?.key}
+                                  selection={selection}
+                                  side={side === "bottom" ? "bottom" : "top"}
+                                  onSelect={(sel) => select(sel, true)}
+                                />
+                              )}
                               {p === "photo" &&
                                 model &&
                                 (storedPhoto && photoImage?.file === storedPhoto.file ? (
