@@ -36,4 +36,13 @@ describe("diffReadings", () => {
     const b = notes({}, { "U7.3": { diode: "OL", net: "PP1V8_S0" } });
     expect(diffReadings(a, b, same, 0.05)).toEqual([{ net: "PP1V8", netB: "PP1V8_S0", point: "U7.3", quantity: "diode", a: 0.5, b: "OL", status: "deviation" }]);
   });
+
+  it("pairs readings of two nets that swapped names by their pins, not their names", () => {
+    const a = notes({ NET_A: { diode: 0.5 }, NET_B: { diode: 0.3 } });
+    const b = notes({ NET_B: { diode: 0.5 }, NET_A: { diode: 0.3 } });
+    const swapped = (n: string) => (n === "NET_A" ? "NET_B" : n === "NET_B" ? "NET_A" : undefined);
+    const d = diffReadings(a, b, swapped, 0.05);
+    expect(d.map((x) => x.status)).toEqual(["ok", "ok"]);
+    expect(d).toContainEqual({ net: "NET_A", netB: "NET_B", quantity: "diode", a: 0.5, b: 0.5, status: "ok" });
+  });
 });

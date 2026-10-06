@@ -5,7 +5,7 @@ import type { Selection } from "../core/types";
 import { useI18n } from "../i18n";
 import { expectedFor, judgeExpected } from "../workbench/expected";
 import { compare, formatValue, parseValue, type Quantity, type Value } from "../workbench/measure";
-import { readStable, useMeter } from "../workbench/meter";
+import { looksOpen, movedFrom, readMeter, readStable, useMeter } from "../workbench/meter";
 import { activeCase, listProgress, setPointValue, setValue, type BoardNotes, type ListItem, type Target } from "../workbench/notes";
 
 /** Speaks with a voice of this Mac only (never a voice that goes online); false when there is none. */
@@ -47,6 +47,13 @@ interface Props {
  * pedal or keys. Manual or automatic taking is switched visibly; a meter
  * value is only taken once the display has settled. On request the point
  * and the result are read out with a voice of this Mac.
+ *
+ * A meter reading is saved only for the point, case and run it was started
+ * for: switching automatic off, moving on or changing the case while the
+ * meter is read throws the reading away. After a meter value is taken, the
+ * automatic waits for the display to leave it (the probe lifted) before it
+ * takes anything for the next point, and it never takes "no contact" (OL,
+ * about 0 V) on its own – that needs the pedal.
  */
 export function BenchBar({ model, notes, update, undo, tolerance, onSelect, onClose, handle }: Props) {
   const { t, lang } = useI18n();
@@ -71,6 +78,15 @@ export function BenchBar({ model, notes, update, undo, tolerance, onSelect, onCl
   const c = activeCase(notes);
   const target: Target = c ? { caseId: c.id } : "reference";
   const label = item ? (item.label ?? item.point ?? item.net) : "";
+  // What a reading started now belongs to; checked again when it comes back.
+  const pointKey = item && list ? `${list.id}|${index}|${item.point ?? ""}|${item.net}|${item.quantity}|${c?.id ?? "reference"}` : "";
+  const live = useRef({ key: pointKey, auto });
+  live.current = { key: pointKey, auto };
+  // The meter value taken last: the next point waits until the display has left it.
+  const lastTaken = useRef<{ value: Value; quantity: Quantity } | null>(null);
+  // The manual reading under way, stopped when the point, the case or the bar goes.
+  const manual = useRef<AbortController | null>(null);
+  useEffect(() => () => manual.current?.abort(), [pointKey]);
 
   // Arriving at a point: show it on the board, and say it.
   useEffect(() => {
@@ -94,18 +110,25 @@ export function BenchBar({ model, notes, update, undo, tolerance, onSelect, onCl
     if (voice) speakLocal(said, lang);
     setLast({ label, text: formatValue(value, item.quantity, lang), ...(verdict && { verdict }) });
     setRepeatAt(null);
+    setMessage(null);
   };
 
+  /** Taken by hand (pedal, Enter): a settled reading, saved if the point is still the one it was read for. */
   const measure = async (q: Quantity) => {
     if (!meter.connected) return setMessage(t("bench.noMeter"));
-    const { value, stable } = await readStable(q);
+    manual.current?.abort();
+    const ctl = new AbortController();
+    manual.current = ctl;
+    const key = pointKey;
+    const { value, stable, aborted } = await readStable(q, 10, 250, ctl.signal);
+    if (aborted || ctl.signal.aborted || live.current.key !== key) return setMessage(t("bench.discarded"));
     if (!stable) {
       setMessage(t("meter.unstable"));
       if (voice) speakLocal(t("meter.unstable"), lang);
-      return false;
+      return;
     }
+    lastTaken.current = { value, quantity: q };
     save(value);
-    return true;
   };
 
   const actions: BenchHandle = {
@@ -129,27 +152,50 @@ export function BenchBar({ model, notes, update, undo, tolerance, onSelect, onCl
   };
   if (handle) handle.current = actions;
 
-  // Automatic: the meter is read until the display settles, then on to the next point.
-  const running = useRef(false);
+  // Automatic: first the display has to leave the value taken last (the probe lifted and put on
+  // the next point), then a settled reading that is not "no contact" is taken. One run per point;
+  // a run ends when automatic goes off, the point or case changes or the bar closes, and a run
+  // waits for the one before so the meter is never asked twice at once.
+  const previousRun = useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
-    if (!auto || !item || !meter.connected || running.current) return;
-    let stop = false;
-    running.current = true;
-    void (async () => {
-      while (!stop) {
-        try {
-          if (await measure(item.quantity)) break;
-        } catch {
-          break;
+    if (!auto || !item || !meter.connected) return;
+    const ctl = new AbortController();
+    const key = pointKey;
+    const q = item.quantity;
+    const valid = () => !ctl.signal.aborted && live.current.key === key && live.current.auto;
+    const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const run = previousRun.current.then(async () => {
+      try {
+        const last = lastTaken.current;
+        if (last) {
+          setMessage(t("bench.lift"));
+          while (valid()) {
+            const v = await readMeter(q);
+            if (!valid()) return;
+            // Another quantity switches the meter; then only "no contact" shows the probe was lifted.
+            if (last.quantity === q ? movedFrom(last.value, v, q, tolerance) : looksOpen(v, q)) break;
+            await pause(300);
+          }
         }
-        await new Promise((r) => setTimeout(r, 400));
+        while (valid()) {
+          const { value, stable, aborted } = await readStable(q, 10, 250, ctl.signal);
+          if (aborted || !valid()) return;
+          if (stable && !looksOpen(value, q)) {
+            lastTaken.current = { value, quantity: q };
+            setMessage(null);
+            save(value);
+            return;
+          }
+          setMessage(stable ? t("bench.openHint") : t("meter.unstable"));
+          await pause(400);
+        }
+      } catch {
+        // The meter's error shows in its state.
       }
-      running.current = false;
-    })();
-    return () => {
-      stop = true;
-    };
-  }, [auto, list?.id, index, meter.connected]);
+    });
+    previousRun.current = run;
+    return () => ctl.abort();
+  }, [auto, pointKey, meter.connected]);
 
   if (!list) {
     return (

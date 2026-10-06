@@ -179,14 +179,44 @@ export function isStable(values: readonly Value[], quantity: Quantity): boolean 
 
 /**
  * Reads until the display settles (see isStable), at most `tries` times;
- * `stable: false` with the last reading when it does not.
+ * `stable: false` with the last reading when it does not. Stopped through
+ * `signal`, it ends after the reading under way with `aborted: true`, and
+ * that reading must not be used.
  */
-export async function readStable(quantity: Quantity, tries = 10, pauseMs = 250): Promise<{ value: Value; stable: boolean }> {
+export async function readStable(
+  quantity: Quantity,
+  tries = 10,
+  pauseMs = 250,
+  signal?: AbortSignal,
+): Promise<{ value: Value; stable: boolean; aborted?: boolean }> {
   const seen: Value[] = [];
   for (let i = 0; i < tries; i++) {
     seen.push(await readMeter(quantity));
+    if (signal?.aborted) return { value: seen[seen.length - 1], stable: false, aborted: true };
     if (isStable(seen, quantity)) return { value: seen[seen.length - 1], stable: true };
     await new Promise((r) => setTimeout(r, pauseMs));
+    if (signal?.aborted) return { value: seen[seen.length - 1], stable: false, aborted: true };
   }
   return { value: seen[seen.length - 1], stable: false };
+}
+
+/**
+ * A reading that is what the meter shows with the probes in the air: open
+ * in diode and resistance mode, next to nothing in voltage mode. A real
+ * point can read so too, but the automatic never takes it on its own.
+ */
+export function looksOpen(value: Value, quantity: Quantity): boolean {
+  if (value === "OL") return true;
+  return quantity === "voltage" && Math.abs(value) < 0.02;
+}
+
+/**
+ * Whether a reading has left the value taken last – the probe was lifted or
+ * put elsewhere. Readings within the tolerance of the last value (or open
+ * again after open) have not.
+ */
+export function movedFrom(last: Value, value: Value, quantity: Quantity, tolerance: number): boolean {
+  if (last === "OL" || value === "OL") return last !== value;
+  const allowed = Math.max(Math.abs(last) * tolerance, { diode: 0.005, voltage: 0.02, resistance: 0.5 }[quantity]);
+  return Math.abs(value - last) > allowed;
 }

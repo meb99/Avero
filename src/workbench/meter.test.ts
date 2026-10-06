@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isStable, parseMeterReading, profileOf } from "./meter";
+import { isStable, looksOpen, movedFrom, parseMeterReading, profileOf } from "./meter";
 
 describe("multimeter answers", () => {
   it("reads SCPI numbers with or without units", () => {
@@ -43,5 +43,28 @@ describe("settled display", () => {
     expect(isStable([0.002, 0.004, 0.003], "voltage")).toBe(true);
     expect(isStable([3.3, 3.31, 3.32], "voltage")).toBe(true);
     expect(isStable([3.3, 3.4, 3.35], "voltage")).toBe(false);
+  });
+});
+
+describe("probe on the next point", () => {
+  it("sees a probe left on the pad (480 mV, then 464 mV within the tolerance) as not moved", () => {
+    expect(movedFrom(0.48, 0.48, "diode", 0.1)).toBe(false);
+    expect(movedFrom(0.48, 0.464, "diode", 0.1)).toBe(false);
+  });
+
+  it("sees lifting (OL) or another value as moved", () => {
+    expect(movedFrom(0.48, "OL", "diode", 0.1)).toBe(true);
+    expect(movedFrom(0.48, 0.7, "diode", 0.1)).toBe(true);
+    expect(movedFrom("OL", 0.45, "diode", 0.1)).toBe(true);
+    expect(movedFrom("OL", "OL", "diode", 0.1)).toBe(false);
+    expect(movedFrom(3.3, 0.004, "voltage", 0.1)).toBe(true);
+  });
+
+  it("takes open and about 0 V as no contact", () => {
+    expect(looksOpen("OL", "diode")).toBe(true);
+    expect(looksOpen("OL", "resistance")).toBe(true);
+    expect(looksOpen(0.005, "voltage")).toBe(true);
+    expect(looksOpen(0.005, "diode")).toBe(false);
+    expect(looksOpen(1.8, "voltage")).toBe(false);
   });
 });

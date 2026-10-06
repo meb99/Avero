@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { BoardModel } from "../core/board";
-import { alignmentMatters, diffBoards, type PartChange } from "../core/diff";
+import { alignmentMatters, diffBoards, netNamesOnB, type PartChange } from "../core/diff";
 import { findPoint } from "../core/points";
 import type { Selection } from "../core/types";
 import { useI18n, type MessageKey } from "../i18n";
@@ -63,14 +63,11 @@ export function DiffView({
       live = false;
     };
   }, [b]);
-  // B's name of each net of A, as the boards were paired.
+  // B's name of each net of A, as the boards were paired (a reading on a net A does not have keeps its name).
   const netOnB = useMemo(() => {
-    const out = new Map<string, string>();
-    for (const r of diff.renamed) out.set(r.a.toUpperCase(), r.b);
-    for (const n of diff.netChanges) if (n.renamedTo) out.set(n.name.toUpperCase(), n.renamedTo);
-    const onlyA = new Set(diff.netsOnlyA.map((n) => n.toUpperCase()));
-    return (net: string) => out.get(net.toUpperCase()) ?? (onlyA.has(net.toUpperCase()) ? undefined : net);
-  }, [diff]);
+    const paired = netNamesOnB(a, b, diff.netMap);
+    return (net: string) => (a.findNet(net) === undefined ? net : paired(net));
+  }, [a, b, diff]);
   const readings = useMemo(() => (notesA && notesB ? diffReadings(notesA, notesB, netOnB, tolerance) : []), [notesA, notesB, netOnB, tolerance]);
   const readingsOff = readings.filter((r) => r.status !== "ok");
   // Population: parts with another value, pins, side or place (wiring alone is a connection).

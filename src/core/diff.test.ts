@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { BoardModel } from "./board";
-import { alignedToA, alignedToB, alignmentMatters, diffBoards, matchNets } from "./diff";
+import { alignedToA, alignedToB, alignmentMatters, diffBoards, matchNets, netNamesOnB } from "./diff";
 import { testBoard } from "./testBoard";
-import type { Board } from "./types";
+import type { Board, Pin } from "./types";
 
 /** The board with every position moved by (dx, dy). */
 function shifted(board: Board, dx: number, dy: number): Board {
@@ -118,5 +118,55 @@ describe("diffBoards", () => {
     const p = alignedToB(al, alignedToA(al, { x: 123, y: -45 }));
     expect(p.x).toBeCloseTo(123);
     expect(p.y).toBeCloseTo(-45);
+  });
+
+  it("takes two nets that swapped names as two renamings, not as changes", () => {
+    // U1.1 and R1.1 on NET_A, U1.2 and R1.2 on NET_B; on B the names are swapped.
+    const pin = (part: number, number: string, net: number): Pin => ({ part, number, x: part * 100 + Number(number) * 10, y: 0, radius: 5, side: "top", net });
+    const board = (first: string, second: string): Board => ({
+      ...testBoard(),
+      parts: [
+        { name: "U1", side: "top", mount: "smd", firstPin: 0, pinCount: 2, outline: [], bounds: { minX: 0, minY: 0, maxX: 30, maxY: 10 } },
+        { name: "R1", side: "top", mount: "smd", firstPin: 2, pinCount: 2, outline: [], bounds: { minX: 100, minY: 0, maxX: 130, maxY: 10 } },
+      ],
+      pins: [pin(0, "1", 0), pin(0, "2", 1), pin(1, "1", 0), pin(1, "2", 1)],
+      testPoints: [],
+      nets: [
+        { name: first, kind: "signal", pins: [0, 2], testPoints: [] },
+        { name: second, kind: "signal", pins: [1, 3], testPoints: [] },
+      ],
+    });
+    const a = new BoardModel(board("NET_A", "NET_B"));
+    const b = new BoardModel(board("NET_B", "NET_A"));
+    const d = diffBoards(a, b);
+    expect(d.renamed).toEqual([
+      { a: "NET_A", b: "NET_B" },
+      { a: "NET_B", b: "NET_A" },
+    ]);
+    expect(d.netChanges).toEqual([]);
+    expect(d.pins).toEqual([]);
+    expect(d.changed).toEqual([]);
+    expect(d.netsOnlyA).toEqual([]);
+    expect(d.netsOnlyB).toEqual([]);
+    // Readings follow the pins: A's NET_A is B's NET_B.
+    const onB = netNamesOnB(a, b, d.netMap);
+    expect(onB("NET_A")).toBe("NET_B");
+    expect(onB("NET_B")).toBe("NET_A");
+  });
+
+  it("pairs a net with the one holding most of its pins before one of the same name", () => {
+    const board = structuredClone(testBoard());
+    // B: PP3V3 (R1.1, U10.1, L5.1) is now called GND and gains R9.2; the old GND pins are called PP3V3.
+    board.nets[0].name = "GND";
+    board.nets[1].name = "PP3V3";
+    board.pins[9].net = 0;
+    const d = diffBoards(new BoardModel(testBoard()), new BoardModel(board));
+    expect(d.renamed).toEqual([{ a: "GND", b: "PP3V3" }]);
+    expect(d.netChanges).toEqual([
+      { name: "PP3V3", renamedTo: "GND", added: ["R9.2"], removed: [] },
+      // R9.2 was PP3V3_R's only pin.
+      { name: "PP3V3_R", added: [], removed: ["R9.2"] },
+    ]);
+    expect(d.pins.map((p) => `${p.part}.${p.pin}`)).toEqual(["R9.2"]);
   });
 });

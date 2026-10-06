@@ -52,6 +52,8 @@ export interface BoardDiff {
   netChanges: NetChange[];
   /** Parts in both with no difference. */
   same: number;
+  /** Net of A → its net on B, as paired by what they connect. */
+  netMap: ReadonlyMap<number, number>;
   /** How B lies against A (fitted on parts both have), when there were enough of them. */
   aligned?: Alignment;
 }
@@ -65,8 +67,11 @@ function connectionsOf(m: BoardModel): string[][] {
 }
 
 /**
- * Nets of A matched to nets of B: by name when the name is on both, else by
- * the same set of connections (a renamed net). Returns A net → B net.
+ * Nets of A matched to nets of B by what they connect, names only where the
+ * pins cannot tell: first the same set of pins (a pin is on one net only, so
+ * such a pair is unique, whatever the names – two nets that swapped names
+ * are two renamings), then most of the pins in common (a net changed, and
+ * maybe renamed as well), last the same name. Returns A net → B net.
  */
 export function matchNets(a: BoardModel, b: BoardModel): { map: Map<number, number>; renamed: { a: string; b: string }[]; changed: NetChange[] } {
   const map = new Map<number, number>();
@@ -74,45 +79,44 @@ export function matchNets(a: BoardModel, b: BoardModel): { map: Map<number, numb
   const changed: NetChange[] = [];
   const ofA = connectionsOf(a);
   const ofB = connectionsOf(b);
-  const connections = (m: BoardModel, net: number) => (m === a ? ofA : ofB)[net];
   const live = (m: BoardModel) => m.nets.flatMap((n, i) => (n.kind === "unconnected" ? [] : [i]));
-  const bByName = new Map(live(b).map((i) => [b.fileNetName(i).toUpperCase(), i]));
   const usedB = new Set<number>();
-  const waitingA: number[] = [];
-  for (const i of live(a)) {
-    const j = bByName.get(a.fileNetName(i).toUpperCase());
-    if (j === undefined) {
-      waitingA.push(i);
-      continue;
-    }
+  const nameA = (i: number) => a.fileNetName(i);
+  const nameB = (j: number) => b.fileNetName(j);
+  const sameName = (i: number, j: number) => nameA(i).toUpperCase() === nameB(j).toUpperCase();
+  const pair = (i: number, j: number) => {
     map.set(i, j);
     usedB.add(j);
-    const ca = connections(a, i);
-    const cb = connections(b, j);
-    if (ca.join() !== cb.join()) {
-      const inA = new Set(ca);
-      const inB = new Set(cb);
-      changed.push({ name: a.fileNetName(i), added: cb.filter((x) => !inA.has(x)), removed: ca.filter((x) => !inB.has(x)) });
+    const ca = ofA[i];
+    const cb = ofB[j];
+    if (ca.join() === cb.join()) {
+      if (!sameName(i, j)) renamed.push({ a: nameA(i), b: nameB(j) });
+      return;
     }
-  }
-  // Left over: the same connections under another name.
+    const inA = new Set(ca);
+    const inB = new Set(cb);
+    changed.push({
+      name: nameA(i),
+      ...(!sameName(i, j) && { renamedTo: nameB(j) }),
+      added: cb.filter((x) => !inA.has(x)),
+      removed: ca.filter((x) => !inB.has(x)),
+    });
+  };
+
+  // 1. The same pins.
   const bBySet = new Map<string, number>();
-  for (const j of live(b)) if (!usedB.has(j) && connections(b, j).length) bBySet.set(connections(b, j).join(), j);
-  for (const i of waitingA) {
-    if (!connections(a, i).length) continue;
-    const j = bBySet.get(connections(a, i).join());
-    if (j === undefined) continue;
-    map.set(i, j);
-    usedB.add(j);
-    bBySet.delete(connections(b, j).join());
-    renamed.push({ a: a.fileNetName(i), b: b.fileNetName(j) });
+  for (const j of live(b)) if (ofB[j].length) bBySet.set(ofB[j].join(), j);
+  for (const i of live(a)) {
+    const j = ofA[i].length ? bBySet.get(ofA[i].join()) : undefined;
+    if (j !== undefined) pair(i, j);
   }
-  // Renamed and changed: the B net sharing most pins, when they share most of what either has.
+  // 2. Most of the pins: at least two thirds of what either net has. (Two nets of A cannot
+  // both hold two thirds of one net of B, the pins of A's nets being apart.)
   const netOfB = new Map<string, number>();
-  for (const j of live(b)) if (!usedB.has(j)) for (const c of connections(b, j)) netOfB.set(c, j);
-  for (const i of waitingA) {
+  for (const j of live(b)) if (!usedB.has(j)) for (const c of ofB[j]) netOfB.set(c, j);
+  for (const i of live(a)) {
     if (map.has(i)) continue;
-    const ca = connections(a, i);
+    const ca = ofA[i];
     if (ca.length < 2) continue;
     const shared = new Map<number, number>();
     for (const c of ca) {
@@ -120,18 +124,27 @@ export function matchNets(a: BoardModel, b: BoardModel): { map: Map<number, numb
       if (j !== undefined && !usedB.has(j)) shared.set(j, (shared.get(j) ?? 0) + 1);
     }
     let best: [number, number] | undefined;
-    for (const [j, n] of shared) if (!best || n > best[1]) best = [j, n];
-    if (!best) continue;
-    const cb = connections(b, best[0]);
-    // At least two thirds of the pins on both sides in common.
-    if (best[1] * 3 < Math.max(ca.length, cb.length) * 2) continue;
-    map.set(i, best[0]);
-    usedB.add(best[0]);
-    const inA = new Set(ca);
-    const inB = new Set(cb);
-    changed.push({ name: a.fileNetName(i), renamedTo: b.fileNetName(best[0]), added: cb.filter((x) => !inA.has(x)), removed: ca.filter((x) => !inB.has(x)) });
+    for (const [j, n] of shared) if (!best || n > best[1] || (n === best[1] && sameName(i, j))) best = [j, n];
+    if (!best || best[1] * 3 < Math.max(ca.length, ofB[best[0]].length) * 2) continue;
+    pair(i, best[0]);
+  }
+  // 3. The same name, for what the pins could not pair.
+  const bByName = new Map<string, number>();
+  for (const j of live(b)) if (!usedB.has(j)) bByName.set(nameB(j).toUpperCase(), j);
+  for (const i of live(a)) {
+    if (map.has(i)) continue;
+    const j = bByName.get(nameA(i).toUpperCase());
+    if (j === undefined || usedB.has(j)) continue;
+    pair(i, j);
   }
   return { map, renamed, changed };
+}
+
+/** B's name of a net of A (by A's name in the file), as the boards were paired; undefined when B has none. */
+export function netNamesOnB(a: BoardModel, b: BoardModel, map: ReadonlyMap<number, number>): (net: string) => string | undefined {
+  const names = new Map<string, string>();
+  for (const [i, j] of map) names.set(a.fileNetName(i).toUpperCase(), b.fileNetName(j));
+  return (net) => names.get(net.toUpperCase());
 }
 
 /**
@@ -251,7 +264,7 @@ const MOVE = 20;
 export function diffBoards(a: BoardModel, b: BoardModel): BoardDiff {
   const nets = matchNets(a, b);
   const aligned = alignOnParts(a, b);
-  const diff: BoardDiff = { onlyA: [], onlyB: [], changed: [], pins: [], netsOnlyA: [], netsOnlyB: [], renamed: nets.renamed, netChanges: nets.changed, same: 0, ...(aligned && { aligned }) };
+  const diff: BoardDiff = { onlyA: [], onlyB: [], changed: [], pins: [], netsOnlyA: [], netsOnlyB: [], renamed: nets.renamed, netChanges: nets.changed, same: 0, netMap: nets.map, ...(aligned && { aligned }) };
   const netName = (m: BoardModel, net: number) => m.fileNetName(net);
   // B's positions laid onto A's.
   const onA = (p: { x: number; y: number }) => (aligned ? alignedToA(aligned, p) : p);
