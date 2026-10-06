@@ -7,7 +7,7 @@ import { claudeCodeCommand, claudeDesktopConfig, MCP_DEFAULT_PORT, mcpUrl } from
 import { MCP_TOOLS } from "../workbench/mcpTools";
 
 /** Switching the AI connection on, and how to connect Claude to it. */
-export function McpSettings({ value, onChange }: { value: Settings["mcp"]; onChange(v: Settings["mcp"]): void }) {
+export function McpSettings({ value, localMode, onChange }: { value: Settings["mcp"]; localMode?: boolean; onChange(v: Settings["mcp"]): void }) {
   const { t } = useI18n();
   const enabled = !!value?.enabled;
   const port = value?.port ?? MCP_DEFAULT_PORT;
@@ -52,6 +52,7 @@ export function McpSettings({ value, onChange }: { value: Settings["mcp"]; onCha
         <span className={running ? "mcp-on" : "muted"}>{running ? t("mcp.running", { url: mcpUrl(running) }) : t("mcp.off")}</span>
       </div>
       <p className="muted setting-hint">{t("mcp.hint")}</p>
+      {localMode && <p className="kb-note kb-warning">{t("local.mcpOff")}</p>}
       {enabled && (
         <>
           <h4>{t("mcp.claudeCode")}</h4>

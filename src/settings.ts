@@ -52,6 +52,11 @@ export interface Settings {
   overview: boolean;
   /** Look for a new release on GitHub once a day. */
   updateCheck: boolean;
+  /**
+   * Local mode: Avero makes no connection to the internet at all – no update
+   * check, no AI connection, external links only after asking.
+   */
+  localMode: boolean;
   autoSchematic: boolean;
   /** Reopen the boards, schematics and window of the last session on start. */
   restoreWorkspace: boolean;
@@ -106,6 +111,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ratsnest: true,
   overview: true,
   updateCheck: true,
+  localMode: false,
   autoSchematic: true,
   restoreWorkspace: true,
   photoPoints: 2,

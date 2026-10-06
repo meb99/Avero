@@ -27,6 +27,8 @@ export function isNewer(candidate: string, current: string): boolean {
  * never hangs in or gets blocked by the web view.
  */
 export async function fetchUpdate(current: string): Promise<Update | null> {
+  // Local mode is binding: no request leaves the Mac, whoever asks.
+  if (localModeOn()) throw new Error("local mode");
   if ("__TAURI_INTERNALS__" in window) {
     const { invoke } = await import("@tauri-apps/api/core");
     return (await invoke<Update | null>("check_update", { current })) ?? null;
@@ -41,8 +43,18 @@ export async function fetchUpdate(current: string): Promise<Update | null> {
     : null;
 }
 
-/** Background check, skipped when the last one was less than a day ago. */
+/** Local mode, read from the stored settings (so no caller can forget it). */
+export function localModeOn(): boolean {
+  try {
+    return (JSON.parse(localStorage.getItem("avero.settings.v1") ?? "{}") as { localMode?: boolean }).localMode === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Background check, skipped when the last one was less than a day ago, and always in local mode. */
 export async function dailyCheck(current: string): Promise<Update | null> {
+  if (localModeOn()) return null;
   try {
     const last = Number(localStorage.getItem(KEY) ?? 0);
     if (Date.now() - last < DAY_MS) return null;

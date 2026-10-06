@@ -65,7 +65,7 @@ import type { Word } from "./schematic/textIndex";
 import { clearRecent, loadRecent, loadSettings, rememberRecent, saveSettings, type DockPane, type SavedLayout, type Settings } from "./settings";
 import { DOCK_ORDER, paneWeights, parseLayouts, PRESETS, PRESET_IDS, sidebarPixels, withLayout, type PresetId } from "./workbench/layouts";
 import { useTheme } from "./theme";
-import { dailyCheck, fetchUpdate, type Update } from "./updates";
+import { dailyCheck, fetchUpdate, localModeOn, type Update } from "./updates";
 import { pickImport, type LibraryEntry, type LibraryFile } from "./workbench/library";
 import {
   activeCase,
@@ -1218,7 +1218,8 @@ export function App() {
     tolerance: settings.tolerance,
     select: (sel) => select(sel, true),
   };
-  const mcpEnabled = !!settings.mcp?.enabled;
+  // Local mode: no AI connection either (a client would send board data to its model).
+  const mcpEnabled = !!settings.mcp?.enabled && !settings.localMode;
   const mcpPort = settings.mcp?.port ?? MCP_DEFAULT_PORT;
   useEffect(() => {
     if (!mcpEnabled) {
@@ -1807,6 +1808,7 @@ export function App() {
         setUpdate(await dailyCheck(__APP_VERSION__));
         return;
       }
+      if (localModeOn()) return setToast(t("local.noUpdates"));
       // A manual check always answers with a native dialog.
       setToast(t("update.checking"));
       const { ask, message } = await import("@tauri-apps/plugin-dialog");
@@ -1854,7 +1856,12 @@ export function App() {
 
   installUpdateRef.current = installUpdate;
 
-  const openExternal = (url: string) => void openUrl(url).catch(() => window.open(url, "_blank"));
+  const openExternal = (url: string) =>
+    void (async () => {
+      // Local mode: the browser goes online, so only when asked to.
+      if (settings.localMode && !(await askConfirm(t("local.linkAsk", { url }), { title: t("local.title") }))) return;
+      await openUrl(url).catch(() => window.open(url, "_blank"));
+    })();
 
   /** Writes unsaved readings and notes, then ends the app; asks when saving fails. */
   const saveAndQuit = async () => {

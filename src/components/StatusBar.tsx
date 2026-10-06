@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { BoardModel } from "../core/board";
 import type { BoardSource } from "../core/loader";
 import type { SchematicDocument } from "../schematic/document";
@@ -17,6 +18,22 @@ interface Props {
   onReport(): void;
 }
 
+/** Whether the Mac has a network connection (for the status bar only; nothing depends on it). */
+function useOnline(): boolean {
+  const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
+  return online;
+}
+
 /** Copper first: whether the board has it, hidden, added by Avero, or none in the file. */
 function copperChip(scope: ScopeRow[] | null | undefined): ScopeRow | undefined {
   return scope?.find((r) => r.id === "traces");
@@ -24,6 +41,7 @@ function copperChip(scope: ScopeRow[] | null | undefined): ScopeRow | undefined 
 
 export function StatusBar({ model, source, schematic, loading, settings, scope, onReport }: Props) {
   const { t } = useI18n();
+  const online = useOnline();
   const b = model?.board;
   return (
     <footer className="statusbar">
@@ -65,6 +83,17 @@ export function StatusBar({ model, source, schematic, loading, settings, scope, 
         </span>
       )}
       <span className="status-spacer" />
+      {settings.localMode ? (
+        <span className="status-local" title={t("local.statusHint")}>
+          {t("local.status")}
+        </span>
+      ) : (
+        !online && (
+          <span className="muted" title={t("local.offlineHint")}>
+            {t("local.offline")}
+          </span>
+        )
+      )}
       <span className="muted">Avero {__APP_VERSION__}</span>
     </footer>
   );

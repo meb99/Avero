@@ -4526,3 +4526,8 @@ body.resizing-rows {
 .status-scope.scope-state-derived {
   color: #e6a100;
 }
+
+.status-local {
+  color: var(--accent);
+  font-weight: 600;
+}

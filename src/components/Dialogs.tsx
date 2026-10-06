@@ -70,7 +70,8 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
     | "overview"
     | "autoSchematic"
     | "restoreWorkspace"
-    | "updateCheck";
+    | "updateCheck"
+    | "localMode";
   const check = (key: Toggle, label: string) => (
     <label className="check">
       <input type="checkbox" checked={settings[key]} onChange={(e) => set(key, e.target.checked)} />
@@ -158,12 +159,15 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
       <p className="muted setting-hint">{t("keys.hint")}</p>
       <ShortcutEditor value={settings.shortcuts} onChange={(shortcuts) => set("shortcuts", shortcuts)} />
       <h3>{t("mcp.title")}</h3>
-      <McpSettings value={settings.mcp} onChange={(mcp) => set("mcp", mcp)} />
+      <McpSettings value={settings.mcp} localMode={settings.localMode} onChange={(mcp) => set("mcp", mcp)} />
       <h3>{t("meter.title")}</h3>
       <MeterSettings value={settings.meter} onChange={(meter) => set("meter", meter)} />
       <h3>{t("backup.title")}</h3>
       <p className="muted setting-hint">{t("backup.hint")}</p>
       <BackupButtons />
+      <h3>{t("local.title")}</h3>
+      <div className="checks">{check("localMode", t("local.setting"))}</div>
+      <p className="muted setting-hint">{t("local.hint")}</p>
       <h3>Avero</h3>
       <div className="checks">
         {check("updateCheck", t("settings.updateCheck"))}
