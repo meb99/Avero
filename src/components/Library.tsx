@@ -25,6 +25,7 @@ import {
   type LibraryState,
 } from "../workbench/library";
 import { LibraryText } from "./LibraryText";
+import type { SpatialHit } from "../workbench/spatialSearch";
 import { RenameFiles, type RenameTarget } from "./RenameFiles";
 import { CategoryDialog, CategoryFields, CategoryTree } from "./Categories";
 import { DuplicatesDialog } from "./Duplicates";
@@ -51,7 +52,7 @@ interface Props {
   drop: LibraryDrop | null;
   onOpen(entry: LibraryEntry): void;
   /** Opens a schematic found by full-text search and searches it for `query`. */
-  onOpenText(entry: LibraryEntry, file: LibraryFile, query: string): void;
+  onOpenText(entry: LibraryEntry, file: LibraryFile, query: string, spot?: SpatialHit): void;
   onClose(): void;
 }
 

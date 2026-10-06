@@ -35,6 +35,11 @@ import {
 import { condOf } from "./measure";
 
 describe("boardKey", () => {
+  it("keeps measurement references separate for different project members",()=>{
+    const source={name:"Switch project",path:"/Switch.epro"};
+    const a=boardKey({...source,projectMember:"PCB/a.epcb"}),b=boardKey({...source,projectMember:"PCB/b.epcb"});
+    expect(a).not.toBe(b);expect(a).not.toBe(boardKey(source));
+  });
   it("uses the board number so formats of one board share notes", () => {
     expect(boardKey({ name: "x", path: "/Boards/Apple/820-02100.brd" })).toBe("820-02100");
     expect(boardKey({ name: "x", path: "/Boards/Apple/J413 820-02100 boardview.bdv" })).toBe("820-02100");

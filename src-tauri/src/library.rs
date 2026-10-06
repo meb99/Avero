@@ -89,9 +89,8 @@ fn classify(name: &str, head: impl FnOnce() -> Vec<u8>) -> Option<Kind> {
         // An ASC board is three files; pins.asc stands for the set.
         "asc" => (name == "pins.asc").then_some(Kind::Board),
         "pcb" => is_xzz_head(&head()).then_some(Kind::Board),
-        "tvw" => Some(Kind::Unsupported),
-        // The same detector as opening a file: a binary Allegro .brd or an OLE
-        // .PcbDoc is named as not readable instead of listed as a board.
+        "bvre" | "f2b" | "asr" | "a3p" | "faz" => Some(Kind::Unsupported),
+        // The same detector as opening a file, including native binary readers.
         _ if avero_formats::formats::extensions().contains(&ext) => {
             match avero_formats::detect(&head(), Some(&name)) {
                 avero_formats::Detected::Unsupported(_) => Some(Kind::Unsupported),
@@ -115,6 +114,10 @@ pub(crate) fn is_importable(name: &str, head: impl FnOnce() -> Vec<u8>) -> bool 
 
 fn kind_of(path: &Path) -> Option<Kind> {
     let name = path.file_name()?.to_string_lossy().into_owned();
+    if path.extension().is_some_and(|s| s.eq_ignore_ascii_case("zip")) && !crate::import::is_project_zip(path)
+    {
+        return None;
+    }
     classify(&name, || read_head(path))
 }
 
@@ -313,19 +316,19 @@ mod tests {
     }
 
     #[test]
-    fn binary_allegro_boards_are_named_not_listed_as_boards() {
+    fn binary_allegro_boards_use_the_native_reader() {
         let mut allegro = vec![0u8; 0x200];
         allegro[0xf8..0xfb].copy_from_slice(b"all");
-        assert_eq!(classify("Mainboard.brd", || allegro.clone()), Some(Kind::Unsupported));
+        assert_eq!(classify("Mainboard.brd", || allegro.clone()), Some(Kind::Board));
         assert_eq!(classify("Mainboard.brd", || b"str_length: 1".to_vec()), Some(Kind::Board));
     }
 
     #[test]
-    fn altium_text_boards_are_boards_and_binary_ones_are_named() {
+    fn altium_text_and_binary_boards_are_listed() {
         let text = || b"|RECORD=Board|KIND=Protel_Advanced_PCB|".to_vec();
         assert_eq!(classify("Main.PcbDoc", text), Some(Kind::Board));
         let ole = || vec![0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1];
-        assert_eq!(classify("Main.PcbDoc", ole), Some(Kind::Unsupported));
+        assert_eq!(classify("Main.PcbDoc", ole), Some(Kind::Board));
     }
 
     fn tree(files: &[&str]) -> PathBuf {
@@ -368,8 +371,8 @@ mod tests {
         let by_title: HashMap<&str, &LibraryEntry> =
             scan.entries.iter().map(|e| (e.title.as_str(), e)).collect();
         let apple = by_title["820-02100"];
-        assert_eq!(names(&apple.boards), ["820-02100.brd", "820-02100.fz"]);
-        assert_eq!(names(&apple.unsupported), ["820-02100.tvw"]);
+        assert_eq!(names(&apple.boards), ["820-02100.brd", "820-02100.fz", "820-02100.tvw"]);
+        assert!(apple.unsupported.is_empty());
         assert_eq!(names(&apple.schematics), ["J413 820-02100 schematic.pdf"]);
         assert_eq!(apple.folder, "Apple/iPhone 13 Pro");
 

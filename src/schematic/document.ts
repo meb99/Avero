@@ -75,20 +75,25 @@ export async function extractTextIndex(bytes: Uint8Array, cancelled: () => boole
   const pdf = await openPdf(bytes);
   try {
     const words: Record<string, number[]> = {};
+    const positions: Word[] = [];
     for (let p = 0; p < pdf.numPages; p++) {
       if (cancelled()) return null;
       const page = await pdf.getPage(p + 1);
       const content = await page.getTextContent();
+      const viewport = page.getViewport({ scale: 1 });
+      const runs: TextRun[] = [];
       for (const item of content.items) {
         if (!("str" in item)) continue;
+        runs.push({ str: item.str, width: item.width, transform: Util.transform(viewport.transform, item.transform) });
         for (const word of splitWords(item.str)) {
           const pages = (words[word] ??= []);
           if (pages[pages.length - 1] !== p) pages.push(p);
         }
       }
+      positions.push(...wordsFromRuns(runs, p));
       page.cleanup();
     }
-    return { v: 1, pages: pdf.numPages, words };
+    return { v: 1, pages: pdf.numPages, words, positions };
   } finally {
     await pdf.loadingTask.destroy();
   }

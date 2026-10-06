@@ -1,6 +1,7 @@
 //! Desktop shell. Parsing runs natively through `avero-formats`; the web UI
 //! receives the finished board as JSON.
 
+mod allegro;
 mod backup;
 mod collection;
 mod conversion;
@@ -12,6 +13,7 @@ mod mcp;
 mod meter;
 mod notes;
 mod package;
+mod projects;
 mod updater;
 
 use std::path::{Path, PathBuf};
@@ -58,8 +60,18 @@ fn find_insensitive(dir: &Path, name: &str) -> Option<PathBuf> {
 }
 
 pub fn load(path: &Path, options: ParseOptions) -> Result<Board, LoadError> {
+    if path.is_dir() {
+        return Ok(avero_formats::project::parse_member(&projects::files(path)?, None)?);
+    }
     let bytes = read(path)?;
     let name = path.file_name().and_then(|n| n.to_str());
+    match avero_formats::detect(&bytes, name) {
+        avero_formats::Detected::Supported(avero_formats::FormatId::Allegro) => return allegro::load(path),
+        avero_formats::Detected::Supported(
+            avero_formats::FormatId::EasyEdaPro | avero_formats::FormatId::Odb,
+        ) => return Ok(avero_formats::project::parse_member(&projects::files(path)?, None)?),
+        _ => {}
+    }
     if matches!(
         avero_formats::detect(&bytes, name),
         avero_formats::Detected::Supported(avero_formats::FormatId::Xzz)
@@ -225,7 +237,11 @@ async fn open_board(
     path: String,
     xzz_key: Option<String>,
     fz_key: Option<String>,
+    project_member: Option<String>,
 ) -> Result<Board, LoadError> {
+    if let Some(member) = project_member {
+        return Ok(avero_formats::project::parse_member(&projects::files(Path::new(&path))?, Some(&member))?);
+    }
     use avero_formats::formats::{assign_fz_keys, parse_fz_keys, parse_xzz_key};
     let given = |k: &Option<String>| k.as_deref().map(str::trim).filter(|k| !k.is_empty()).map(str::to_owned);
     // A malformed key becomes one that fails the parity check, so only the
@@ -255,7 +271,7 @@ async fn find_donors(
             continue;
         }
         // Boards that do not open (no key, broken) are skipped, not fatal.
-        if let Ok(board) = open_board(path.clone(), xzz_key.clone(), fz_key.clone()).await {
+        if let Ok(board) = open_board(path.clone(), xzz_key.clone(), fz_key.clone(), None).await {
             hits.extend(donors::find_in(&board, &path, &query));
         }
     }
@@ -272,7 +288,7 @@ async fn board_words(
     xzz_key: Option<String>,
     fz_key: Option<String>,
 ) -> Result<Vec<String>, LoadError> {
-    let board = open_board(path, xzz_key, fz_key).await?;
+    let board = open_board(path, xzz_key, fz_key, None).await?;
     let mut words: Vec<String> = board
         .parts
         .iter()
@@ -884,6 +900,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             open_board,
+            projects::project_members,
             open_demo,
             schematics_for,
             read_file,

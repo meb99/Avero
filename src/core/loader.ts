@@ -9,6 +9,7 @@ import type { Board, LoadError, LoadResult } from "./types";
 export interface BoardSource {
   name: string;
   path?: string;
+  projectMember?: string;
 }
 
 export interface Loaded {
@@ -17,7 +18,20 @@ export interface Loaded {
 }
 
 /** Extensions offered in the open dialog. Keep in sync with avero_formats::formats::SUPPORTED. */
-export const BOARD_EXTENSIONS = ["brd", "bdv", "asc", "bvr", "bvr3", "cad", "gcd", "gencad", "cst", "pcb", "fz", "cae", "kicad_pcb", "pcbdoc", "fab", "txt", "gr", "averopkg"];
+export const BOARD_EXTENSIONS = ["brd", "bdv", "asc", "bvr", "bvr3", "cad", "gcd", "gencad", "cst", "pcb", "fz", "cae", "kicad_pcb", "pcbdoc", "fab", "txt", "gr", "averopkg", "averoboard", "tvw", "hyp", "bv", "epro", "epcb", "odb", "zip", "tgz", "tar", "gz"];
+
+export interface ProjectMember { id:string;name:string;format:string }
+type ProjectPrompt=(name:string,choices:ProjectMember[])=>Promise<string|null>;
+let projectPrompt:ProjectPrompt|null=null;
+let pendingProject:Promise<unknown>=Promise.resolve();
+export function setProjectPrompt(prompt:ProjectPrompt|null):void{projectPrompt=prompt;}
+export const isProjectPath=(path:string)=>/\.(epro|epcb|odb|zip|tgz|tar|tar\.gz)$/i.test(path);
+function chooseProject(name:string,members:ProjectMember[]):Promise<string|null>{
+  const choice=pendingProject.then(()=>projectPrompt?.(name,members)??null);
+  pendingProject=choice.catch(()=>null);
+  return choice;
+}
+export async function pickProjectFolder(title:string):Promise<string|undefined>{const path=await open({title,directory:true,multiple:false});return typeof path==="string"?path:undefined;}
 
 async function load(command: string, args: Record<string, unknown>): Promise<LoadResult> {
   try {
@@ -35,10 +49,19 @@ export interface FormatKeys {
   fzKey?: string;
 }
 
-export async function loadPath(path: string, keys: FormatKeys = {}): Promise<Loaded> {
-  const name = path.split("/").pop() ?? path;
-  const args = { path, xzzKey: keys.xzzKey || null, fzKey: keys.fzKey || null };
-  return { result: await load("open_board", args), source: { name, path } };
+export async function loadPath(path: string, keys: FormatKeys = {}, projectFolder=false, requestedMember?:string): Promise<Loaded> {
+  let name = path.split("/").pop() ?? path;
+  let projectMember:string|undefined;
+  const args:Record<string,unknown> = { path, xzzKey: keys.xzzKey || null, fzKey: keys.fzKey || null };
+  if(projectFolder || isProjectPath(path)) {
+    try {
+      const members=await invoke<ProjectMember[]>("project_members",{path});
+      if(members.length>1){const choice=members.some((m)=>m.id===requestedMember)?requestedMember:await chooseProject(name,members);if(!choice)return{result:{ok:false,error:{code:"cancelled",message:"Project selection cancelled"}},source:{name,path}};projectMember=choice;}
+      else if(members.length===1)projectMember=members[0].id;
+      if(projectMember){args.projectMember=projectMember;const selected=members.find((m)=>m.id===projectMember);name=`${name} · ${selected?.name??projectMember}`;}
+    }catch(e){return{result:{ok:false,error:e&&typeof e==="object"&&"code"in e?e as LoadError:{code:"io",message:String(e)}},source:{name,path}};}
+  }
+  return { result: await load("open_board", args), source: { name, path, ...(projectMember&&{projectMember}) } };
 }
 
 export async function loadDemo(): Promise<Loaded> {

@@ -229,7 +229,11 @@ const slug = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").re
  * most like one wins ("PlayStation5 EDM-010" → "edm-010", not "playstation5").
  * Generic file names take their folder along ("Trinity/Board.brd").
  */
-export function boardKey(source: { name: string; path?: string }): string {
+export function boardKey(source: { name: string; path?: string;projectMember?:string }): string {
+  if(source.projectMember){
+    let hash=0x811c9dc5;for(const c of new TextEncoder().encode(source.projectMember))hash=Math.imul(hash^c,0x01000193)>>>0;
+    return `${boardKey({...source,projectMember:undefined})}-pcb-${slug(source.projectMember).slice(0,64)}-${hash.toString(16).padStart(8,"0")}`;
+  }
   if (!source.path) return source.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const parts = source.path.split(/[\\/]/);
   const file = parts.pop() ?? "";
@@ -242,7 +246,8 @@ export function boardKey(source: { name: string; path?: string }): string {
 }
 
 /** The key Avero used up to 0.9.23 (first id token), to find notes saved under it. */
-export function legacyBoardKey(source: { name: string; path?: string }): string {
+export function legacyBoardKey(source: { name: string; path?: string;projectMember?:string }): string {
+  if(source.projectMember)return boardKey(source);
   if (!source.path) return source.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const parts = source.path.split("/");
   const file = parts.pop() ?? "";
@@ -478,6 +483,7 @@ export interface FilePointReading {
   net: string;
   quantity: Quantity;
   value: Value;
+  conditions?: Conditions;
 }
 
 export interface FileImport {
@@ -494,7 +500,7 @@ export interface FileImport {
 /** A short fingerprint of what a file holds: each point with its quantity, value and net. */
 function fingerprint(entries: readonly FilePointReading[]): string {
   let h = 0x811c9dc5;
-  for (const e of entries) for (const c of `${e.point}|${e.quantity}|${e.value}|${e.net};`) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193);
+  for (const e of entries) for (const c of `${e.point}|${e.quantity}|${e.value}|${e.net}${e.conditions?`|${JSON.stringify(e.conditions)}`:""};`) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193);
   return `${entries.length}:${(h >>> 0).toString(16)}`;
 }
 
@@ -526,11 +532,11 @@ export function takeFileReadings(notes: BoardNotes, entries: readonly FilePointR
     }
     // Deleted here after it was taken: stays deleted.
     if (value === undefined && taken.has(e.point)) continue;
-    if (value !== e.value) {
+    if (value !== e.value || !sameConditions(condOf(old,e.quantity),e.conditions)) {
       if (value === undefined) result.added++;
       else result.updated++;
       // The file says nothing about the conditions, so none are claimed.
-      points = withReading(points, e.point, { [e.quantity]: e.value }, undefined, { origin: source });
+      points = withReading(points, e.point, { [e.quantity]: e.value }, e.conditions, { origin: source });
       points[e.point] = { ...points[e.point], net: e.net };
     } else if (old?.net !== e.net) {
       // Same value, the point now on another net.

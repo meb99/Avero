@@ -364,8 +364,8 @@ pub fn readings(input: &[u8]) -> FileReadings {
     let Some(at) = find(input, XOR_END_MARKER) else { return out };
     let text = &input[at + XOR_END_MARKER.len()..];
     // None: before any list, or in a list of another kind (its title and line count).
-    let mut list: Option<Result<&'static str, (String, usize)>> = None;
-    let close = |list: Option<Result<&'static str, (String, usize)>>, out: &mut FileReadings| {
+    let mut list: Option<Result<String, (String, usize)>> = None;
+    let close = |list: Option<Result<String, (String, usize)>>, out: &mut FileReadings| {
         if let Some(Err(other)) = list {
             out.other_lists.push(other);
         }
@@ -377,15 +377,16 @@ pub fn readings(input: &[u8]) -> FileReadings {
         }
         if let Some(title) = line.strip_prefix(b"===") {
             close(list.take(), &mut out);
-            list = Some(if title == DIODE_LIST || title == "阻值".as_bytes() {
-                Ok("阻值")
+            let name = decode_text(title).trim().to_string();
+            list = Some(if title == DIODE_LIST || measurement_kind(&name).is_some() {
+                Ok(name)
             } else {
                 Err((decode_text(title).into_owned(), 0))
             });
             continue;
         }
         match &mut list {
-            Some(Ok(name)) => match diode_line(line, name) {
+            Some(Ok(name)) => match measurement_line(line, name) {
                 Some(r) => out.readings.push(r),
                 None => out.unreadable += 1,
             },
@@ -408,8 +409,10 @@ pub fn attach_readings(board: &mut crate::model::Board, found: FileReadings) {
             .iter()
             .enumerate()
             .filter(|(_, p)| p.name.eq_ignore_ascii_case(&r.part))
-            .any(|(part, _)| board.part_pins(part).iter().any(|p| p.number.eq_ignore_ascii_case(&r.pin)));
-        if fits {
+            .flat_map(|(part, _)| board.part_pins(part))
+            .filter(|p| p.number.eq_ignore_ascii_case(&r.pin))
+            .count();
+        if fits == 1 {
             if !board.readings.contains(&r) {
                 board.readings.push(r);
             }
@@ -419,9 +422,9 @@ pub fn attach_readings(board: &mut crate::model::Board, found: FileReadings) {
     }
     if missing > 0 {
         let why = if board.parts.is_empty() { " (the parts are locked)" } else { "" };
-        board.warnings.push(format!(
-            "{missing} readings of the file name a part or pin the board does not have{why}; left out."
-        ));
+        board
+            .warnings
+            .push(format!("{missing} readings name a missing or ambiguous part/pin{why}; left out."));
     }
     if found.unreadable > 0 {
         board
@@ -436,7 +439,24 @@ pub fn attach_readings(board: &mut crate::model::Board, found: FileReadings) {
 }
 
 /// `=480=N65594(1)`: millivolts (or `OL`), part, pin.
-fn diode_line(line: &[u8], list: &str) -> Option<FileReading> {
+fn measurement_kind(list: &str) -> Option<&'static str> {
+    let title = list.to_ascii_lowercase();
+    if title == "阻值"
+        || title.starts_with("diode")
+        || title.starts_with("二极管")
+        || title.starts_with("二極管")
+    {
+        Some("diode")
+    } else if title.starts_with("电压") || title.starts_with("電壓") || title.starts_with("voltage") {
+        Some("voltage")
+    } else if title.starts_with("电阻") || title.starts_with("電阻") || title.starts_with("resistance") {
+        Some("resistance")
+    } else {
+        None
+    }
+}
+
+fn measurement_line(line: &[u8], list: &str) -> Option<FileReading> {
     let line = decode_text(line);
     let rest = line.strip_prefix('=')?;
     let (value, target) = rest.split_once('=')?;
@@ -445,24 +465,53 @@ fn diode_line(line: &[u8], list: &str) -> Option<FileReading> {
     if part.is_empty() || pin.is_empty() {
         return None;
     }
-    let volts = if value.eq_ignore_ascii_case("OL") {
-        None
-    } else {
-        let mv: f64 = value.parse().ok()?;
-        if !mv.is_finite() || mv < 0.0 {
-            return None;
-        }
-        Some(mv / 1000.0)
-    };
+    let quantity = measurement_kind(list)?;
+    let volts =
+        if value.eq_ignore_ascii_case("OL") { None } else { Some(measurement_value(value, list, quantity)?) };
     Some(FileReading {
         part: part.to_string(),
         pin: pin.to_string(),
-        quantity: "diode",
+        quantity,
         value: volts,
         raw: value.to_string(),
         list: list.to_string(),
-        source_format: Some("XZZ"),
+        source_format: Some("XZZ".into()),
+        conditions: None,
     })
+}
+
+fn measurement_value(value: &str, list: &str, quantity: &str) -> Option<f64> {
+    let split = value
+        .find(|c: char| !c.is_ascii_digit() && !matches!(c, '+' | '-' | '.' | ',' | 'e' | 'E'))
+        .unwrap_or(value.len());
+    let number = value[..split].trim().replace(',', ".").parse::<f64>().ok()?;
+    if !number.is_finite() || (quantity != "voltage" && number < 0.) {
+        return None;
+    }
+    let explicit = value[split..].trim();
+    // A list with a declared unit may omit the unit on each value. Other
+    // voltage/resistance lists require it; unsupported units stay reported.
+    let in_title = list.rsplit_once('(').and_then(|(_, unit)| unit.strip_suffix(')'));
+    let unit = if !explicit.is_empty() {
+        explicit
+    } else if let Some(u) = in_title {
+        u
+    } else if quantity == "diode" {
+        "mV"
+    } else {
+        return None;
+    };
+    let scale = match (quantity, unit) {
+        ("diode" | "voltage", "V" | "v") => 1.,
+        ("diode" | "voltage", "mV" | "mv") => 0.001,
+        ("resistance", "Ω" | "Ω" | "ohm" | "Ohm" | "R") => 1.,
+        ("resistance", "kΩ" | "KΩ" | "kohm" | "kOhm" | "k") => 1000.,
+        ("resistance", "MΩ" | "Mohm" | "MOhm" | "M") => 1_000_000.,
+        ("resistance", "mΩ" | "mohm") => 0.001,
+        _ => return None,
+    };
+    let result = number * scale;
+    result.is_finite().then_some(result)
 }
 
 /// Arc as ten segments between two angles in degrees, like OpenBoardView.
@@ -520,11 +569,28 @@ mod tests {
         assert_eq!(r.readings[0].list, "阻值");
         assert_eq!(r.readings[1].value, Some(0.464));
         assert_eq!((r.readings[2].pin.as_str(), r.readings[2].value), ("G5", None));
-        assert_eq!(r.unreadable, 1);
-        // A list of another kind is left out and named.
-        assert_eq!(r.other_lists, vec![("电压".to_string(), 2)]);
+        // Voltage is recognized, but these entries have no declared unit.
+        assert_eq!(r.unreadable, 3);
+        assert!(r.other_lists.is_empty());
         // No marker, no readings.
         assert_eq!(readings(b"XZZPCB no marker"), FileReadings::default());
+    }
+
+    #[test]
+    fn voltage_and_resistance_require_units_and_keep_their_quantity() {
+        let file="v6v6555v6v6===电压\n=440mV=U1(1)\n=-1.2V=U1(2)\n=3300=U1(3)\n===电阻\n=4.7kΩ=U1(1)\n=1MΩ=U1(2)\n=50mΩ=U1(3)\n===Voltage(V)\n=3.3=U1(4)\n===signals\n=clock=U1(5)\n";
+        let r = readings(file.as_bytes());
+        assert_eq!(r.readings.len(), 6);
+        assert_eq!(r.unreadable, 1);
+        assert_eq!(r.readings[0].quantity, "voltage");
+        assert_eq!(r.readings[0].value, Some(0.44));
+        assert_eq!(r.readings[1].value, Some(-1.2));
+        assert_eq!(r.readings[2].quantity, "resistance");
+        assert_eq!(r.readings[2].value, Some(4700.));
+        assert_eq!(r.readings[3].value, Some(1_000_000.));
+        assert_eq!(r.readings[4].value, Some(0.05));
+        assert_eq!(r.readings[5].value, Some(3.3));
+        assert_eq!(r.other_lists, vec![("signals".into(), 1)]);
     }
 
     #[test]

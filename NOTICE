@@ -52,3 +52,23 @@ are copied into the app under ocr/.
 
 Serial ports for multimeters are opened with the `serialport` crate
 (MPL-2.0, https://github.com/serialport/serialport-rs).
+
+The structured TVW reader is ported from EagleView's TeboBoard reader,
+Copyright (c) 2019 Pavel Kovalenko, MIT licensed. The full notice is in
+licenses/eagleview-MIT.txt.
+
+Altium binary field layouts were checked against tscircuit/altium,
+Copyright (c) 2026 tscircuit Inc., MIT licensed. Its notice is retained in
+licenses/tscircuit-altium-MIT.txt.
+
+The separate Allegro executable includes brd_parser by Yigit Berna,
+revision f38fb8f48031eb78d654a78a79453e580b634f93, GPL-3.0.
+It is executed locally through file IPC, not linked to the MIT library.
+The complete corresponding source, Avero's modifications, license and
+build instructions are in tools/allegro-reader and src-tauri/build.rs in
+this repository and the GitHub source archive for the installed version:
+https://github.com/meb99/Avero. The GPL license also ships with the app.
+
+The ATE BV reader uses jetdb (MIT/Apache-2.0); compound Altium documents
+use cfb (MIT). ODB++ and EasyEDA importers are original implementations
+using the manufacturers' public interchange documentation.

@@ -14,7 +14,7 @@
 use std::collections::HashMap;
 
 use crate::builder::{RawBoard, RawPart, RawPin, RawTestPoint, RawTrace};
-use crate::model::{FormatId, Mount, PadShape, Point, Side, TestPointKind};
+use crate::model::{FormatId, Mount, PadShape, Point, Side, TestPointKind, ViaDetails};
 use crate::text::decode;
 use crate::ParseError;
 
@@ -238,6 +238,18 @@ pub fn parse(buf: &[u8]) -> Result<RawBoard, ParseError> {
             }
             "Via" => {
                 let Some(pos) = point(&r, "X", "Y") else { continue };
+                if let (Some(from), Some(to), Some(drill)) =
+                    (r.get("FROMLAYER"), r.get("TOLAYER"), r.len("HOLESIZE"))
+                {
+                    board.via_details.insert(
+                        board.test_points.len(),
+                        ViaDetails {
+                            layers: vec![from.to_string(), to.to_string()],
+                            drill,
+                            buried: from != "TOP" && to != "BOTTOM" && from != "BOTTOM" && to != "TOP",
+                        },
+                    );
+                }
                 board.test_points.push(RawTestPoint {
                     kind: TestPointKind::Via,
                     pos,

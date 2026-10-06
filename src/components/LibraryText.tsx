@@ -6,11 +6,12 @@ import { useI18n } from "../i18n";
 import { cachedIndex, searchText, storeIndex, withOcrWords, type OcrPages, type PdfTextIndex } from "../workbench/fulltext";
 import type { LibraryEntry, LibraryFile } from "../workbench/library";
 import { VirtualList } from "./VirtualList";
+import { searchNearby, type SpatialHit } from "../workbench/spatialSearch";
 
 interface Props {
   entries: LibraryEntry[];
   query: string;
-  onOpen(entry: LibraryEntry, file: LibraryFile, query: string): void;
+  onOpen(entry: LibraryEntry, file: LibraryFile, query: string, spot?: SpatialHit): void;
 }
 
 const isPdf = (file: LibraryFile) => /\.pdf$/i.test(file.name);
@@ -40,7 +41,11 @@ async function buildIndex(file: LibraryFile, stop: () => boolean): Promise<PdfTe
 
 /** Full-text search over the schematics and boardviews of the library. */
 export function LibraryText({ entries, query, onOpen }: Props) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const de = lang === "de";
+  const [nearby, setNearby] = useState(false);
+  const [radius, setRadius] = useState(50);
+  const [errors, setErrors] = useState<string[]>([]);
   const pdfs = useMemo(
     () => entries.flatMap((entry) => [...entry.schematics, ...entry.boards].map((file) => ({ entry, file }))),
     [entries],
@@ -78,10 +83,11 @@ export function LibraryText({ entries, query, onOpen }: Props) {
     [],
   );
 
-  const missing = pdfs.filter((p) => !indexes.has(p.file.path));
+  const missing = pdfs.filter((p) => (!nearby||isPdf(p.file))&&(!indexes.has(p.file.path) || (nearby && !indexes.get(p.file.path)?.positions)));
 
   const build = async () => {
     stop.current = false;
+    setErrors([]);
     for (let i = 0; i < missing.length && !stop.current; i++) {
       const { file } = missing[i];
       setBuilding({ done: i, total: missing.length, name: file.name });
@@ -90,8 +96,8 @@ export function LibraryText({ entries, query, onOpen }: Props) {
         if (!index) break;
         await storeIndex(file, index);
         setIndexes((m) => new Map(m).set(file.path, index));
-      } catch {
-        // A damaged or protected PDF is skipped.
+      } catch (e) {
+        setErrors((old) => [...old, `${file.name}: ${String(e)}`]);
       }
     }
     setBuilding(null);
@@ -103,9 +109,17 @@ export function LibraryText({ entries, query, onOpen }: Props) {
     return () => clearTimeout(id);
   }, [query]);
   const hits = useMemo(() => searchText(indexes, debounced), [indexes, debounced]);
+  const nearbyResult = useMemo(() => {let limited=false;const hits=nearby?searchNearby(indexes,debounced,radius,200,()=>{limited=true;}):[];return {hits,limited};}, [indexes, debounced, radius, nearby]);
+  const nearbyHits=nearbyResult.hits;
 
   return (
     <>
+      <div className="fulltext-status">
+        <label className="check"><input type="checkbox" checked={nearby} onChange={(e) => setNearby(e.target.checked)} />{de ? "Mehrere Begriffe nahe beieinander" : "Find terms near each other"}</label>
+        {nearby && <label>{de ? "Max. Abstand (PDF-Punkte) " : "Max. distance (PDF points) "}<input type="number" min={1} max={1000} value={radius} style={{width:80}} onChange={(e) => setRadius(Math.min(1000,Math.max(1, Number(e.target.value) || 1)))} /></label>}
+      </div>
+      {nearby && <p className="muted">{de ? "Beispiel: 1uF 16V 0201. Bis zu 12 Begriffe müssen auf derselben Seite innerhalb des Abstands liegen. Gespeicherte OCR-Texte werden mitgesucht." : "Example: 1uF 16V 0201. Up to 12 terms must be on the same page within the chosen distance. Includes saved OCR text."}</p>}
+      {nearbyResult.limited&&<p role="status">{de?"Suchlimit erreicht; die Liste ist unvollständig. Suchbegriffe genauer wählen oder Abstand verkleinern.":"Search limit reached; results are incomplete. Refine the terms or reduce the distance."}</p>}
       <div className="fulltext-status">
         <span className="muted">
           {loading ? t("library.scanning") : t("library.textIndexed", { n: indexes.size, total: pdfs.length })}
@@ -124,7 +138,11 @@ export function LibraryText({ entries, query, onOpen }: Props) {
           )
         )}
       </div>
-      {debounced.trim().length < 2 ? (
+      {errors.length > 0 && <details><summary>{de ? "Nicht indexierte Dateien" : "Files not indexed"} ({errors.length})</summary>{errors.map((e,i) => <p key={i}>{e}</p>)}</details>}
+      {nearby ? <div className="library-list"><VirtualList items={nearbyHits} rowHeight={54} render={(hit) => {
+        const pdf = byPath.get(hit.path);
+        return pdf ? <button className="library-row" onClick={() => onOpen(pdf.entry,pdf.file,debounced.trim(),hit)}><span className="library-title">{pdf.file.name}</span><span className="library-folder">{pdf.entry.title} · {de ? "Seite" : "Page"} {hit.page+1} · {hit.words.map((w) => w.text).join(" · ")}</span></button> : null;
+      }} />{!nearbyHits.length && <p className="library-empty">{debounced.trim() ? t("library.noMatch") : (de ? "Suchbegriffe eingeben." : "Enter search terms.")}</p>}</div> : debounced.trim().length < 2 ? (
         <p className="library-empty">{t("library.textHint")}</p>
       ) : hits.length === 0 ? (
         <p className="library-empty">{t("library.noMatch")}</p>

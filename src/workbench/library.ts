@@ -113,8 +113,10 @@ export function renameLibraryFile(path: string, name: string): Promise<string> {
   return invoke<string>("rename_library_file", { path, name });
 }
 
-export function importFiles(paths: string[], folder: string): Promise<ImportResult> {
-  return invoke<ImportResult>("import_files", { paths, folder: folder.trim() || null });
+export async function importFiles(paths: string[], folder: string): Promise<ImportResult> {
+  const result=await invoke<ImportResult>("import_files", { paths, folder: folder.trim() || null });
+  if(result.imported.length){const library=loadLibrary();saveLibrary({...library,scannedAt:null});}
+  return result;
 }
 
 export async function pickImport(title: string, extensions: string[]): Promise<string[]> {

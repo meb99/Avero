@@ -22,12 +22,16 @@ import { newDatasheetId, parseDatasheets, partNumbers, type Datasheet } from "./
 import { CommandPalette } from "./components/CommandPalette";
 import { HelpDialog, SettingsDialog } from "./components/Dialogs";
 import { LibraryDialog, type LibraryDrop } from "./components/Library";
+import type { SpatialHit } from "./workbench/spatialSearch";
+import { BoardEditor } from "./components/BoardEditor";
 import { CloseIcon } from "./components/Icons";
 import { Sidebar, SIDEBAR_TABS, type SidebarTab } from "./components/Sidebar";
 import { Splitter, StackSplitter } from "./components/Splitter";
 import { StatusBar } from "./components/StatusBar";
 import { TabBar, type TabInfo } from "./components/TabBar";
 import { Toolbar } from "./components/Toolbar";
+import { Dialog } from "./components/Dialogs";
+import { setProjectPrompt, pickProjectFolder, type ProjectMember } from "./core/loader";
 import { Welcome } from "./components/Welcome";
 import { BoardModel, netSides, visibleFrom, type ViewSide } from "./core/board";
 import { findPoint } from "./core/points";
@@ -271,7 +275,10 @@ export function App() {
   const [error, setError] = useState<{ name: string; path?: string; error: LoadError } | null>(null);
   // A file that failed for lack of an XZZ key, reopened once the key is set.
   const retryPath = useRef<string | null>(null);
-  const [dialog, setDialog] = useState<"settings" | "help" | "library" | "palette" | "report" | "project" | null>(null);
+  const [dialog, setDialog] = useState<"settings" | "help" | "library" | "palette" | "report" | "project" | "editor" | null>(null);
+  const [editorBlank, setEditorBlank] = useState(false);
+  const [projectChoice,setProjectChoice]=useState<{name:string;choices:ProjectMember[];resolve:(id:string|null)=>void}|null>(null);
+  useEffect(()=>{setProjectPrompt((name,choices)=>new Promise((resolve)=>setProjectChoice({name,choices,resolve})));return()=>setProjectPrompt(null);},[]);
   const dialogRef = useRef(dialog);
   dialogRef.current = dialog;
   const [libraryDrop, setLibraryDrop] = useState<LibraryDrop | null>(null);
@@ -301,7 +308,7 @@ export function App() {
   const [focus, setFocus] = useState<SchematicFocus | null>(null);
   // Text searched in the schematic on request (library full-text search);
   // the next selection on the board replaces it.
-  const [textQuery, setTextQuery] = useState<string | null>(null);
+  const [textQuery, setTextQuery] = useState<string | { text: string; spot: SpatialHit } | null>(null);
   // The active tab lives in the states above; `tabs` keeps the other tabs as
   // they were left (its entry for the active tab is stale).
   const [tabs, setTabs] = useState<Tab[]>(() => [emptyTab(0)]);
@@ -1020,6 +1027,7 @@ export function App() {
     setLoading(null);
     const { result, source } = loaded;
     if (!result.ok) {
+      if(result.error.code==="cancelled")return false;
       setError({ name: source.name, path: source.path, error: result.error });
       return false;
     }
@@ -1099,7 +1107,7 @@ export function App() {
 
   /** Opens a board or PDF. `schematicPath` overrides the automatic schematic lookup. */
   const openPath = useCallback(
-    async (path: string, schematicPath?: string) => {
+    async (path: string, schematicPath?: string, projectMember?:string) => {
       if (isPdf(path)) {
         await openSchematicPath(path);
         return;
@@ -1119,7 +1127,10 @@ export function App() {
         return;
       }
       // Already open in a tab: show that tab (with the requested schematic).
-      const openIn = tabsRef.current.find((t) => (t.id === live.current.id ? live.current : t).source?.path === path);
+      const openIn = tabsRef.current.find((t) => {
+        const source=(t.id === live.current.id ? live.current : t).source;
+        return source?.path === path && (projectMember?source.projectMember===projectMember:!source.projectMember);
+      });
       if (openIn) {
         switchTab(openIn.id);
         // Shown, or added, when asked for (an open one is not read again).
@@ -1127,7 +1138,7 @@ export function App() {
         return;
       }
       setLoading(fileName(path));
-      const loaded = await loadPath(path, { xzzKey: settings.xzzKey, fzKey: settings.fzKey });
+      const loaded = await loadPath(path, { xzzKey: settings.xzzKey, fzKey: settings.fzKey },!!projectMember,projectMember);
       // An open board stays; the new one gets its own tab.
       const inNewTab = loaded.result.ok && live.current.model !== null;
       const shownSchematic = inNewTab ? undefined : live.current.docs.map((d) => d.path);
@@ -1168,7 +1179,7 @@ export function App() {
   const pendingBoardSearch = useRef<string | null>(null);
 
   const openLibraryText = useCallback(
-    async (entry: LibraryEntry, file: LibraryFile, query: string) => {
+    async (entry: LibraryEntry, file: LibraryFile, query: string, spot?: SpatialHit) => {
       setDialog(null);
       // A hit in a boardview: open it and select the part or net.
       if (!/\.pdf$/i.test(file.name)) {
@@ -1180,7 +1191,7 @@ export function App() {
       if (board) await openPath(board, file.path);
       else await openSchematicPath(file.path);
       setSchematicVisible(true);
-      setTextQuery(query);
+      setTextQuery(spot ? { text: query, spot } : query);
     },
     [openPath, openSchematicPath],
   );
@@ -1451,7 +1462,9 @@ export function App() {
     const jump = !pickedInSchematic.current;
     pickedInSchematic.current = false;
     if (textQuery) {
-      setFocus({ text: textQuery, jump: true, partial: true, nonce: ++focusNonce.current });
+      const text = typeof textQuery === "string" ? textQuery : textQuery.text;
+      const region = typeof textQuery === "string" ? undefined : { key: text.toUpperCase(), text, page: textQuery.spot.page, box: textQuery.spot.box };
+      setFocus({ text, jump: true, partial: !region, ...(region && { region }), nonce: ++focusNonce.current });
       return;
     }
     const text = model ? focusText(model, selection) : undefined;
@@ -1869,6 +1882,7 @@ export function App() {
       version: 1,
       tabs: withFiles.map((t) => ({
         path: t.source!.path!,
+        ...(t.source?.projectMember&&{projectMember:t.source.projectMember}),
         ...(t.docs[t.docIndex]?.path && { schematicPath: t.docs[t.docIndex].path }),
         ...(t.docs.length > 1 && { schematicPaths: t.docs.flatMap((d) => (d.path ? [d.path] : [])) }),
         schematicVisible: t.schematicVisible,
@@ -1926,7 +1940,7 @@ export function App() {
         pendingRestore.current = tab;
         // All documents in their order, then the one that was shown.
         const paths = tab.schematicPaths?.length ? tab.schematicPaths : tab.schematicPath ? [tab.schematicPath] : [];
-        await openPathRef.current(tab.path, paths[0]);
+        await openPathRef.current(tab.path, paths[0],tab.projectMember);
         for (const path of paths.slice(1)) await openSchematicPathRef.current(path);
         if (tab.schematicPath && paths.length > 1) await openSchematicPathRef.current(tab.schematicPath);
         if (!tab.schematicVisible) setSchematicVisible(false);
@@ -2209,6 +2223,9 @@ export function App() {
     return [
       { id: "open", label: t("menu.open"), shortcut: "⌘O", run: a.open },
       { id: "library", label: t("menu.library"), shortcut: "⌘L", run: a.library },
+      { id: "board-edit", label: lang==="de"?"Board bearbeiten":"Edit board", enabled: board, run:()=>{setEditorBlank(false);setDialog("editor");} },
+      { id: "board-new", label: lang==="de"?"Neues Board erstellen":"Create board", run:()=>{setEditorBlank(true);setDialog("editor");} },
+      { id: "project-folder-open", label:lang==="de"?"ODB++-/EasyEDA-Projektordner öffnen":"Open ODB++ / EasyEDA project folder", run:async()=>{const path=await pickProjectFolder(lang==="de"?"PCB-Projektordner wählen":"Choose PCB project folder");if(!path)return;setDialog(null);setLoading(fileName(path));const loaded=await loadPath(path,{xzzKey:settings.xzzKey,fzKey:settings.fzKey},true);if(loaded.result.ok&&live.current.model)newTab();finishLoad(loaded);} },
       { id: "import", label: t("menu.import"), shortcut: "⇧⌘I", run: a.importToLibrary },
       { id: "demo", label: t("menu.demo"), run: () => void openDemo() },
       { id: "flip", label: t("menu.flip"), shortcut: "Space", enabled: board, run: a.flip },
@@ -2606,6 +2623,7 @@ export function App() {
           onSidebar={() => setSettings((s) => ({ ...s, showSidebar: !s.showSidebar }))}
           onSettings={() => setDialog("settings")}
           onHelp={() => setDialog("help")}
+          onEditor={() => {setEditorBlank(!model);setDialog("editor");}}
           onPick={(sel) => select(sel, true)}
           searchRef={searchRef}
           placingMarker={placingMarker}
@@ -3206,6 +3224,10 @@ export function App() {
           onReport={() => setDialog("report")}
         />
         {dialog === "report" && model && <ImportReport model={model} source={source} scope={scope ?? []} onClose={() => setDialog(null)} />}
+        {dialog === "editor" && <BoardEditor board={editorBlank?undefined:model?.board} name={editorBlank?undefined:source?.name} settings={settings} palette={palette} onClose={()=>setDialog(null)} onSaved={(path)=>{setDialog(null);void openPath(path);}} />}
+        {projectChoice&&<Dialog title={lang==="de"?"Board im Projekt auswählen":"Choose project board"} onClose={()=>{projectChoice.resolve(null);setProjectChoice(null);}}>
+          <p>{projectChoice.name}</p><div className="project-board-choices">{projectChoice.choices.map((choice)=><button key={choice.id} onClick={()=>{projectChoice.resolve(choice.id);setProjectChoice(null);}}><strong>{choice.name}</strong><span className="muted">{choice.format} · {choice.id}</span></button>)}</div>
+        </Dialog>}
         {dialog === "project" && (
           <ProjectDialog
             projects={projects}
@@ -3316,7 +3338,7 @@ export function App() {
             }}
           />
         )}
-        {dialog === "library" && <LibraryDialog drop={libraryDrop} onOpen={openLibraryEntry} onOpenText={(e, f, q) => void openLibraryText(e, f, q)} onClose={() => setDialog(null)} />}
+        {dialog === "library" && <LibraryDialog drop={libraryDrop} onOpen={openLibraryEntry} onOpenText={(e, f, q, spot) => void openLibraryText(e, f, q, spot)} onClose={() => setDialog(null)} />}
       </div>
     </I18nContext.Provider>
   );

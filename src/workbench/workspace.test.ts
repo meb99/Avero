@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { parseWorkspace } from "./workspace";
 
 describe("parseWorkspace", () => {
+  it("restores two distinct boards of the same project",()=>{
+    const tabs=[{path:"/Switch.epro",projectMember:"PCB/a.epcb"},{path:"/Switch.epro",projectMember:"PCB/b.epcb"}];
+    const restored=parseWorkspace(JSON.stringify({version:1,active:1,tabs}))!;
+    expect(restored.tabs.map((t)=>t.projectMember)).toEqual(["PCB/a.epcb","PCB/b.epcb"]);expect(restored.active).toBe(1);
+  });
   it("keeps valid tabs and drops broken ones", () => {
     const ws = parseWorkspace(
       JSON.stringify({

@@ -137,8 +137,8 @@ export interface Board {
 export interface FileReading {
   part: string;
   pin: string;
-  quantity: "diode";
-  /** Volts; null is open (OL). */
+  quantity: "diode" | "voltage" | "resistance";
+  /** Volts or ohms by quantity; null is OL. */
   value: number | null;
   /** As written in the file ("480", "OL"). */
   raw: string;
@@ -146,9 +146,11 @@ export interface FileReading {
   list: string;
   /** Original format, preserved when the enclosing board was converted. */
   sourceFormat?: string;
+  conditions?: import("../workbench/measure").Conditions;
 }
 
 export type LoadErrorCode =
+  | "cancelled"
   | "empty"
   | "too-large"
   | "unrecognized"
