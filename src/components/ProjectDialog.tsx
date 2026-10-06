@@ -218,7 +218,7 @@ function LinkForm({ project, open, onAdd }: { project: DeviceProject; open: Open
     const path = project.boards.find((x) => x.id === board)?.path;
     const parts = open.find((o) => o.path === path)?.parts ?? [];
     // Connectors first: J, CN, CON, P, FPC …
-    return [...parts].sort((x, y) => Number(!/^(J|CN|CON|FPC|FFC|P)\d/i.test(x)) - Number(!/^(J|CN|CON|FPC|FFC|P)\d/i.test(y)) || x.localeCompare(y, undefined, { numeric: true }));
+    return [...new Set(parts)].sort((x, y) => Number(!/^(J|CN|CON|FPC|FFC|P)\d/i.test(x)) - Number(!/^(J|CN|CON|FPC|FFC|P)\d/i.test(y)) || x.localeCompare(y, undefined, { numeric: true }));
   };
   const end = (value: { board: string; part: string }, set: (v: { board: string; part: string }) => void, label: string, listId: string) => (
     <div className="project-end">

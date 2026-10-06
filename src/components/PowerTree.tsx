@@ -248,8 +248,8 @@ export function PowerTree({ model, notes, schematicFacts, onSelect, update }: Pr
         <div className="wb-row pt-add">
           <input value={adding} list="pt-parts" placeholder={t("power.addPlaceholder")} onChange={(e) => setAdding(e.target.value)} aria-label={t("power.add")} />
           <datalist id="pt-parts">
-            {model.parts.slice(0, 3000).map((p) => (
-              <option key={p.name} value={p.name} />
+            {[...new Set(model.parts.map((p) => p.name))].slice(0, 3000).map((n) => (
+              <option key={n} value={n} />
             ))}
           </datalist>
           <button

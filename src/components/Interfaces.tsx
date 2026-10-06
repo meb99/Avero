@@ -318,8 +318,8 @@ function InterfaceBlock({
         <div className="wb-row if-add">
           <input value={adding} list={`if-parts-${view.connector}`} placeholder={t("if.addPlaceholder")} onChange={(e) => setAdding(e.target.value)} aria-label={t("if.add")} />
           <datalist id={`if-parts-${view.connector}`}>
-            {model.parts.slice(0, 3000).map((p) => (
-              <option key={p.name} value={p.name} />
+            {[...new Set(model.parts.map((p) => p.name))].slice(0, 3000).map((n) => (
+              <option key={n} value={n} />
             ))}
           </datalist>
           <select value={addRole} onChange={(e) => setAddRole(e.target.value as MemberRole)} aria-label={t("if.roleLabel")}>
