@@ -3,7 +3,7 @@ import { ask, open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
 import { saveBytes } from "../core/loader";
 import { useI18n } from "../i18n";
-import { CASE_STATUSES, caseToReference, updateCase, type BoardNotes, type CaseStatus, type RepairCase } from "../workbench/notes";
+import { CASE_STATUSES, caseToReference, setCaseGood, updateCase, type BoardNotes, type CaseStatus, type RepairCase } from "../workbench/notes";
 import { loadPhotoImage } from "../workbench/photoImage";
 import type { ReportTexts } from "../workbench/report";
 
@@ -182,6 +182,11 @@ export function CaseEditor({ notes, repair, update, tolerance, onMessage }: Prop
           + {t("case.addPhotos")}
         </button>
       </div>
+
+      <label className="case-good" title={t("case.goodHint")}>
+        <input type="checkbox" checked={!!repair.good} onChange={(e) => update((n) => setCaseGood(n, repair.id, e.target.checked))} />{" "}
+        {t("case.good")}
+      </label>
 
       <div className="wb-row case-actions">
         <button className="small" onClick={() => void toReference()} title={t("case.toReferenceHint")}>

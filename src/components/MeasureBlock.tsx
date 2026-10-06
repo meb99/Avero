@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n, type MessageKey } from "../i18n";
-import { compare, condOf, conditionsFit, formatValue, parseValue, QUANTITIES, type HistoryEntry, type Quantity, type Reading, type Value } from "../workbench/measure";
+import { compare, condOf, conditionsFit, formatValue, parseValue, QUANTITIES, type Conditions, type HistoryEntry, type Quantity, type Reading, type Value } from "../workbench/measure";
 import { conditionsText } from "./Conditions";
 import {
   activeCase,
@@ -16,6 +16,8 @@ import {
   type Target,
 } from "../workbench/notes";
 import { METER_VALUE_EVENT, readMeter, useMeter } from "../workbench/meter";
+import { expectedFor, expectedShort, hasMoreReferences, judgeExpected, parseLimit, setLimit, type Expected } from "../workbench/expected";
+import { askText } from "./Ask";
 
 interface Props {
   net: string;
@@ -156,6 +158,101 @@ export function ValueInput({
   );
 }
 
+/**
+ * What the good boards say a net (or point) should read: per quantity the
+ * range, median and how many boards, values taken differently kept apart,
+ * the raw values, and a limit set by hand with its source.
+ */
+function Expectation({
+  notes,
+  name,
+  point,
+  conds,
+  onChange,
+}: {
+  notes: BoardNotes;
+  name: string;
+  point?: string;
+  conds(q: Quantity): Conditions | undefined;
+  onChange(f: (n: BoardNotes) => BoardNotes): void;
+}) {
+  const { t, lang } = useI18n();
+  const refTitle = t("measure.reference");
+  const per = QUANTITIES.map((q) => ({ q, e: expectedFor(notes, refTitle, name, q, conds(q), point) }));
+  const goods = notes.cases.filter((c) => c.good).length;
+  const shown = per.filter(({ e }) => e.limit || e.groups.some((g) => g.values.length > 1) || e.groups.length > 1 || (goods > 0 && e.groups.length > 0));
+  const key = point ?? name;
+  const editLimit = async (q: Quantity, e: Expected) => {
+    const now = e.limit ? `${e.limit.min ?? ""}${e.limit.min !== undefined && e.limit.max !== undefined ? " – " : ""}${e.limit.max ?? ""} ${e.limit.source}` : "";
+    const text = await askText(t("expect.limitAsk", { what: t(LABEL[q]), name: key }), now.trim(), { title: t("expect.limit") });
+    if (text === null) return;
+    if (!text.trim()) return onChange((n) => setLimit(n, key, q, undefined));
+    const limit = parseLimit(text);
+    if (limit) onChange((n) => setLimit(n, key, q, limit));
+  };
+  const fmt = (q: Quantity) => (v: Value) => formatValue(v, q, lang);
+  return (
+    <details className="expectation">
+      <summary>
+        {t("expect.title")}{" "}
+        <span className="muted">
+          {shown.length === 0
+            ? t("expect.none")
+            : shown
+                .map(({ q, e }) => {
+                  const short = expectedShort(e, fmt(q));
+                  return short ? `${t(LABEL[q])} ${short}` : `${t(LABEL[q])} ${t("expect.split")}`;
+                })
+                .join(" · ")}
+        </span>
+      </summary>
+      {QUANTITIES.map((q) => {
+        const e = per.find((x) => x.q === q)!.e;
+        if (e.groups.length === 0 && !e.limit) return null;
+        return (
+          <div key={q} className="expect-q">
+            <div className="expect-head">
+              <strong>{t(LABEL[q])}</strong>
+              {e.limit && (
+                <span className="expect-limit" title={t("expect.limitHint")}>
+                  {t("expect.limitText", { range: expectedShort({ ...e, fitting: [] }, fmt(q)) ?? "", source: e.limit.source })}
+                </span>
+              )}
+              <button className="link" onClick={() => void editLimit(q, e)}>
+                {e.limit ? t("expect.limitEdit") : t("expect.limitAdd")}
+              </button>
+            </div>
+            {e.groups.map((g, i) => {
+              const fits = e.fitting.includes(g);
+              return (
+                <div key={i} className={`expect-group${fits ? "" : " other"}`}>
+                  <span>
+                    {g.min !== undefined && g.max !== undefined
+                      ? g.min === g.max
+                        ? fmt(q)(g.min)
+                        : `${fmt(q)(g.min)} – ${fmt(q)(g.max)}`
+                      : fmt(q)("OL")}
+                    {g.numbers.length > 1 && g.median !== undefined && <span className="muted"> · {t("expect.median", { v: fmt(q)(g.median) })}</span>}
+                    {g.ol > 0 && g.numbers.length > 0 && <span className="muted"> · {t("expect.ol", { n: g.ol })}</span>}
+                    <span className="muted"> · {t(g.values.length === 1 ? "expect.oneBoard" : "expect.boards", { n: g.values.length })}</span>
+                  </span>
+                  {conditionsText(g.cond, t) && <span className="muted expect-cond">{conditionsText(g.cond, t)}</span>}
+                  {!fits && <span className="muted expect-cond">{t("expect.notFitting")}</span>}
+                  <span className="expect-raw muted">
+                    {g.values.map((v) => `${v.title}: ${fmt(q)(v.value)}`).join(" · ")}
+                  </span>
+                </div>
+              );
+            })}
+            {e.fitting.length > 1 && <p className="muted expect-cond">{t("expect.splitHint")}</p>}
+          </div>
+        );
+      })}
+      {shown.length === 0 && <p className="muted expect-cond">{t("expect.howTo")}</p>}
+    </details>
+  );
+}
+
 /** Reference and repair-case readings for one net, in the details panel. */
 export function MeasureBlock({ net, notes, update, tolerance, title }: Props) {
   const { t, lang } = useI18n();
@@ -204,9 +301,11 @@ export function MeasureBlock({ net, notes, update, tolerance, title }: Props) {
                     label={`${t(LABEL[q])} · ${current.title}`}
                     bind={bindOf(target, q)}
                     status={
-                      ref?.[q] !== undefined && mine?.[q] !== undefined && !conditionsFit(condOf(ref, q), condOf(mine, q), q)
-                        ? "mismatch"
-                        : compare(ref?.[q], mine?.[q], q, tolerance)
+                      hasMoreReferences(notes)
+                        ? judgeExpected(expectedFor(notes, t("measure.reference"), net, q, condOf(mine, q)), mine?.[q], q, tolerance)
+                        : ref?.[q] !== undefined && mine?.[q] !== undefined && !conditionsFit(condOf(ref, q), condOf(mine, q), q)
+                          ? "mismatch"
+                          : compare(ref?.[q], mine?.[q], q, tolerance)
                     }
                     onChange={(v) => change((n) => setValue(n, target, net, q, v))}
                   />
@@ -230,6 +329,7 @@ export function MeasureBlock({ net, notes, update, tolerance, title }: Props) {
           )}
         </p>
       )}
+      <Expectation notes={notes} name={net} conds={(q) => condOf(mine, q) ?? current?.conditions} onChange={change} />
       <History reading={ref} title={t("measure.reference")} lang={lang} onClear={() => change((n) => clearHistory(n, "reference", net))} />
       {current && target && <History reading={mine} title={current.title} lang={lang} onClear={() => change((n) => clearHistory(n, target, net))} />}
       <input

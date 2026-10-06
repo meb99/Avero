@@ -9,6 +9,7 @@ import { pointOf } from "../core/points";
 import type { PadValue, PadValues } from "../render/labels";
 import { compare, condOf, conditionsFit, formatValue, type Quantity, type Reading } from "./measure";
 import { activeCase, type BoardNotes } from "./notes";
+import { expectedFor, expectedShort, hasMoreReferences, judgeExpected } from "./expected";
 
 export function padValueSource(
   model: BoardModel,
@@ -21,9 +22,16 @@ export function padValueSource(
   const c = activeCase(notes);
   const refPoints = notes.referencePoints ?? {};
   const casePoints = c?.points ?? {};
-  const value = (ref: Reading | undefined, got: Reading | undefined): PadValue | undefined => {
+  const pooled = hasMoreReferences(notes);
+  const value = (ref: Reading | undefined, got: Reading | undefined, name: string, point?: string): PadValue | undefined => {
     const r = ref?.[q];
     const g = got?.[q];
+    if (g !== undefined && pooled) {
+      // Several good boards or a limit: their range under the value.
+      const e = expectedFor(notes, refLabel, name, q, condOf(got, q), point);
+      const short = expectedShort(e, (v) => formatValue(v, q, lang));
+      return { text: formatValue(g, q, lang), sub: short ? `${refLabel} ${short}` : undefined, status: judgeExpected(e, g, q, tolerance) ?? "measured" };
+    }
     if (g !== undefined) {
       const status =
         r === undefined ? "measured" : !conditionsFit(condOf(ref, q), condOf(got, q), q) ? "mismatch" : (compare(r, g, q, tolerance) ?? "measured");
@@ -42,7 +50,8 @@ export function padValueSource(
     const nGot = c?.readings[n.name];
     const ref = pRef?.[q] !== undefined ? pRef : nRef;
     const got = pGot?.[q] !== undefined ? pGot : nGot;
-    return value(ref, got);
+    // The point's own readings are expected from the good boards' readings at that point.
+    return value(ref, got, n.name, pGot?.[q] !== undefined && pointId ? pointId : undefined);
   };
   return {
     pin: (i) => at(model.pinLabel(i), model.pins[i].net),

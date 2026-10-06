@@ -4435,3 +4435,48 @@ body.resizing-rows {
   height: 2px;
   width: 26px;
 }
+
+/* What the good boards say a reading should be. */
+.expectation {
+  margin: 6px 0;
+  font-size: 12px;
+}
+.expectation > summary {
+  cursor: pointer;
+}
+.expect-q {
+  margin-top: 6px;
+}
+.expect-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.expect-limit {
+  padding: 0 6px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.expect-group {
+  display: flex;
+  flex-direction: column;
+  padding: 3px 0 3px 8px;
+  border-left: 2px solid var(--accent);
+  margin-top: 3px;
+}
+.expect-group.other {
+  border-left-color: var(--border);
+  opacity: 0.75;
+}
+.expect-cond,
+.expect-raw {
+  font-size: 11.5px;
+}
+.case-good {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0;
+  font-size: 12.5px;
+}

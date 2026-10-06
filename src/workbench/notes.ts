@@ -1,4 +1,5 @@
 import { parseDocLinks, type DocLinks } from "../schematic/mapping";
+import { expectedFor, hasMoreReferences, judgeExpected, parseLimits, type Limits } from "./expected";
 import { compareReadings, condOf, hasValues, HISTORY_MAX, QUANTITIES, takenAt, type Comparison, type Conditions, type HistoryEntry, type Quantity, type Reading, type Value } from "./measure";
 import { parsePhoto, type BoardPhoto, type PhotoSide } from "./photo";
 import type { NetKind } from "../core/types";
@@ -25,6 +26,8 @@ export interface RepairCase {
   photos?: string[];
   /** Conditions new readings of this case are taken under. */
   conditions?: Conditions;
+  /** A known good board: its readings count towards what is expected, like the reference. */
+  good?: boolean;
 }
 
 /** Fields of a case that are edited as a whole. */
@@ -97,6 +100,8 @@ export interface BoardNotes {
   docLinks?: DocLinks;
   /** The board's own origin (a connector corner, say), in board units. */
   origin?: { x: number; y: number };
+  /** Limits set by hand per net or point, with their source (a datasheet, the schematic). */
+  limits?: Limits;
   /** Notes pinned to spots on the board. */
   markers?: BoardMarker[];
   /** Lines, areas and jumpers drawn on the board. */
@@ -476,9 +481,22 @@ export function netStatuses(notes: BoardNotes, tolerance: number): Map<string, N
   const out = new Map<string, NetStatus>();
   const current = activeCase(notes)?.readings ?? {};
   for (const [net, r] of Object.entries(notes.reference)) if (hasValues(r)) out.set(net, "reference");
+  // Several good boards or limits: judged against what they expect, per quantity.
+  const pooled = hasMoreReferences(notes);
   for (const [net, r] of Object.entries(current)) {
     if (!hasValues(r)) continue;
-    out.set(net, compareReadings(notes.reference[net], r, tolerance) ?? "measured");
+    if (!pooled) {
+      out.set(net, compareReadings(notes.reference[net], r, tolerance) ?? "measured");
+      continue;
+    }
+    let status: NetStatus = "measured";
+    for (const q of QUANTITIES) {
+      const result = judgeExpected(expectedFor(notes, "", net, q, condOf(r, q)), r[q], q, tolerance);
+      if (result === "deviation") status = "deviation";
+      else if (result === "ok" && status !== "deviation") status = "ok";
+      else if (result === "mismatch" && status === "measured") status = "mismatch";
+    }
+    out.set(net, status);
   }
   return out;
 }
@@ -649,6 +667,11 @@ function parseNetKinds(value: unknown): Record<string, NetKind> | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
+/** Marks a case as a known good board (its readings then count towards what is expected), or not. */
+export function setCaseGood(notes: BoardNotes, id: string, good: boolean): BoardNotes {
+  return { ...notes, cases: notes.cases.map((c) => (c.id === id ? { ...c, good: good || undefined } : c)), updated: now() };
+}
+
 /** Sets (or, with `undefined`, removes) the board's own origin. */
 export function setOrigin(notes: BoardNotes, origin: { x: number; y: number } | undefined): BoardNotes {
   return { ...notes, origin, updated: now() };
@@ -770,6 +793,7 @@ function parseCase(value: unknown): RepairCase | null {
     points: optionalReadings(value.points),
     photos: Array.isArray(c.photos) ? c.photos.filter((p) => typeof p === "string") : undefined,
     conditions: parseConditions(c.conditions),
+    ...(c.good === true && { good: true }),
   };
 }
 
@@ -827,6 +851,7 @@ export function parseNotes(json: string): BoardNotes | null {
       netNames: parseNetNames(d.netNames),
       netKinds: parseNetKinds(d.netKinds),
       docLinks: parseDocLinks(d.docLinks),
+      limits: parseLimits(d.limits),
       origin: isRecord(d.origin) && Number.isFinite(d.origin.x) && Number.isFinite(d.origin.y) ? { x: Number(d.origin.x), y: Number(d.origin.y) } : undefined,
       hidden: parseHidden(d.hidden),
       markers: parseMarkers(d.markers),
@@ -902,6 +927,7 @@ export function mergeNotes(mine: BoardNotes, theirs: BoardNotes): BoardNotes {
     netKinds: theirs.netKinds || mine.netKinds ? { ...theirs.netKinds, ...mine.netKinds } : undefined,
     docLinks: theirs.docLinks || mine.docLinks ? { ...theirs.docLinks, ...mine.docLinks } : undefined,
     origin: mine.origin ?? theirs.origin,
+    limits: theirs.limits || mine.limits ? { ...theirs.limits, ...mine.limits } : undefined,
     hidden: mine.hidden ?? theirs.hidden,
     markers: mergeMarkers(mine.markers, theirs.markers),
     drawings: mergeById(mine.drawings, theirs.drawings),

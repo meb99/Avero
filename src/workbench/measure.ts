@@ -152,7 +152,8 @@ export function formatValue(value: Value | undefined, q: Quantity, lang = "en"):
 }
 
 /** Smallest difference that counts as a deviation, whatever the tolerance. */
-const FLOOR: Record<Quantity, number> = { diode: 0.015, voltage: 0.05, resistance: 2 };
+/** Smallest allowed deviation per quantity, for readings near zero. */
+export const FLOOR: Record<Quantity, number> = { diode: 0.015, voltage: 0.05, resistance: 2 };
 
 /**
  * Compares a measurement with the reference. `tolerance` is relative
