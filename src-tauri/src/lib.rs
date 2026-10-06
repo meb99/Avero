@@ -64,7 +64,11 @@ pub fn load(path: &Path, options: ParseOptions) -> Result<Board, LoadError> {
         avero_formats::detect(&bytes, name),
         avero_formats::Detected::Supported(avero_formats::FormatId::Xzz)
     ) {
-        return load_xzz(&bytes, name, options);
+        // The readings the file keeps after its marker go onto whatever board the reading gave.
+        return load_xzz(&bytes, name, options).map(|mut board| {
+            avero_formats::attach_xzz_readings(&mut board, avero_formats::xzz_readings(&bytes));
+            board
+        });
     }
     match avero_formats::parse_with(&bytes, name, options) {
         Err(ParseError::NeedsAscFiles) => {
@@ -1089,6 +1093,22 @@ mod tests {
         assert_eq!(board.pins.len(), 2);
         assert!(board.nets.iter().any(|n| n.name == "PP3V3"));
         std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn xzz_readings_after_the_marker_go_onto_their_pins() {
+        let path = std::env::temp_dir().join(format!("avero-xzz-readings-{}.pcb", std::process::id()));
+        let mut file = plain_xzz();
+        // The diode list (`阻值` in GBK): two pins of U1, and one of a part the board does not have.
+        file.extend(b"\n===\xD7\xE8\xD6\xB5\n=480=U1(1)\n=OL=U1(2)\n=5=U9(1)\n");
+        std::fs::write(&path, &file).unwrap();
+        let board = load(&path, ParseOptions::default()).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        let at = |pin: &str| board.readings.iter().find(|r| r.part == "U1" && r.pin == pin).map(|r| r.value);
+        assert_eq!(at("1"), Some(Some(0.48)));
+        assert_eq!(at("2"), Some(None));
+        assert_eq!(board.readings.len(), 2);
+        assert!(board.warnings.iter().any(|w| w.starts_with("1 readings of the file")), "{:?}", board.warnings);
     }
 
     #[test]

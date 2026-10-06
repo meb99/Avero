@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AskHost, askConfirm, askText } from "./components/Ask";
 import { copyText } from "./core/clipboard";
+import { takeAllFileReadings } from "./workbench/fileReadings";
 import { annotationsCsv, differencesCsv, netsCsv, partsCsv, readingsCsv } from "./workbench/csvExport";
 import { answerMcp, type McpContext } from "./workbench/mcpTools";
 import { MCP_DEFAULT_PORT } from "./workbench/mcp";
@@ -379,6 +380,20 @@ export function App() {
     if (model.applyNetNames(netNames ?? {}) || kinds || hidden) setNamesRevision((r) => r + 1);
     // notesForModel only matters as "the notes of this board have loaded".
   }, [model, netNames, netKinds, hiddenParts, notesForModel !== null]);
+  // Readings the board file carries (XZZ: diode values per pin) go into the reference once per
+  // file content, each at its pin with its source; values of one's own stay.
+  const fileReadingsTaken = useRef<string | null>(null);
+  useEffect(() => {
+    if (!model || !notesForModel || !model.board.readings?.length) return;
+    const id = `${notesForModel.key}|${source?.path ?? ""}`;
+    if (fileReadingsTaken.current === id) return;
+    fileReadingsTaken.current = id;
+    const r = takeAllFileReadings(notesForModel, model);
+    if (r.added + r.updated === 0 && r.notes.fileImports === notesForModel.fileImports) return;
+    updateNotes((n) => takeAllFileReadings(n, model).notes);
+    if (r.added + r.updated + r.kept > 0)
+      setToast(t("fileReadings.taken", { n: r.added + r.updated, total: r.total, source: r.sources.join(", "), kept: r.kept, differ: r.differ }));
+  }, [model, notesForModel !== null]);
   /** Hides the selected part(s) (key H); a selected pin's part. */
   const hideSelected = () => {
     if (!model || !notesForModel) return;

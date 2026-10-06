@@ -292,6 +292,7 @@ impl RawBoard {
             warnings: self.warnings,
             locked_parts: self.locked_parts,
             derived,
+            readings: Vec::new(),
         }
     }
 }

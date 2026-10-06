@@ -52,4 +52,9 @@ describe("data scope", () => {
     expect(row(rows, "manual")).toMatchObject({ state: "manual", n: 2 });
     expect(row(rows, "readings")).toMatchObject({ state: "yes", n: 1, m: 2 });
   });
+
+  it("names readings the file carries with what they belong to", () => {
+    const model = new BoardModel({ ...testBoard(), readings: [{ part: "U10", pin: "1", quantity: "diode", value: 0.48, raw: "480", list: "阻值" }, { part: "U10", pin: "2", quantity: "diode", value: null, raw: "OL", list: "阻值" }] });
+    expect(dataScope(model, { showTraces: true, hiddenLayers: new Set(), notes: null, docs: [], schematicValues: 0 }).find((r) => r.id === "fileReadings")).toEqual({ id: "fileReadings", state: "yes", n: 2, m: 1 });
+  });
 });

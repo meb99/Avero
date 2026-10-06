@@ -154,6 +154,12 @@ export interface BoardNotes {
   bookmarks?: Bookmark[];
   /** OpenBoardData board (its ID, e.g. 820-00165) chosen for this board by hand. */
   obdata?: string;
+  /**
+   * Readings taken over from the board file, per source (`XZZ 阻值`): a
+   * fingerprint of what was taken, so the same file is not taken again
+   * (values deleted here stay deleted) but a changed one is.
+   */
+  fileImports?: Record<string, string>;
   /** Conditions new reference readings are taken under. */
   referenceConditions?: Conditions;
   /** Lists of points to measure, worked through one after the other. */
@@ -428,6 +434,63 @@ export function setPointReading(notes: BoardNotes, target: Target, point: string
 
 export function setPointValue(notes: BoardNotes, target: Target, point: string, net: string, q: Quantity, value: Value | undefined): BoardNotes {
   return setPointReading(notes, target, point, net, { [q]: value });
+}
+
+/** A reading the board file carries for one point. */
+export interface FilePointReading {
+  point: string;
+  net: string;
+  quantity: Quantity;
+  value: Value;
+}
+
+export interface FileImport {
+  notes: BoardNotes;
+  /** New, changed in the file since the last time, kept (a value of one's own is there), of which differ. */
+  added: number;
+  updated: number;
+  kept: number;
+  differ: number;
+  /** The same file was taken before: nothing done. */
+  already: boolean;
+}
+
+/** A short fingerprint of what a file holds. */
+function fingerprint(entries: readonly FilePointReading[]): string {
+  let h = 0x811c9dc5;
+  for (const e of entries) for (const c of `${e.point}|${e.quantity}|${e.value};`) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193);
+  return `${entries.length}:${(h >>> 0).toString(16)}`;
+}
+
+/**
+ * Takes the readings a board file carries into the reference, each at its
+ * pin and marked with where it came from (`source`). A value of one's own
+ * (typed, measured, or from another source) is never replaced; a value
+ * from this source is brought up to date when the file changed. The same
+ * file is taken once: values deleted afterwards stay deleted.
+ */
+export function takeFileReadings(notes: BoardNotes, entries: readonly FilePointReading[], source: string): FileImport {
+  const print = fingerprint(entries);
+  const result: FileImport = { notes, added: 0, updated: 0, kept: 0, differ: 0, already: notes.fileImports?.[source] === print };
+  if (result.already) return result;
+  let points = notes.referencePoints ?? {};
+  for (const e of entries) {
+    const old = points[e.point];
+    const before = old?.[e.quantity];
+    if (before !== undefined && old?.origin?.[e.quantity] !== source) {
+      result.kept++;
+      if (before !== e.value) result.differ++;
+      continue;
+    }
+    if (before === e.value) continue;
+    if (before === undefined) result.added++;
+    else result.updated++;
+    // The file says nothing about the conditions, so none are claimed.
+    points = withReading(points, e.point, { [e.quantity]: e.value }, undefined, { origin: source });
+    points[e.point] = { ...points[e.point], net: e.net };
+  }
+  result.notes = { ...notes, referencePoints: points, fileImports: { ...notes.fileImports, [source]: print }, updated: now() };
+  return result;
 }
 
 export function clearPointHistory(notes: BoardNotes, target: Target, point: string): BoardNotes {
@@ -1002,6 +1065,9 @@ export function parseNotes(json: string): BoardNotes | null {
       drawings: parseDrawings(d.drawings),
       bookmarks: parseBookmarks(d.bookmarks),
       obdata: typeof d.obdata === "string" && d.obdata ? d.obdata : undefined,
+      fileImports: isRecord(d.fileImports)
+        ? Object.fromEntries(Object.entries(d.fileImports).filter((e): e is [string, string] => typeof e[1] === "string"))
+        : undefined,
       referenceConditions: parseConditions(d.referenceConditions),
       lists: parseLists(d.lists),
       activeList: typeof d.activeList === "string" ? d.activeList : undefined,
@@ -1079,6 +1145,7 @@ export function mergeNotes(mine: BoardNotes, theirs: BoardNotes): BoardNotes {
     drawings: mergeById(mine.drawings, theirs.drawings),
     bookmarks: mergeById(mine.bookmarks, theirs.bookmarks),
     obdata: mine.obdata ?? theirs.obdata,
+    ...((mine.fileImports || theirs.fileImports) && { fileImports: { ...theirs.fileImports, ...mine.fileImports } }),
     referenceConditions: mine.referenceConditions ?? theirs.referenceConditions,
     lists: mergeLists(mine.lists, theirs.lists),
     cases,

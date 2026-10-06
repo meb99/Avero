@@ -127,6 +127,21 @@ export interface Board {
   lockedParts?: number;
   /** What Avero added or reconstructed rather than read from the file. */
   derived?: { what: string; how: string; count: number }[];
+  /** Readings the file itself carries, per pin (XZZ: diode values). */
+  readings?: FileReading[];
+}
+
+/** A reading stored in the board file for one pin, as the file has it. */
+export interface FileReading {
+  part: string;
+  pin: string;
+  quantity: "diode";
+  /** Volts; null is open (OL). */
+  value: number | null;
+  /** As written in the file ("480", "OL"). */
+  raw: string;
+  /** The file's name for the list ("阻值"). */
+  list: string;
 }
 
 export type LoadErrorCode =

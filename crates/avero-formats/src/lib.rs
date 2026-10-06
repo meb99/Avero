@@ -21,6 +21,7 @@ pub mod model;
 mod text;
 
 pub use builder::{classify_net, UNCONNECTED};
+pub use formats::xzz::{attach_readings as attach_xzz_readings, readings as xzz_readings, FileReadings};
 pub use formats::{detect, Detected, FormatInfo};
 pub use model::*;
 

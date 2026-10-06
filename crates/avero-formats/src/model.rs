@@ -340,6 +340,25 @@ pub struct Board {
     /// What Avero added or reconstructed (see [`Derived`]).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub derived: Vec<Derived>,
+    /// Readings stored in the file itself (XZZ keeps diode values per pin).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub readings: Vec<FileReading>,
+}
+
+/// A reading the board file carries for one pin, kept as the file has it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileReading {
+    pub part: String,
+    pub pin: String,
+    /// `"diode"` (the only kind seen in files so far).
+    pub quantity: &'static str,
+    /// In volts; `None` is open (OL).
+    pub value: Option<f64>,
+    /// As written in the file (`480`, `OL`).
+    pub raw: String,
+    /// The file's name for the list it stood in (`阻值`).
+    pub list: String,
 }
 
 impl Board {

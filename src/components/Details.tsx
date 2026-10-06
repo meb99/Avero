@@ -16,7 +16,7 @@ import type { NetKind, Selection, Side } from "../core/types";
 import { formatLength, formatSize } from "../format";
 import { useI18n, type MessageKey } from "../i18n";
 import type { Settings } from "../settings";
-import { activeCase, addDrawing, readingsFor, setOwnPart, setOwnPin, updateDocLinks, type BoardNotes } from "../workbench/notes";
+import { activeCase, addDrawing, pointReadingsFor, readingsFor, setOwnPart, setOwnPin, updateDocLinks, type BoardNotes } from "../workbench/notes";
 import { OwnPartInfo, OwnPinInfo } from "./OwnInfo";
 import { BoundNotes } from "./BoundNotes";
 import { jumperTargets } from "../core/jumper";
@@ -285,6 +285,22 @@ export function Details({
       }
     }
     return null;
+  };
+  // At one pin: its own reading first (the case's, then the reference's, with where it came from), else the net's.
+  const diodeAtPin = (pin: number): { text: string; source: string } | null => {
+    if (notes) {
+      const point = pinKey(model, pin);
+      const kase = activeCase(notes);
+      const sources: [string, BoardNotes["referencePoints"]][] = [
+        [t("measure.case"), kase ? pointReadingsFor(notes, { caseId: kase.id }) : undefined],
+        [t("measure.reference"), notes.referencePoints],
+      ];
+      for (const [source, readings] of sources) {
+        const r = readings?.[point];
+        if (r?.diode !== undefined) return { text: formatValue(r.diode, "diode", lang), source: `${source} · ${point}${r.origin?.diode ? ` · ${r.origin.diode}` : ""}` };
+      }
+    }
+    return diodeOf(model.pins[pin].net);
   };
 
   const netLink = (net: number) => {
@@ -658,7 +674,7 @@ export function Details({
                       </td>
                       {pinCheck && pinCheck.byPin.size > 0 && <PinFunction pin={pinCheck.byPin.get(index)} />}
                       {(() => {
-                        const d = diodeOf(pin.net);
+                        const d = diodeAtPin(index);
                         return (
                           <td className="mono pin-diode" title={d ? `${t("measure.diode")} · ${d.source}` : undefined}>
                             {d?.text ?? ""}

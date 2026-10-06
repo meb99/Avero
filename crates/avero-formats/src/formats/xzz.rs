@@ -11,6 +11,9 @@
 //!   arcs (1) and lines (5) on layer 28 form the board outline, parts (7)
 //!   are DES-encrypted, test pads (9) are plain.
 //! - Coordinates are `u32` in 1/10000 mil.
+//! - After the marker, plain text: lists headed `===<title>` (GBK) with one
+//!   reading per line, `=<value>=<part>(<pin>)`. The list `阻值` holds
+//!   diode-mode values in millivolts (`480`) or `OL`; see [`readings`].
 //!
 //! This direct reader uses the DES key users enter in the settings. The separate
 //! library converter has its own compatibility default.
@@ -21,7 +24,7 @@ use des::cipher::{Block, BlockCipherDecrypt, KeyInit};
 use des::Des;
 
 use crate::builder::{RawBoard, RawPart, RawPin, RawTestPoint};
-use crate::model::{FormatId, Mount, Point, Side, TestPointKind};
+use crate::model::{FileReading, FormatId, Mount, Point, Side, TestPointKind};
 use crate::text::{decode, find};
 use crate::ParseError;
 
@@ -331,6 +334,124 @@ fn parse_test_pad(data: &[u8], net_name: &dyn Fn(u32) -> String) -> Result<RawTe
     })
 }
 
+/// What the text after the marker holds: readings Avero understands, and
+/// what it left out (lists of another kind, lines of another form).
+#[derive(Debug, Default, PartialEq)]
+pub struct FileReadings {
+    pub readings: Vec<FileReading>,
+    /// Lists of an unknown kind, with how many lines each had: left out.
+    pub other_lists: Vec<(String, usize)>,
+    /// Lines in a known list that are not `=value=part(pin)`.
+    pub unreadable: usize,
+}
+
+/// `阻值` in GBK: the list of diode-mode values, in millivolts.
+const DIODE_LIST: &[u8] = &[0xD7, 0xE8, 0xD6, 0xB5];
+
+/// The readings an XZZ file carries after its `v6v6555v6v6` marker. Only
+/// lists whose kind is known are read; a reading names its part and pin as
+/// the file does, for the caller to find on the board.
+pub fn readings(input: &[u8]) -> FileReadings {
+    let mut out = FileReadings::default();
+    let Some(at) = find(input, XOR_END_MARKER) else { return out };
+    let text = &input[at + XOR_END_MARKER.len()..];
+    // None: before any list, or in a list of another kind (its title and line count).
+    let mut list: Option<Result<&'static str, (String, usize)>> = None;
+    let close = |list: Option<Result<&'static str, (String, usize)>>, out: &mut FileReadings| {
+        if let Some(Err(other)) = list {
+            out.other_lists.push(other);
+        }
+    };
+    for raw in text.split(|&b| b == b'\n') {
+        let line = crate::text::trim(raw);
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(title) = line.strip_prefix(b"===") {
+            close(list.take(), &mut out);
+            list = Some(if title == DIODE_LIST {
+                Ok("阻值")
+            } else {
+                // Shown as hex: the title is GBK, which Avero does not decode.
+                Err((title.iter().map(|b| format!("{b:02X}")).collect(), 0))
+            });
+            continue;
+        }
+        match &mut list {
+            Some(Ok(name)) => match diode_line(line, name) {
+                Some(r) => out.readings.push(r),
+                None => out.unreadable += 1,
+            },
+            Some(Err((_, n))) => *n += 1,
+            None => {}
+        }
+    }
+    close(list, &mut out);
+    out
+}
+
+/// Puts the file's readings on the board: those whose part and pin the board
+/// has (names compared without case). What does not fit, and lists of an
+/// unknown kind, are named in the board's warnings – nothing is guessed.
+pub fn attach_readings(board: &mut crate::model::Board, found: FileReadings) {
+    let mut missing = 0usize;
+    for r in found.readings {
+        let fits = board
+            .find_part(&r.part)
+            .is_some_and(|part| board.part_pins(part).iter().any(|p| p.number.eq_ignore_ascii_case(&r.pin)));
+        if fits {
+            board.readings.push(r);
+        } else {
+            missing += 1;
+        }
+    }
+    if missing > 0 {
+        let why = if board.parts.is_empty() { " (the parts are locked)" } else { "" };
+        board.warnings.push(format!(
+            "{missing} readings of the file name a part or pin the board does not have{why}; left out."
+        ));
+    }
+    if found.unreadable > 0 {
+        board
+            .warnings
+            .push(format!("{} lines of the file's readings could not be read; left out.", found.unreadable));
+    }
+    for (title, lines) in found.other_lists {
+        board
+            .warnings
+            .push(format!("A list of readings of unknown kind ({title}, {lines} lines) was left out."));
+    }
+}
+
+/// `=480=N65594(1)`: millivolts (or `OL`), part, pin.
+fn diode_line(line: &[u8], list: &str) -> Option<FileReading> {
+    let line = std::str::from_utf8(line).ok()?;
+    let rest = line.strip_prefix('=')?;
+    let (value, target) = rest.split_once('=')?;
+    let (part, pin) = target.strip_suffix(')')?.split_once('(')?;
+    let (part, pin, value) = (part.trim(), pin.trim(), value.trim());
+    if part.is_empty() || pin.is_empty() {
+        return None;
+    }
+    let volts = if value.eq_ignore_ascii_case("OL") {
+        None
+    } else {
+        let mv: f64 = value.parse().ok()?;
+        if !mv.is_finite() || mv < 0.0 {
+            return None;
+        }
+        Some(mv / 1000.0)
+    };
+    Some(FileReading {
+        part: part.to_string(),
+        pin: pin.to_string(),
+        quantity: "diode",
+        value: volts,
+        raw: value.to_string(),
+        list: list.to_string(),
+    })
+}
+
 /// Arc as ten segments between two angles in degrees, like OpenBoardView.
 fn arc(center: Point, r: f64, start: f64, stop: f64) -> Vec<(Point, Point)> {
     let (mut a0, a1) = if start > stop { (stop, start) } else { (start, stop) };
@@ -368,6 +489,29 @@ mod tests {
         assert!(key_is_plausible(0x8003_0303_0303_0303));
         assert!(!key_is_plausible(0));
         assert!(!key_is_plausible(0x8003_0303_0303_0302));
+    }
+
+    #[test]
+    fn reads_the_readings_after_the_marker() {
+        let mut file = b"XZZPCB....v6v6555v6v6===".to_vec();
+        file.extend(DIODE_LIST);
+        file.extend(b"\r\n=480=N65594(1)\n=464=N65594(3)\n=OL=N65658(G5)\nbroken\n===");
+        file.extend([0xB5, 0xE7, 0xD1, 0xB9]);
+        file.extend(b"\n=3300=N1(1)\n=1800=N2(1)\n");
+        let r = readings(&file);
+        assert_eq!(r.readings.len(), 3);
+        assert_eq!(r.readings[0].part, "N65594");
+        assert_eq!(r.readings[0].pin, "1");
+        assert_eq!(r.readings[0].value, Some(0.48));
+        assert_eq!(r.readings[0].raw, "480");
+        assert_eq!(r.readings[0].list, "阻值");
+        assert_eq!(r.readings[1].value, Some(0.464));
+        assert_eq!((r.readings[2].pin.as_str(), r.readings[2].value), ("G5", None));
+        assert_eq!(r.unreadable, 1);
+        // A list of another kind is left out and named.
+        assert_eq!(r.other_lists, vec![("B5E7D1B9".to_string(), 2)]);
+        // No marker, no readings.
+        assert_eq!(readings(b"XZZPCB no marker"), FileReadings::default());
     }
 
     #[test]

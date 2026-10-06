@@ -42,6 +42,7 @@ export interface ScopeRow {
     | "bottomSide"
     | "ground"
     | "readings"
+    | "fileReadings"
     | "schematic"
     | "schematicValues"
     | "manual";
@@ -134,6 +135,9 @@ export function dataScope(model: BoardModel, ctx: ScopeContext): ScopeRow[] {
     n: measured,
     m: notes ? notes.cases.filter((c) => c.good).length + (measured ? 1 : 0) : 0,
   });
+
+  // Readings the file itself carries (XZZ diode values per pin), taken into the reference with their source.
+  if (b.readings?.length) rows.push({ id: "fileReadings", state: "yes", n: b.readings.length, m: new Set(b.readings.map((r) => r.part)).size });
 
   const pages = ctx.docs.reduce((s, d) => s + d.pageCount, 0);
   const recognised = ctx.docs.reduce((s, d) => s + d.recognisedPages, 0);
