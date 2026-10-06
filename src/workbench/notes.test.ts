@@ -321,3 +321,29 @@ describe("measuring conditions and history", () => {
     expect(listProgress(n, n.lists![0])).toEqual({ done: [false, true], count: 1 });
   });
 });
+
+describe("conditions from older files", () => {
+  it("are read as they were, without conditions made up", () => {
+    const old = JSON.stringify({
+      version: 1,
+      key: "B1",
+      reference: { PP3V3: { diode: 0.45, cond: { power: "off", polarity: "red-gnd" } } },
+      cases: [],
+      referenceConditions: { power: "off", meter: "XDM1241" },
+    });
+    const n = parseNotes(old)!;
+    expect(n.referenceConditions).toEqual({ power: "off", meter: "XDM1241" });
+    expect(n.reference.PP3V3.cond).toEqual({ power: "off", polarity: "red-gnd" });
+  });
+
+  it("keep the new ones", () => {
+    const json = JSON.stringify({
+      version: 1,
+      key: "B1",
+      reference: {},
+      cases: [],
+      referenceConditions: { assembly: "ic-removed", removed: "U7000", temperature: 24, modules: "display", range: "2V", leadsNulled: true, bogus: 1 },
+    });
+    expect(parseNotes(json)!.referenceConditions).toEqual({ assembly: "ic-removed", removed: "U7000", temperature: 24, modules: "display", range: "2V", leadsNulled: true });
+  });
+});

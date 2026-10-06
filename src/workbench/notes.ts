@@ -782,6 +782,12 @@ function parseConditions(value: unknown): Conditions | undefined {
   if (typeof v.battery === "boolean") out.battery = v.battery;
   if (v.polarity === "red-gnd" || v.polarity === "black-gnd") out.polarity = v.polarity;
   if (typeof v.meter === "string" && v.meter) out.meter = v.meter;
+  if (v.assembly === "complete" || v.assembly === "ic-removed" || v.assembly === "parts-removed") out.assembly = v.assembly;
+  if (typeof v.removed === "string" && v.removed) out.removed = v.removed;
+  if (typeof v.temperature === "number" && Number.isFinite(v.temperature)) out.temperature = v.temperature;
+  if (typeof v.modules === "string" && v.modules) out.modules = v.modules;
+  if (typeof v.range === "string" && v.range) out.range = v.range;
+  if (typeof v.leadsNulled === "boolean") out.leadsNulled = v.leadsNulled;
   return Object.keys(out).length ? out : undefined;
 }
 

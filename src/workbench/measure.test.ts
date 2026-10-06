@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compare, compareReadings, formatValue, parseValue } from "./measure";
+import { compare, compareReadings, conditionsFit, formatValue, parseValue } from "./measure";
 
 describe("typed units", () => {
   it("takes an explicit volt as volts, a bare diode number above 3 as millivolts", () => {
@@ -77,5 +77,38 @@ describe("compare", () => {
     expect(compareReadings({ diode: 0.45, voltage: 3.3 }, { diode: 0.45, voltage: 0 }, 0.1)).toBe("deviation");
     expect(compareReadings({ diode: 0.45 }, { diode: 0.46, voltage: 3.3 }, 0.1)).toBe("ok");
     expect(compareReadings({ diode: 0.45 }, { voltage: 3.3 }, 0.1)).toBeUndefined();
+  });
+});
+
+describe("conditionsFit with the board's state", () => {
+  it("never compares a reading with the IC off against one with it fitted", () => {
+    const off = { assembly: "ic-removed" as const, removed: "U7000" };
+    expect(conditionsFit(off, { assembly: "complete" }, "diode")).toBe(false);
+    // Unknown stays unknown, but a removed IC is the exception that must be said on both sides.
+    expect(conditionsFit(off, undefined, "diode")).toBe(false);
+    expect(conditionsFit(off, {}, "resistance")).toBe(false);
+    expect(conditionsFit(off, { assembly: "ic-removed", removed: "u7000" }, "diode")).toBe(true);
+    expect(conditionsFit(off, { assembly: "ic-removed", removed: "U7001" }, "diode")).toBe(false);
+    // Two complete or unknown boards still compare.
+    expect(conditionsFit({ assembly: "complete" }, undefined, "diode")).toBe(true);
+    expect(conditionsFit(undefined, undefined, "voltage")).toBe(true);
+  });
+
+  it("keeps cold and hot diode readings apart, not voltages", () => {
+    expect(conditionsFit({ temperature: 22 }, { temperature: 60 }, "diode")).toBe(false);
+    expect(conditionsFit({ temperature: 22 }, { temperature: 30 }, "diode")).toBe(true);
+    expect(conditionsFit({ temperature: 22 }, { temperature: 60 }, "voltage")).toBe(true);
+    expect(conditionsFit({ temperature: 22 }, {}, "diode")).toBe(true);
+  });
+
+  it("compares only with the same modules connected", () => {
+    expect(conditionsFit({ modules: "Display, Keyboard" }, { modules: "display  keyboard" }, "diode")).toBe(true);
+    expect(conditionsFit({ modules: "display" }, { modules: "none" }, "diode")).toBe(false);
+  });
+
+  it("the stricter rules mark a reading pair as not comparable", () => {
+    const ref = { diode: 0.45, conds: { diode: { assembly: "complete" as const } } };
+    const got = { diode: 0.2, conds: { diode: { assembly: "ic-removed" as const } } };
+    expect(compareReadings(ref, got, 0.1)).toBe("mismatch");
   });
 });

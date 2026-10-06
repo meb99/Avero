@@ -24,7 +24,26 @@ export interface Conditions {
   polarity?: "red-gnd" | "black-gnd";
   /** Meter used, e.g. "Owon XDM1241". */
   meter?: string;
+  /** What is fitted: all of it, or with an IC or other parts taken off. */
+  assembly?: "complete" | "ic-removed" | "parts-removed";
+  /** Which parts were taken off, e.g. "U7000". */
+  removed?: string;
+  /** Board temperature in °C (diode readings move about 2 mV per degree). */
+  temperature?: number;
+  /** Modules, cables or boards connected, e.g. "display, keyboard off". */
+  modules?: string;
+  /** Meter range, e.g. "auto", "2 V", "200 Ω". */
+  range?: string;
+  /** Test leads nulled (relative mode) before low resistance readings. */
+  leadsNulled?: boolean;
 }
+
+/** Degrees apart beyond which diode and resistance readings are not compared. */
+const TEMPERATURE_SPAN = 15;
+
+const norm = (s: string | undefined) => (s ?? "").toUpperCase().replace(/[\s,;]+/g, " ").trim();
+/** Parts named in a free text, sorted ("U7000, u7001" = "U7001 U7000"). */
+const partSet = (s: string | undefined) => [...new Set(norm(s).split(" ").filter(Boolean))].sort().join(" ");
 
 /** An earlier value of a reading, kept when it changed. */
 export interface HistoryEntry {
@@ -152,9 +171,19 @@ export function compare(reference: Value | undefined, measured: Value | undefine
  * different rule a comparison out.
  */
 export function conditionsFit(a: Conditions | undefined, b: Conditions | undefined, q: Quantity): boolean {
-  if (!a || !b) return true;
+  if (!a && !b) return true;
+  a ??= {};
+  b ??= {};
   const differ = <K extends keyof Conditions>(k: K) => a[k] !== undefined && b[k] !== undefined && a[k] !== b[k];
   if (differ("revision")) return false;
+  // Parts taken off change what a net sees: such a reading only compares with one taken the same way.
+  // (Unknown stays unknown: it is not taken as "complete", but it is not "removed" either.)
+  const offA = a.assembly === "ic-removed" || a.assembly === "parts-removed";
+  const offB = b.assembly === "ic-removed" || b.assembly === "parts-removed";
+  if (offA !== offB) return false;
+  if (offA && offB && a.removed && b.removed && partSet(a.removed) !== partSet(b.removed)) return false;
+  if (a.modules !== undefined && b.modules !== undefined && norm(a.modules) !== norm(b.modules)) return false;
+  if (q !== "voltage" && a.temperature !== undefined && b.temperature !== undefined && Math.abs(a.temperature - b.temperature) > TEMPERATURE_SPAN) return false;
   if (q === "voltage") return !differ("power") && !differ("battery");
   // Diode and resistance readings: probe direction, and the board off (or not) on both sides.
   return !differ("polarity") && !differ("power");
