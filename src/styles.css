@@ -4894,3 +4894,137 @@ body.resizing-rows {
   font-size: 12px;
   font-weight: 600;
 }
+
+/* Interfaces (HDMI, USB-C) and own function groups. */
+.interfaces {
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.interfaces > summary,
+.if-block > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.if-block {
+  margin: 6px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.if-block > summary {
+  font-weight: normal;
+}
+
+.if-table td {
+  vertical-align: top;
+  font-size: 12px;
+}
+
+.if-table td.if-chips {
+  display: table-cell;
+}
+
+.if-table td.if-chips .if-part {
+  margin: 0 3px 3px 0;
+}
+
+.if-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.if-part {
+  font: 11px var(--mono);
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.if-part.if-confirmed,
+.if-part.if-added {
+  border-style: solid;
+  border-color: var(--accent);
+}
+
+.if-part.if-rejected {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+
+.if-part.if-role-protection {
+  color: #ffb74d;
+}
+
+.if-part.if-role-filter {
+  color: #81c784;
+}
+
+.if-part.if-role-ic {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+:root[data-theme="light"] .if-part.if-role-protection {
+  color: #b26a00;
+}
+
+:root[data-theme="light"] .if-part.if-role-filter {
+  color: #2e7d32;
+}
+
+.if-roles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 6px 12px;
+  margin-top: 6px;
+}
+
+.if-role h5 {
+  margin: 4px 0 2px;
+  font-size: 12px;
+}
+
+.if-role ul,
+.if-own {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.if-member {
+  font-size: 12px;
+}
+
+.if-member.if-rejected .part-name {
+  text-decoration: line-through;
+}
+
+.if-tag-confirmed,
+.if-tag-added {
+  color: var(--accent);
+}
+
+.if-add {
+  margin-top: 6px;
+}
+
+.if-add input {
+  flex: 1;
+  min-width: 0;
+}
+
+.if-own-title {
+  margin: 12px 0 4px;
+  font-size: 12px;
+}
+
+.if-own li {
+  margin: 4px 0 8px;
+}

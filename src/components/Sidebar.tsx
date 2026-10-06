@@ -2,6 +2,7 @@ import type { CrossHit } from "./Details";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "./Icons";
 import { Diagnosis } from "./Diagnosis";
+import { Interfaces } from "./Interfaces";
 import { PowerTree } from "./PowerTree";
 import { HiddenParts } from "./HiddenParts";
 import { MultiSelection } from "./MultiSelection";
@@ -381,6 +382,7 @@ export function Sidebar({
       {tab === "diagnose" && (
         <div className="panel scroll">
           <PowerTree model={model} notes={notes} schematicFacts={schematicFacts} onSelect={onSelect} update={notes ? updateNotes : undefined} />
+          <Interfaces model={model} notes={notes} update={notes ? updateNotes : undefined} onSelect={onSelect} marked={marked} onMarkParts={onMarkParts} multiParts={multiParts} />
           <Diagnosis model={model} notes={notes} update={updateNotes} onSelect={onSelect} schematicFacts={schematicFacts} selection={selection} />
         </div>
       )}
