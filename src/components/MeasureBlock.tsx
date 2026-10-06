@@ -28,6 +28,8 @@ interface Props {
   title?: string;
 }
 
+const STATUS_MARK: Record<string, string> = { ok: "✓", deviation: "✗", mismatch: "≠" };
+
 const LABEL: Record<Quantity, MessageKey> = {
   diode: "measure.diode",
   voltage: "measure.voltage",
@@ -112,7 +114,7 @@ export function ValueInput({
       data-quantity={quantity}
       className={`value-input${invalid ? " invalid" : ""}${status ? ` status-${status}` : ""}`}
       value={text}
-      aria-label={label}
+      aria-label={status ? `${label}, ${t(`measure.status.${status}`)}` : label}
       aria-invalid={invalid}
       data-bind={bind}
       title={invalid ? t("measure.invalid") : status ? t(`measure.status.${status}`) : undefined}
@@ -133,10 +135,22 @@ export function ValueInput({
       }}
     />
   );
-  if (!meter.connected) return input;
+  // The comparison as a sign too, not by color alone.
+  const mark = status ? STATUS_MARK[status] : "";
+  const field = mark ? (
+    <span className="value-field">
+      {input}
+      <span className={`status-mark status-${status}`} aria-hidden="true">
+        {mark}
+      </span>
+    </span>
+  ) : (
+    input
+  );
+  if (!meter.connected) return field;
   return (
     <span className="value-with-meter">
-      {input}
+      {field}
       <button
         className="tool icon-only meter-take"
         disabled={meter.busy}

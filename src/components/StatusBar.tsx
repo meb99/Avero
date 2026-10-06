@@ -15,6 +15,8 @@ interface Props {
   settings: Settings;
   /** What the board's data holds (see dataScope). */
   scope?: ScopeRow[] | null;
+  /** What is active: the repair case (null: reference only), the side, the layout chosen. */
+  context?: { caseTitle?: string | null; side: string; layout?: string | null };
   onReport(): void;
 }
 
@@ -39,7 +41,7 @@ function copperChip(scope: ScopeRow[] | null | undefined): ScopeRow | undefined 
   return scope?.find((r) => r.id === "traces");
 }
 
-export function StatusBar({ model, source, schematic, loading, settings, scope, onReport }: Props) {
+export function StatusBar({ model, source, schematic, loading, settings, scope, context, onReport }: Props) {
   const { t } = useI18n();
   const online = useOnline();
   const b = model?.board;
@@ -83,6 +85,17 @@ export function StatusBar({ model, source, schematic, loading, settings, scope, 
         </span>
       )}
       <span className="status-spacer" />
+      {!loading && b && context && (
+        <span className="status-context" title={t("status.contextHint")}>
+          {context.caseTitle !== undefined && (
+            <span className={context.caseTitle ? "status-case" : "muted"}>
+              {context.caseTitle ? t("status.case", { title: context.caseTitle }) : t("status.referenceOnly")}
+            </span>
+          )}
+          <span>{t(`status.side.${context.side}` as MessageKey)}</span>
+          {context.layout && <span className="muted">{t("status.layout", { name: context.layout })}</span>}
+        </span>
+      )}
       {settings.localMode ? (
         <span className="status-local" title={t("local.statusHint")}>
           {t("local.status")}

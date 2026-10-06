@@ -1544,11 +1544,32 @@ export function App() {
     setSettings((s) => (s.showSidebar && !s.sidebarCollapsed ? s : { ...s, showSidebar: true, sidebarCollapsed: false }));
     setListFocus({ listId: list.id, index: i, n });
   };
+  /**
+   * Puts the keyboard into the value field of what is selected: the case's
+   * column (the reference without a case), the quantity shown at the pads or
+   * else diode, the point's own field for a pin or test point.
+   */
+  const enterValue = () => {
+    if (!model || selection.kind === "none" || selection.kind === "part") return setToast(t("enter.nothing"));
+    const n = Date.now();
+    setTabRequest({ tab: "details", n });
+    setSettings((s) => (s.showSidebar && !s.sidebarCollapsed ? s : { ...s, showSidebar: true, sidebarCollapsed: false }));
+    const q = padQuantity !== "off" ? padQuantity : "diode";
+    window.setTimeout(() => {
+      const block = document.querySelector(".details .measure");
+      const fields = block?.querySelectorAll<HTMLInputElement>(`input.value-input[data-quantity="${q}"]`);
+      const field = fields?.[fields.length - 1];
+      if (field) field.focus();
+      else setToast(t("enter.noField"));
+    }, 60);
+  };
   const runShortcut = (action: ShortcutAction) => {
     const view = viewRef.current;
     switch (action) {
       case "nextPoint":
         return nextListPoint();
+      case "enterValue":
+        return enterValue();
       case "commitNext": {
         // An empty value field with a multimeter connected: its reading goes in first.
         const field = document.activeElement;
@@ -1994,7 +2015,10 @@ export function App() {
         if (preset) applyPreset(preset);
       } else {
         const own = layouts.find((l) => `own:${l.name}` === id);
-        if (own) applyLayout(own);
+        if (own) {
+          applyLayout(own);
+          setLayoutName(own.name);
+        }
       }
     },
     saveLayout: () => void saveLayout(),
@@ -2052,11 +2076,28 @@ export function App() {
       { id: "pad-values", label: t("pad.command"), shortcut: "V", enabled: board, run: cyclePadValues },
       { id: "hide-selected", label: t("hide.command"), shortcut: "H", enabled: board && notesForModel !== null, run: hideSelected },
       { id: "isolate", label: t(isolationFor ? "isolate.end" : "isolate.command"), shortcut: "I", enabled: board, run: toggleIsolation },
+      { id: "enter-value", label: t("keys.enterValue"), shortcut: "E", enabled: board && selection.kind !== "none", run: enterValue },
+      {
+        id: "case-new",
+        label: t("measure.newCase"),
+        enabled: board && notesForModel !== null,
+        run: () => {
+          updateNotes((n) => addCase(n, t("measure.caseTitle", { n: n.cases.length + 1 })));
+          setToast(t("enter.caseMade"));
+        },
+      },
       { id: "grid", label: t(settings.grid ? "grid.off" : "grid.on"), shortcut: "G", enabled: board, run: () => setSettings((s) => ({ ...s, grid: !s.grid })) },
       { id: "origin-selection", label: t("origin.atSelection"), enabled: board && notesForModel !== null && selection.kind !== "none", run: originAtSelection },
       { id: "origin-clear", label: t("origin.clear"), shortcut: "⇧O", enabled: !!boardOrigin, run: clearOrigin },
       ...PRESET_IDS.map((id) => ({ id: `layout-${id}`, label: t("layout.apply", { name: t(`layout.${id}`) }), run: () => applyPreset(id) })),
-      ...layouts.map((l) => ({ id: `layout-own-${l.name}`, label: t("layout.apply", { name: l.name }), run: () => applyLayout(l) })),
+      ...layouts.map((l) => ({
+        id: `layout-own-${l.name}`,
+        label: t("layout.apply", { name: l.name }),
+        run: () => {
+          applyLayout(l);
+          setLayoutName(l.name);
+        },
+      })),
       { id: "layout-save", label: t("layout.save"), run: () => void saveLayout() },
       ...layouts.map((l) => ({ id: `layout-delete-${l.name}`, label: t("layout.delete", { name: l.name }), run: () => deleteLayout(l.name) })),
       {
@@ -2321,6 +2362,8 @@ export function App() {
 
   // --- layouts: panes, their sizes and the sidebar, kept as shares ----------
   const layouts = useMemo(() => parseLayouts(settings.layouts), [settings.layouts]);
+  // The layout last chosen, named in the status bar.
+  const [layoutName, setLayoutName] = useState<string | null>(null);
   const applyLayout = (layout: SavedLayout & { compare?: boolean }) => {
     setShare(layout.share);
     setDockWeights(layout.weights);
@@ -2351,7 +2394,10 @@ export function App() {
       if (!compareModel) toggleCompare();
     } else if (compareModel) setCompareTab(null);
   };
-  const applyPreset = (id: PresetId) => applyLayout(PRESETS[id]);
+  const applyPreset = (id: PresetId) => {
+    applyLayout(PRESETS[id]);
+    setLayoutName(t(`layout.${id}`));
+  };
   /** The arrangement on screen now, under a name. */
   const currentLayout = (name: string): SavedLayout => ({
     name,
@@ -2953,7 +2999,20 @@ export function App() {
           {dragOver && <div className="drop-overlay">{t(dialog === "library" ? "library.dropHere" : "drop.hint")}</div>}
         </main>
 
-        <StatusBar model={model} source={source} schematic={schematic} loading={loading} settings={settings} scope={scope} onReport={() => setDialog("report")} />
+        <StatusBar
+          model={model}
+          source={source}
+          schematic={schematic}
+          loading={loading}
+          settings={settings}
+          scope={scope}
+          context={{
+            caseTitle: notesForModel ? (activeCase(notesForModel)?.title ?? null) : undefined,
+            side: bothSides ? "both" : side,
+            layout: layoutName,
+          }}
+          onReport={() => setDialog("report")}
+        />
         {dialog === "report" && model && <ImportReport model={model} source={source} scope={scope ?? []} onClose={() => setDialog(null)} />}
         {showDiff && model && compareModel && compared && (
           <DiffView

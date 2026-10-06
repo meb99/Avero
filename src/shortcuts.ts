@@ -19,7 +19,8 @@ export type ShortcutAction =
   | "forward"
   | "bookmark"
   | "nextPin"
-  | "prevPin";
+  | "prevPin"
+  | "enterValue";
 
 export const SHORTCUT_ACTIONS: ShortcutAction[] = [
   "nextPoint",
@@ -37,6 +38,7 @@ export const SHORTCUT_ACTIONS: ShortcutAction[] = [
   "bookmark",
   "nextPin",
   "prevPin",
+  "enterValue",
 ];
 
 /** Key names as `keyName` gives them; several keys may share an action. */
@@ -59,6 +61,8 @@ export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string[]> = {
   // Probing a chip pin by pin.
   nextPin: ["."],
   prevPin: [","],
+  // Into the value field of what is selected, without the mouse.
+  enterValue: ["e"],
 };
 
 export type Shortcuts = Partial<Record<ShortcutAction, string[]>>;
