@@ -39,6 +39,8 @@ export interface Settings {
   bothSidesMode: "together" | "separate" | "synced";
   dimUnselected: boolean;
   showVias: boolean;
+  /** A mm or mil grid over the board, through its own origin. */
+  grid: boolean;
   /** Copper tracks, for formats that have them. */
   showTraces: boolean;
   partNames: boolean;
@@ -96,6 +98,7 @@ export const DEFAULT_SETTINGS: Settings = {
   bothSidesMode: "together",
   dimUnselected: true,
   showVias: false,
+  grid: false,
   showTraces: true,
   partNames: true,
   pinNumbers: true,

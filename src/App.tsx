@@ -86,6 +86,7 @@ import {
   type NetStatus,
   setNetKind,
   hideParts,
+  setOrigin,
   showParts,
 } from "./workbench/notes";
 import { MarkerEditor, PinnedLegend } from "./components/Markers";
@@ -372,6 +373,33 @@ export function App() {
     setMultiParts([]);
     setToast(t("hide.done", { names: names.slice(0, 5).join(", ") + (names.length > 5 ? " …" : "") }));
   };
+
+  // The board's own origin (key O at the mouse, ⇧O removes it); coordinates and the grid follow it.
+  const boardOrigin = notesForModel?.origin ?? null;
+  const setOriginAt = (point: Point | null | undefined) => {
+    if (!notesForModel) return;
+    if (!point) return setToast(t("origin.noPoint"));
+    updateNotes((n) => setOrigin(n, { x: point.x, y: point.y }));
+    setToast(t("origin.set"));
+  };
+  const originAtMouse = () => setOriginAt(viewRef.current?.pointUnderCursor() ?? viewRef2.current?.pointUnderCursor());
+  const originAtSelection = () => {
+    if (!model) return;
+    if (selection.kind === "pin") return setOriginAt(model.pins[selection.pin]);
+    if (selection.kind === "testPoint") return setOriginAt(model.testPoints[selection.testPoint]);
+    if (selection.kind === "part") {
+      const b = model.parts[selection.part].bounds;
+      return setOriginAt({ x: b.minX, y: b.minY });
+    }
+    setToast(t("origin.noPoint"));
+  };
+  const clearOrigin = () => {
+    if (!notesForModel?.origin) return;
+    updateNotes((n) => setOrigin(n, undefined));
+    setToast(t("origin.cleared"));
+  };
+  const originKeyRef = useRef({ originAtMouse, clearOrigin });
+  originKeyRef.current = { originAtMouse, clearOrigin };
 
   // Isolation view (key I): only the selected and pinned nets with their
   // parts, tracks and test points; leaving it brings back view and selection.
@@ -1892,6 +1920,7 @@ export function App() {
     addPhoto: () => void addPhoto(),
     togglePhoto: () => setShowPhoto((v) => !v),
     compare: toggleCompare,
+    toggleGrid: () => setSettings((s) => ({ ...s, grid: !s.grid })),
     layout: (id: string) => {
       if (id.startsWith("preset:")) {
         const preset = PRESET_IDS.find((p) => `preset:${p}` === id);
@@ -1956,6 +1985,9 @@ export function App() {
       { id: "pad-values", label: t("pad.command"), shortcut: "V", enabled: board, run: cyclePadValues },
       { id: "hide-selected", label: t("hide.command"), shortcut: "H", enabled: board && notesForModel !== null, run: hideSelected },
       { id: "isolate", label: t(isolationFor ? "isolate.end" : "isolate.command"), shortcut: "I", enabled: board, run: toggleIsolation },
+      { id: "grid", label: t(settings.grid ? "grid.off" : "grid.on"), shortcut: "G", enabled: board, run: () => setSettings((s) => ({ ...s, grid: !s.grid })) },
+      { id: "origin-selection", label: t("origin.atSelection"), enabled: board && notesForModel !== null && selection.kind !== "none", run: originAtSelection },
+      { id: "origin-clear", label: t("origin.clear"), shortcut: "⇧O", enabled: !!boardOrigin, run: clearOrigin },
       ...PRESET_IDS.map((id) => ({ id: `layout-${id}`, label: t("layout.apply", { name: t(`layout.${id}`) }), run: () => applyPreset(id) })),
       ...layouts.map((l) => ({ id: `layout-own-${l.name}`, label: t("layout.apply", { name: l.name }), run: () => applyLayout(l) })),
       { id: "layout-save", label: t("layout.save"), run: () => void saveLayout() },
@@ -2128,6 +2160,15 @@ export function App() {
           break;
         case "i":
           if (model) isolationKeyRef.current();
+          break;
+        case "o":
+          if (model) originKeyRef.current.originAtMouse();
+          break;
+        case "O":
+          if (model) originKeyRef.current.clearOrigin();
+          break;
+        case "g":
+          if (model) setSettings((s) => ({ ...s, grid: !s.grid }));
           break;
         case "Enter": {
           if (drawingRef.current?.kind === "area") {
@@ -2319,6 +2360,8 @@ export function App() {
                     side={splitViews ? "top" : side}
                     dual={bothSides && !splitViews}
                     onViewChange={splitViews && settings.bothSidesMode === "synced" ? (v) => viewRef2.current?.setViewState(v) : undefined}
+                    onCursor={splitViews ? (p) => viewRef2.current?.showGhost(p) : undefined}
+                    origin={boardOrigin}
                     rotation={rotation}
                     selection={selection}
                     settings={settings}
@@ -2462,6 +2505,8 @@ export function App() {
                       onAddPart={addPartToSelection}
                       extraParts={multiSet}
                       onViewChange={settings.bothSidesMode === "synced" ? (v) => viewRef.current?.setViewState(v) : undefined}
+                      onCursor={(p) => viewRef.current?.showGhost(p)}
+                      origin={boardOrigin}
                     />
                   )}
                   </>

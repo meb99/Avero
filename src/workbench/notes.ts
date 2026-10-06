@@ -95,6 +95,8 @@ export interface BoardNotes {
   netKinds?: Record<string, NetKind>;
   /** Places in the documents confirmed or blocked per part, and the parts' other names there. */
   docLinks?: DocLinks;
+  /** The board's own origin (a connector corner, say), in board units. */
+  origin?: { x: number; y: number };
   /** Notes pinned to spots on the board. */
   markers?: BoardMarker[];
   /** Lines, areas and jumpers drawn on the board. */
@@ -647,6 +649,11 @@ function parseNetKinds(value: unknown): Record<string, NetKind> | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
+/** Sets (or, with `undefined`, removes) the board's own origin. */
+export function setOrigin(notes: BoardNotes, origin: { x: number; y: number } | undefined): BoardNotes {
+  return { ...notes, origin, updated: now() };
+}
+
 /** Changes the corrections of document matches. */
 export function updateDocLinks(notes: BoardNotes, change: (all: DocLinks | undefined) => DocLinks | undefined): BoardNotes {
   return { ...notes, docLinks: change(notes.docLinks), updated: now() };
@@ -814,6 +821,7 @@ export function parseNotes(json: string): BoardNotes | null {
       netNames: parseNetNames(d.netNames),
       netKinds: parseNetKinds(d.netKinds),
       docLinks: parseDocLinks(d.docLinks),
+      origin: isRecord(d.origin) && Number.isFinite(d.origin.x) && Number.isFinite(d.origin.y) ? { x: Number(d.origin.x), y: Number(d.origin.y) } : undefined,
       hidden: parseHidden(d.hidden),
       markers: parseMarkers(d.markers),
       drawings: parseDrawings(d.drawings),
@@ -887,6 +895,7 @@ export function mergeNotes(mine: BoardNotes, theirs: BoardNotes): BoardNotes {
     netNames: theirs.netNames || mine.netNames ? { ...theirs.netNames, ...mine.netNames } : undefined,
     netKinds: theirs.netKinds || mine.netKinds ? { ...theirs.netKinds, ...mine.netKinds } : undefined,
     docLinks: theirs.docLinks || mine.docLinks ? { ...theirs.docLinks, ...mine.docLinks } : undefined,
+    origin: mine.origin ?? theirs.origin,
     hidden: mine.hidden ?? theirs.hidden,
     markers: mergeMarkers(mine.markers, theirs.markers),
     drawings: mergeById(mine.drawings, theirs.drawings),

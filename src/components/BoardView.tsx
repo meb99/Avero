@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from "react";
 import type { BoardModel, Hit, ViewSide } from "../core/board";
 import { Camera, lerpCamera } from "../core/camera";
+import { drawGrid, drawOrigin } from "../render/grid";
 import { bottomCamera, boundsToLayout, dualLayout, fromLayout, sideAt, toLayout, type DualLayout } from "../core/dualView";
 import type { Bounds, Point, Selection } from "../core/types";
 import { useI18n } from "../i18n";
@@ -41,6 +42,10 @@ export interface BoardViewHandle {
   viewState(): ViewState;
   /** Moves the view without reporting it back through `onViewChange` (for syncing two views). */
   setViewState(view: ViewState): void;
+  /** The board point under the mouse, on the pin, test point or part corner there when close. */
+  pointUnderCursor(): Point | null;
+  /** The mouse in the other side's view, shown here at the same spot of the board (set without re-rendering). */
+  showGhost(point: Point | null): void;
 }
 
 interface Props {
@@ -80,6 +85,10 @@ interface Props {
   draft?: DrawingMark | null;
   /** Reports pans and zooms, for a second view that follows this one. */
   onViewChange?(view: ViewState): void;
+  /** Reports the board point under the mouse (null when it leaves), for the other side's view. */
+  onCursor?(point: Point | null): void;
+  /** The board's own origin: coordinates are read from it, the grid runs through it. */
+  origin?: Point | null;
   /**
    * While set, clicks pick board points instead of selecting; the point
    * snaps to the pin or test point under the cursor.
@@ -148,6 +157,8 @@ export function BoardView({
   drawings = NO_DRAWINGS,
   draft = null,
   onViewChange,
+  onCursor,
+  origin = null,
   onPointPick,
   onSelect,
   onAddPart,
@@ -186,10 +197,41 @@ export function BoardView({
     draft,
     /** Board point under the cursor, for the draft's last segment. */
     cursorWorld: null as Point | null,
+    /** Side the cursor is over (both sides shown: the other one gets the opposite cursor). */
+    cursorSide: null as ViewSide | null,
+    ghost: null as Point | null,
+    origin: null as Point | null,
     highlightedNet: undefined as number | undefined,
   });
   const [hover, setHover] = useState<Hover | null>(null);
   const [cursor, setCursor] = useState<Point | null>(null);
+  const ghostRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * The opposite cursor: where the mouse is on the board, shown in the other
+   * side's drawing (the second view, or the other half with both sides
+   * shown). Board coordinates are the same on both sides, so mirroring and
+   * rotation are the cameras' business and it always marks the same spot.
+   */
+  const placeGhost = useCallback(() => {
+    const el = ghostRef.current;
+    if (!el) return;
+    const s = stateRef.current;
+    const cam = cameraRef.current;
+    let at: Point | null = null;
+    if (s.dual && s.cursorWorld && s.cursorSide) {
+      const other: ViewSide = s.cursorSide === "top" ? "bottom" : "top";
+      at = cam.toScreen(toLayout(s.cursorWorld, other, s.layout));
+    } else if (!s.dual && s.ghost) {
+      at = cam.toScreen(s.ghost);
+    }
+    if (!at || at.x < 0 || at.y < 0 || at.x > cam.width || at.y > cam.height) {
+      el.style.display = "none";
+      return;
+    }
+    el.style.display = "block";
+    el.style.transform = `translate(${at.x}px, ${at.y}px)`;
+  }, []);
   const [glError, setGlError] = useState(false);
   const [rendererVersion, setRendererVersion] = useState(0);
   const initialViewRef = useRef(initialView);
@@ -342,13 +384,17 @@ export function BoardView({
         s.padValues,
       ),
     );
+    // Grid and origin; with both sides in one view the grid would cross from one into the other.
+    if (s.settings.grid && !s.dual) drawGrid(labels, views[0].camera, s.settings.units, s.origin, s.palette.background[0] < 128, dprRef.current);
+    if (s.origin) for (const v of views) drawOrigin(labels, s.dual ? v.camera : cameraRef.current, s.origin, dprRef.current);
     for (const v of views) {
       const draftShown = s.draft && s.cursorWorld && s.draft.side === v.side ? { ...s.draft, points: [...s.draft.points, s.cursorWorld] } : s.draft;
       drawDrawings(labels, v.camera, s.drawings, v.side, dprRef.current, draftShown);
       drawMarkers(labels, v.camera, s.markers, v.side, s.palette, dprRef.current, s.activeMarker, !s.dual && s.settings.ghostOtherSide);
     }
     drawOverview();
-  }, [sideViews, drawOverview]);
+    placeGhost();
+  }, [sideViews, drawOverview, placeGhost]);
 
   // The last view reported or set from outside, so a synced pair does not echo.
   const lastView = useRef<string>("");
@@ -452,6 +498,32 @@ export function BoardView({
         const { centerX, centerY, scale } = cameraRef.current;
         return { centerX, centerY, scale };
       },
+      showGhost(point: Point | null) {
+        stateRef.current.ghost = point;
+        placeGhost();
+      },
+      pointUnderCursor() {
+        const s = stateRef.current;
+        const world = s.cursorWorld;
+        const side = s.cursorSide;
+        if (!world || !side) return null;
+        const m = s.model;
+        const hit = m.hitTest(world, side, 6 / cameraRef.current.scale, true, false, s.hiddenLayers);
+        if (hit?.kind === "pin") return { x: m.pins[hit.pin].x, y: m.pins[hit.pin].y };
+        if (hit?.kind === "testPoint") return { x: m.testPoints[hit.testPoint].x, y: m.testPoints[hit.testPoint].y };
+        if (hit?.kind === "part") {
+          // The nearest corner of the part (a connector's edge, say).
+          const b = m.parts[hit.part].bounds;
+          const corners = [
+            { x: b.minX, y: b.minY },
+            { x: b.maxX, y: b.minY },
+            { x: b.minX, y: b.maxY },
+            { x: b.maxX, y: b.maxY },
+          ];
+          return corners.reduce((best, c) => (Math.hypot(c.x - world.x, c.y - world.y) < Math.hypot(best.x - world.x, best.y - world.y) ? c : best));
+        }
+        return world;
+      },
       setViewState(view: ViewState) {
         cancelAnimationFrame(animRef.current);
         Object.assign(cameraRef.current, view);
@@ -459,7 +531,7 @@ export function BoardView({
         requestDraw();
       },
     }),
-    [draw, flyTo, requestDraw, allBounds],
+    [draw, flyTo, requestDraw, allBounds, placeGhost],
   );
 
   // Renderer lifetime.
@@ -628,6 +700,14 @@ export function BoardView({
     requestDraw();
   }, [measured, requestDraw]);
 
+  const onCursorRef = useRef(onCursor);
+  onCursorRef.current = onCursor;
+
+  useEffect(() => {
+    stateRef.current.origin = origin;
+    requestDraw();
+  }, [origin, requestDraw]);
+
   useEffect(() => {
     stateRef.current.partValues = partValues;
     requestDraw();
@@ -736,12 +816,15 @@ export function BoardView({
       }
     }
 
-    const world = placeAt(p).world;
+    const at = placeAt(p);
+    const world = at.world;
     setCursor(world);
-    if (stateRef.current.draft) {
-      stateRef.current.cursorWorld = world;
-      requestDraw();
-    }
+    const st = stateRef.current;
+    st.cursorWorld = world;
+    st.cursorSide = at.side;
+    if (st.draft) requestDraw();
+    else placeGhost();
+    onCursorRef.current?.(world);
     if (e.pointerType === "mouse") {
       const text = describe(hitAt(p));
       setHover(text ? { x: p.x, y: p.y, text } : null);
@@ -859,6 +942,10 @@ export function BoardView({
       onPointerLeave={() => {
         setHover(null);
         setCursor(null);
+        stateRef.current.cursorWorld = null;
+        stateRef.current.cursorSide = null;
+        placeGhost();
+        onCursorRef.current?.(null);
       }}
       onDoubleClick={onDoubleClick}
       onWheel={onWheel}
@@ -890,9 +977,11 @@ export function BoardView({
       )}
       {cursor && (
         <div className="board-cursor">
-          {formatLength(cursor.x, settings.units)} · {formatLength(cursor.y, settings.units)}
+          {origin ? "Δ " : ""}
+          {formatLength(cursor.x - (origin?.x ?? 0), settings.units)} · {formatLength(cursor.y - (origin?.y ?? 0), settings.units)}
         </div>
       )}
+      <div ref={ghostRef} className="board-ghost-cursor" aria-hidden="true" />
       {/* Bars and buttons over the board: their clicks are not board clicks. */}
       <div className="board-overlays" onPointerDown={stop} onPointerUp={stop} onDoubleClick={stop} onWheel={stop}>
         {children}

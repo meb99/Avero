@@ -32,6 +32,7 @@ export interface MenuActions {
   popOutSchematic(): void;
   toggleSidebar(): void;
   toggleRatsnest(): void;
+  toggleGrid(): void;
   addPhoto(): void;
   togglePhoto(): void;
   compare(): void;
@@ -193,6 +194,8 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
         item("zoom-out", t("menu.zoomOut"), (a) => a.zoomOut(), "CmdOrCtrl+-"),
         SEP,
         item("ratsnest", t("menu.ratsnest"), (a) => a.toggleRatsnest(), "CmdOrCtrl+Shift+R"),
+        // G is handled by the web view (a bare letter is no menu shortcut).
+        item("grid", `${t("menu.grid")}  G`, (a) => a.toggleGrid()),
         item("schematic", t("menu.schematic"), (a) => a.toggleSchematic(), "CmdOrCtrl+E"),
         item("schematic-window", t("menu.popOut"), (a) => a.popOutSchematic()),
         item("sidebar", t("menu.sidebar"), (a) => a.toggleSidebar(), "CmdOrCtrl+I"),

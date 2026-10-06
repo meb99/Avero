@@ -4404,3 +4404,34 @@ body.resizing-rows {
 .mapping-aliases .pin-chip .link {
   margin-left: 6px;
 }
+
+/* Where the mouse is on the board, shown in the other side's drawing. */
+.board-ghost-cursor {
+  position: absolute;
+  left: -13px;
+  top: -13px;
+  width: 26px;
+  height: 26px;
+  pointer-events: none;
+  display: none;
+  z-index: 2;
+}
+.board-ghost-cursor::before,
+.board-ghost-cursor::after {
+  content: "";
+  position: absolute;
+  background: #ff4081;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+.board-ghost-cursor::before {
+  left: 12px;
+  top: 0;
+  width: 2px;
+  height: 26px;
+}
+.board-ghost-cursor::after {
+  top: 12px;
+  left: 0;
+  height: 2px;
+  width: 26px;
+}
