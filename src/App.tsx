@@ -496,16 +496,19 @@ export function App() {
   };
 
   /** Value shown under a part's name on the board: the schematic's when it has one. */
+  const ownParts = notesForModel?.ownParts;
   const partValues = useMemo(() => {
     const out = new Map<number, string>();
-    if (!schematicFacts || !model) return out;
+    if (!model) return out;
     model.parts.forEach((p, i) => {
-      const f = schematicFacts.parts.get(p.name.toUpperCase());
-      const text = [f?.value ?? f?.partNumber, f?.value && f.rating].filter(Boolean).join(" ");
+      // An own entry first, then what the schematic's text says.
+      const own = ownParts?.[p.name.toUpperCase()]?.value;
+      const f = schematicFacts?.parts.get(p.name.toUpperCase());
+      const text = own ?? [f?.value ?? f?.partNumber, f?.value && f.rating].filter(Boolean).join(" ");
       if (text) out.set(i, text);
     });
     return out;
-  }, [schematicFacts, model]);
+  }, [schematicFacts, model, ownParts]);
 
   // --- board photos ----------------------------------------------------------
 

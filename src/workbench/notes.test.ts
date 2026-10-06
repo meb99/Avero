@@ -17,6 +17,8 @@ import {
   removeMarker,
   renameNet,
   setNetKind,
+  setOwnPart,
+  setOwnPin,
   setPointValue,
   pointsOnNet,
   spread,
@@ -345,5 +347,19 @@ describe("conditions from older files", () => {
       referenceConditions: { assembly: "ic-removed", removed: "U7000", temperature: 24, modules: "display", range: "2V", leadsNulled: true, bogus: 1 },
     });
     expect(parseNotes(json)!.referenceConditions).toEqual({ assembly: "ic-removed", removed: "U7000", temperature: 24, modules: "display", range: "2V", leadsNulled: true });
+  });
+});
+
+describe("own facts over the file's", () => {
+  it("are kept apart, tidied and removable", () => {
+    let n = parseNotes(JSON.stringify({ version: 1, key: "B", reference: {}, cases: [] }))!;
+    n = setOwnPart(n, "u7", { value: " 10µF ", package: "", source: "Schaltplan S. 3" });
+    expect(n.ownParts).toEqual({ U7: { value: "10µF", source: "Schaltplan S. 3" } });
+    n = setOwnPin(n, "U7.GND#2", { label: "PGND" });
+    const again = parseNotes(JSON.stringify(n))!;
+    expect(again.ownParts).toEqual(n.ownParts);
+    expect(again.ownPins).toEqual({ "U7.GND#2": { label: "PGND" } });
+    expect(setOwnPart(again, "U7", undefined).ownParts).toBeUndefined();
+    expect(setOwnPin(again, "U7.GND#2", { label: "  " }).ownPins).toBeUndefined();
   });
 });

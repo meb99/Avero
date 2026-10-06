@@ -16,12 +16,13 @@ import type { NetKind, Selection, Side } from "../core/types";
 import { formatLength, formatSize } from "../format";
 import { useI18n, type MessageKey } from "../i18n";
 import type { Settings } from "../settings";
-import { activeCase, addDrawing, readingsFor, updateDocLinks, type BoardNotes } from "../workbench/notes";
+import { activeCase, addDrawing, readingsFor, setOwnPart, setOwnPin, updateDocLinks, type BoardNotes } from "../workbench/notes";
+import { OwnPartInfo, OwnPinInfo } from "./OwnInfo";
 import { jumperTargets } from "../core/jumper";
 import { datasheetsFor, partNumbers, type Datasheet } from "../workbench/datasheets";
 import { formatValue } from "../workbench/measure";
 import { MeasureBlock, NetPoints, PointMeasureBlock } from "./MeasureBlock";
-import { findPoint, pointLabel, pointOf } from "../core/points";
+import { findPoint, pinKey, pointLabel, pointOf } from "../core/points";
 
 interface Props {
   model: BoardModel;
@@ -457,7 +458,11 @@ export function Details({
           <header className="details-head">
             <span className="details-type">{t("details.part")}</span>
             <h2>{part.name}</h2>
-            {part.device && <p className="details-device">{part.device}</p>}
+            {part.device && (
+              <p className="details-device">
+                {part.device} <span className="src-tag" title={t("own.fileHint")}>{t("own.fileTag")}</span>
+              </p>
+            )}
           </header>
           {part.estimated && <p className="muted estimated-note">{t("details.estimated")}</p>}
           <div className="part-actions">
@@ -546,6 +551,9 @@ export function Details({
               </button>
             </section>
           )}
+          {notes && (
+            <OwnPartInfo info={notes.ownParts?.[part.name.toUpperCase()]} onSave={(info) => updateNotes((n) => setOwnPart(n, part.name, info))} />
+          )}
           {obdValues.length > 0 && (
             <section className="details-section obd">
               <h3>
@@ -584,7 +592,15 @@ export function Details({
                       <td>
                         <span className={`net-chip kind-${net.kind}`}>{net.name}</span>
                       </td>
-                      <td className="muted">{pin.name ?? ""}</td>
+                      <td className="muted">
+                        {notes?.ownPins?.[pinKey(model, index)]?.label ? (
+                          <span className="own-pin-label" title={t("own.tag")}>
+                            {notes.ownPins[pinKey(model, index)].label}
+                          </span>
+                        ) : (
+                          (pin.name ?? "")
+                        )}
+                      </td>
                       {pinCheck && pinCheck.byPin.size > 0 && <PinFunction pin={pinCheck.byPin.get(index)} />}
                       {(() => {
                         const d = diodeOf(pin.net);
@@ -695,6 +711,9 @@ export function Details({
               </section>
             );
           })()}
+          {notes && (
+            <OwnPinInfo info={notes.ownPins?.[pinKey(model, selection.pin)]} onSave={(info) => updateNotes((n) => setOwnPin(n, pinKey(model, selection.pin), info))} />
+          )}
           {hits([part.name], mapping(part.name, { number: pin.number, nets: [...new Set([net.name, model.fileNetName(pin.net)])] }))}
           {netMembers(pin.net, selection.pin)}
         </div>

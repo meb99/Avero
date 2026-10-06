@@ -30,6 +30,25 @@ export interface RepairCase {
   good?: boolean;
 }
 
+/**
+ * Own facts about a part, laid over the file's (never changing them): a
+ * value, package, function name, a note, and where it comes from.
+ */
+export interface OwnPart {
+  value?: string;
+  package?: string;
+  function?: string;
+  note?: string;
+  source?: string;
+}
+
+/** Own facts about a pin: a name for it (VIN, EN, PGOOD), a note, a source. */
+export interface OwnPin {
+  label?: string;
+  note?: string;
+  source?: string;
+}
+
 /** Fields of a case that are edited as a whole. */
 export type CaseFields = Partial<Pick<RepairCase, "title" | "notes" | "status" | "device" | "serial" | "customer" | "photos">>;
 
@@ -102,6 +121,9 @@ export interface BoardNotes {
   origin?: { x: number; y: number };
   /** Limits set by hand per net or point, with their source (a datasheet, the schematic). */
   limits?: Limits;
+  /** Own facts per part (upper-case name) and per pin (pin id, see pinKey), over the file's. */
+  ownParts?: Record<string, OwnPart>;
+  ownPins?: Record<string, OwnPin>;
   /** Notes pinned to spots on the board. */
   markers?: BoardMarker[];
   /** Lines, areas and jumpers drawn on the board. */
@@ -672,6 +694,43 @@ export function setCaseGood(notes: BoardNotes, id: string, good: boolean): Board
   return { ...notes, cases: notes.cases.map((c) => (c.id === id ? { ...c, good: good || undefined } : c)), updated: now() };
 }
 
+/** Own facts with only the string fields given, empty ones dropped. */
+function parseOwn<T extends object>(value: unknown, fields: (keyof T & string)[]): Record<string, T> | undefined {
+  if (!isRecord(value)) return undefined;
+  const out: Record<string, T> = {};
+  for (const [key, v] of Object.entries(value)) {
+    if (!isRecord(v)) continue;
+    const entry: Record<string, string> = {};
+    for (const f of fields) if (typeof v[f] === "string" && (v[f] as string).trim()) entry[f] = (v[f] as string).trim();
+    if (Object.keys(entry).length) out[key] = entry as T;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+const tidyOwn = <T extends object>(info: T | undefined): T | undefined => {
+  if (!info) return undefined;
+  const out = Object.fromEntries(Object.entries(info).filter(([, v]) => typeof v === "string" && v.trim()).map(([k, v]) => [k, (v as string).trim()]));
+  return Object.keys(out).length ? (out as T) : undefined;
+};
+
+/** Sets a part's own facts; `undefined` (or all empty) goes back to the file's. */
+export function setOwnPart(notes: BoardNotes, part: string, info: OwnPart | undefined): BoardNotes {
+  const all = { ...notes.ownParts };
+  const clean = tidyOwn(info);
+  if (clean) all[part.toUpperCase()] = clean;
+  else delete all[part.toUpperCase()];
+  return { ...notes, ownParts: Object.keys(all).length ? all : undefined, updated: now() };
+}
+
+/** Sets a pin's own facts (by pin id); `undefined` (or all empty) removes them. */
+export function setOwnPin(notes: BoardNotes, pin: string, info: OwnPin | undefined): BoardNotes {
+  const all = { ...notes.ownPins };
+  const clean = tidyOwn(info);
+  if (clean) all[pin] = clean;
+  else delete all[pin];
+  return { ...notes, ownPins: Object.keys(all).length ? all : undefined, updated: now() };
+}
+
 /** Sets (or, with `undefined`, removes) the board's own origin. */
 export function setOrigin(notes: BoardNotes, origin: { x: number; y: number } | undefined): BoardNotes {
   return { ...notes, origin, updated: now() };
@@ -852,6 +911,8 @@ export function parseNotes(json: string): BoardNotes | null {
       netKinds: parseNetKinds(d.netKinds),
       docLinks: parseDocLinks(d.docLinks),
       limits: parseLimits(d.limits),
+      ownParts: parseOwn(d.ownParts, ["value", "package", "function", "note", "source"]),
+      ownPins: parseOwn(d.ownPins, ["label", "note", "source"]),
       origin: isRecord(d.origin) && Number.isFinite(d.origin.x) && Number.isFinite(d.origin.y) ? { x: Number(d.origin.x), y: Number(d.origin.y) } : undefined,
       hidden: parseHidden(d.hidden),
       markers: parseMarkers(d.markers),
@@ -928,6 +989,8 @@ export function mergeNotes(mine: BoardNotes, theirs: BoardNotes): BoardNotes {
     docLinks: theirs.docLinks || mine.docLinks ? { ...theirs.docLinks, ...mine.docLinks } : undefined,
     origin: mine.origin ?? theirs.origin,
     limits: theirs.limits || mine.limits ? { ...theirs.limits, ...mine.limits } : undefined,
+    ownParts: theirs.ownParts || mine.ownParts ? { ...theirs.ownParts, ...mine.ownParts } : undefined,
+    ownPins: theirs.ownPins || mine.ownPins ? { ...theirs.ownPins, ...mine.ownPins } : undefined,
     hidden: mine.hidden ?? theirs.hidden,
     markers: mergeMarkers(mine.markers, theirs.markers),
     drawings: mergeById(mine.drawings, theirs.drawings),

@@ -4531,3 +4531,38 @@ body.resizing-rows {
   color: var(--accent);
   font-weight: 600;
 }
+
+/* Where a fact comes from: the file, an own entry, the PDF. */
+.src-tag {
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 0 5px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  vertical-align: middle;
+}
+.src-tag.src-own {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.own-pin-label {
+  color: var(--accent);
+}
+.own-form {
+  display: grid;
+  gap: 6px;
+}
+.own-form label {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.own-row {
+  display: contents;
+}
+.own-info {
+  margin-bottom: 8px;
+}

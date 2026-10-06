@@ -13,11 +13,30 @@ export interface MeasurePoint {
   net: number;
 }
 
+/**
+ * A pin's id: "U7000.21", and where a part has several pins of the same
+ * name ("GND", "NC") the occurrence after it, "U7.GND#2", so each stays
+ * addressable. Pins with unique names keep the plain form.
+ */
+export function pinKey(model: BoardModel, i: number): string {
+  const pin = model.pins[i];
+  const part = model.parts[pin.part];
+  let k = 0;
+  let total = 0;
+  for (let j = part.firstPin; j < part.firstPin + part.pinCount; j++) {
+    if (model.pins[j].number !== pin.number) continue;
+    total++;
+    if (j <= i) k++;
+  }
+  const label = model.pinLabel(i);
+  return total > 1 ? `${label}#${k}` : label;
+}
+
 export function pointOf(model: BoardModel, sel: Selection): MeasurePoint | undefined {
   if (sel.kind === "pin") {
     const pin = model.pins[sel.pin];
-    const label = model.pinLabel(sel.pin);
-    return { id: label, label, net: pin.net };
+    const id = pinKey(model, sel.pin);
+    return { id, label: id, net: pin.net };
   }
   if (sel.kind === "testPoint") {
     const tp = model.testPoints[sel.testPoint];
@@ -41,11 +60,22 @@ export function findPoint(model: BoardModel, id: string): Selection | undefined 
     const i = model.testPoints.findIndex((t) => Math.round(t.x) === x && Math.round(t.y) === y);
     return i >= 0 ? { kind: "testPoint", testPoint: i } : undefined;
   }
-  const dot = id.lastIndexOf(".");
+  const [plain, nth] = id.split("#");
+  const dot = plain.lastIndexOf(".");
   if (dot <= 0) return undefined;
-  const part = model.findPart(id.slice(0, dot));
+  const part = model.findPart(plain.slice(0, dot));
   if (part === undefined) return undefined;
-  const pin = model.findPin(part, id.slice(dot + 1));
+  const number = plain.slice(dot + 1);
+  if (nth !== undefined) {
+    // The n-th pin of that name.
+    const p = model.parts[part];
+    let k = 0;
+    for (let j = p.firstPin; j < p.firstPin + p.pinCount; j++) {
+      if (model.pins[j].number === number && ++k === Number(nth)) return { kind: "pin", pin: j };
+    }
+    return undefined;
+  }
+  const pin = model.findPin(part, number);
   return pin === undefined ? undefined : { kind: "pin", pin };
 }
 
