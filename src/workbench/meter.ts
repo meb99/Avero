@@ -155,3 +155,38 @@ export const meterPorts = () => invoke<PortInfo[]>("meter_ports");
 
 /** Event a value field listens for: put this meter reading in. */
 export const METER_VALUE_EVENT = "avero-meter-value";
+
+/** Readings in a row that must agree before a value counts as settled. */
+export const STABLE_COUNT = 3;
+
+/**
+ * Whether the last readings show a settled display: the last
+ * `STABLE_COUNT` all OL, or all numbers within 1 % of each other (at least
+ * a small absolute step for readings near zero). A display still moving is
+ * never taken as the final value.
+ */
+export function isStable(values: readonly Value[], quantity: Quantity): boolean {
+  if (values.length < STABLE_COUNT) return false;
+  const last = values.slice(-STABLE_COUNT);
+  if (last.every((v) => v === "OL")) return true;
+  if (last.some((v) => v === "OL")) return false;
+  const nums = last as number[];
+  const lo = Math.min(...nums);
+  const hi = Math.max(...nums);
+  const step = { diode: 0.003, voltage: 0.01, resistance: 0.5 }[quantity];
+  return hi - lo <= Math.max(Math.abs(hi) * 0.01, step);
+}
+
+/**
+ * Reads until the display settles (see isStable), at most `tries` times;
+ * `stable: false` with the last reading when it does not.
+ */
+export async function readStable(quantity: Quantity, tries = 10, pauseMs = 250): Promise<{ value: Value; stable: boolean }> {
+  const seen: Value[] = [];
+  for (let i = 0; i < tries; i++) {
+    seen.push(await readMeter(quantity));
+    if (isStable(seen, quantity)) return { value: seen[seen.length - 1], stable: true };
+    await new Promise((r) => setTimeout(r, pauseMs));
+  }
+  return { value: seen[seen.length - 1], stable: false };
+}

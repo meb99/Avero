@@ -4692,3 +4692,88 @@ body.resizing-rows {
 .cam-hints .cam-moved {
   background: color-mix(in srgb, #e6a100 40%, var(--surface));
 }
+
+/* Bench mode: large controls over the board, for one hand or a pedal. */
+.bench-bar {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--surface) 95%, transparent);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  color: var(--text);
+}
+.bench-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.bench-spacer {
+  flex: 1;
+}
+.bench-mode {
+  display: inline-flex;
+  gap: 4px;
+}
+.bench-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.bench-point {
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+}
+.bench-label {
+  font: 700 22px var(--mono, ui-monospace, monospace);
+}
+.bench-q {
+  color: var(--text-muted);
+}
+.bench-input {
+  font-size: 22px;
+  padding: 8px 12px;
+  width: 240px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2, var(--surface));
+  color: var(--text);
+}
+.bench-button {
+  font-size: 16px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.bench-button.primary {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+.bench-message {
+  margin: 8px 0 0;
+  font-size: 15px;
+}
+.meter-unstable {
+  font-size: 11px;
+  margin-left: 4px;
+}
+.bench-last.status-deviation {
+  color: #e53935;
+  font-weight: 600;
+}
+.bench-last.status-ok {
+  color: #43a047;
+}

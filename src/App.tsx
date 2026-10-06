@@ -15,7 +15,7 @@ import { DiffView } from "./components/DiffView";
 import { DonorView } from "./components/DonorView";
 import { DatasheetPane } from "./components/DatasheetPane";
 import { CameraPane } from "./components/CameraPane";
-import { connectMeter, meterState, METER_VALUE_EVENT, readMeter } from "./workbench/meter";
+import { connectMeter, meterState, METER_VALUE_EVENT, readStable } from "./workbench/meter";
 import type { Quantity } from "./workbench/measure";
 import { newDatasheetId, parseDatasheets, partNumbers, type Datasheet } from "./workbench/datasheets";
 import { CommandPalette } from "./components/CommandPalette";
@@ -63,6 +63,7 @@ import { currentScreens, placeOnScreens } from "./core/windowFrame";
 import { dataScope } from "./core/dataScope";
 import { continuations, parseProjects, projectOf, type DeviceProject } from "./workbench/project";
 import { ProjectDialog } from "./components/ProjectDialog";
+import { BenchBar, type BenchHandle } from "./components/BenchBar";
 import type { Word } from "./schematic/textIndex";
 import { clearRecent, loadRecent, loadSettings, rememberRecent, saveSettings, type DockPane, type SavedLayout, type Settings } from "./settings";
 import { DOCK_ORDER, paneWeights, parseLayouts, PRESETS, PRESET_IDS, sidebarPixels, withLayout, type PresetId } from "./workbench/layouts";
@@ -1565,6 +1566,12 @@ export function App() {
       else setToast(t("enter.noField"));
     }, 60);
   };
+  // The bench mode bar (key W): big controls for the measuring list.
+  const [bench, setBench] = useState(false);
+  const benchRef = useRef<BenchHandle | null>(null);
+  useEffect(() => {
+    if (!bench) benchRef.current = null;
+  }, [bench]);
   const runShortcut = (action: ShortcutAction) => {
     const view = viewRef.current;
     switch (action) {
@@ -1572,15 +1579,28 @@ export function App() {
         return nextListPoint();
       case "enterValue":
         return enterValue();
+      case "benchMode":
+        if (!model || !notesForModel) return;
+        return setBench((b) => !b);
+      case "skipPoint":
+        return benchRef.current?.skip();
+      case "repeatPoint":
+        return benchRef.current?.repeat();
+      case "undoReading":
+        return undoNotes();
       case "commitNext": {
+        // In the bench mode the pedal takes the bench's value.
+        if (benchRef.current) return benchRef.current.commit();
         // An empty value field with a multimeter connected: its reading goes in first.
         const field = document.activeElement;
         const quantity = field instanceof HTMLInputElement && field.classList.contains("value-input") ? (field.dataset.quantity as Quantity | undefined) : undefined;
         if (quantity && meterState().connected && field instanceof HTMLInputElement && !field.value.trim()) {
           // The field may show another net by the time the meter answers: then the value is dropped.
           const bind = field.dataset.bind;
-          void readMeter(quantity).then(
-            (v) => {
+          // Only a settled display is taken; a moving one leaves the field empty and stays on the point.
+          void readStable(quantity).then(
+            ({ value: v, stable }) => {
+              if (!stable) return setToast(t("meter.unstable"));
               if (!field.isConnected || field.dataset.bind !== bind) {
                 setToast(t("meter.moved"));
                 return;
@@ -2130,6 +2150,7 @@ export function App() {
       { id: "isolate", label: t(isolationFor ? "isolate.end" : "isolate.command"), shortcut: "I", enabled: board, run: toggleIsolation },
       { id: "project", label: t("project.command"), run: () => setDialog("project") },
       { id: "enter-value", label: t("keys.enterValue"), shortcut: "E", enabled: board && selection.kind !== "none", run: enterValue },
+      { id: "bench", label: t(bench ? "bench.close" : "bench.open"), shortcut: "W", enabled: board && notesForModel !== null, run: () => setBench((b) => !b) },
       {
         id: "case-new",
         label: t("measure.newCase"),
@@ -2588,6 +2609,18 @@ export function App() {
                     extraParts={multiSet}
                   >
                     {placingMarker && <div className="placing-hint">{t("marker.placing")}</div>}
+                    {bench && notesForModel && (
+                      <BenchBar
+                        model={model}
+                        notes={notesForModel}
+                        update={updateNotes}
+                        undo={undoNotes}
+                        tolerance={settings.tolerance}
+                        onSelect={(sel) => select(sel, true)}
+                        onClose={() => setBench(false)}
+                        handle={benchRef}
+                      />
+                    )}
                     {movingDrawing && (
                       <div className="placing-hint drawing-hint">
                         {t("draw.moving")}

@@ -20,7 +20,11 @@ export type ShortcutAction =
   | "bookmark"
   | "nextPin"
   | "prevPin"
-  | "enterValue";
+  | "enterValue"
+  | "benchMode"
+  | "skipPoint"
+  | "repeatPoint"
+  | "undoReading";
 
 export const SHORTCUT_ACTIONS: ShortcutAction[] = [
   "nextPoint",
@@ -39,6 +43,10 @@ export const SHORTCUT_ACTIONS: ShortcutAction[] = [
   "nextPin",
   "prevPin",
   "enterValue",
+  "benchMode",
+  "skipPoint",
+  "repeatPoint",
+  "undoReading",
 ];
 
 /** Key names as `keyName` gives them; several keys may share an action. */
@@ -63,6 +71,11 @@ export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string[]> = {
   prevPin: [","],
   // Into the value field of what is selected, without the mouse.
   enterValue: ["e"],
+  // The bench mode, and what a pedal with more keys does there.
+  benchMode: ["w"],
+  skipPoint: ["F14"],
+  repeatPoint: ["F15"],
+  undoReading: ["F16"],
 };
 
 export type Shortcuts = Partial<Record<ShortcutAction, string[]>>;

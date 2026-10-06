@@ -15,7 +15,7 @@ import {
   type BoardNotes,
   type Target,
 } from "../workbench/notes";
-import { METER_VALUE_EVENT, readMeter, useMeter } from "../workbench/meter";
+import { METER_VALUE_EVENT, readStable, useMeter } from "../workbench/meter";
 import { expectedFor, expectedShort, hasMoreReferences, judgeExpected, parseLimit, setLimit, type Expected } from "../workbench/expected";
 import { askText } from "./Ask";
 
@@ -53,6 +53,7 @@ export function ValueInput({
   /** What the field stands for (board, target, net, quantity): a reading that arrives late goes there, not to whatever the field shows by then. */
   bind?: string;
 }) {
+  const [unstable, setUnstable] = useState(false);
   const { t, lang } = useI18n();
   const shown = formatValue(value, quantity, lang);
   const [text, setText] = useState(shown);
@@ -160,14 +161,25 @@ export function ValueInput({
           // The reading belongs to the field as it was when asked for.
           const to = onChangeRef.current;
           const asked = bindRef.current;
-          void readMeter(quantity).then(
-            (v) => (bindRef.current === asked ? take(v) : to(v)),
+          // Only a settled display counts; a moving one is not taken.
+          void readStable(quantity).then(
+            ({ value, stable }) => {
+              if (!stable) return setUnstable(true);
+              setUnstable(false);
+              if (bindRef.current === asked) take(value);
+              else to(value);
+            },
             () => {},
           );
         }}
       >
         ⇣
       </button>
+      {unstable && (
+        <span className="wb-error meter-unstable" role="status">
+          {t("meter.unstable")}
+        </span>
+      )}
     </span>
   );
 }

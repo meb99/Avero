@@ -1,0 +1,243 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { BoardModel } from "../core/board";
+import { findPoint } from "../core/points";
+import type { Selection } from "../core/types";
+import { useI18n } from "../i18n";
+import { expectedFor, judgeExpected } from "../workbench/expected";
+import { compare, formatValue, parseValue, type Quantity, type Value } from "../workbench/measure";
+import { readStable, useMeter } from "../workbench/meter";
+import { activeCase, listProgress, setPointValue, setValue, type BoardNotes, type ListItem, type Target } from "../workbench/notes";
+
+/** Speaks with a voice of this Mac only (never a voice that goes online); false when there is none. */
+export function speakLocal(text: string, lang: string): boolean {
+  const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined;
+  if (!synth) return false;
+  const voices = synth.getVoices().filter((v) => v.localService);
+  const voice = voices.find((v) => v.lang.toLowerCase().startsWith(lang.toLowerCase())) ?? voices[0];
+  if (!voice) return false;
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.voice = voice;
+  u.lang = voice.lang;
+  synth.speak(u);
+  return true;
+}
+
+export interface BenchHandle {
+  commit(): void;
+  skip(): void;
+  repeat(): void;
+}
+
+interface Props {
+  model: BoardModel;
+  notes: BoardNotes;
+  update(change: (n: BoardNotes) => BoardNotes): void;
+  undo(): void;
+  tolerance: number;
+  onSelect(selection: Selection): void;
+  onClose(): void;
+  /** Set to the bar's actions, for the pedal and keys. */
+  handle?: { current: BenchHandle | null };
+}
+
+/**
+ * The bench mode: the measuring list's next point large, a big field or the
+ * meter to take its value, and skip, repeat and undo – all with the same
+ * pedal or keys. Manual or automatic taking is switched visibly; a meter
+ * value is only taken once the display has settled. On request the point
+ * and the result are read out with a voice of this Mac.
+ */
+export function BenchBar({ model, notes, update, undo, tolerance, onSelect, onClose, handle }: Props) {
+  const { t, lang } = useI18n();
+  const meter = useMeter();
+  const lists = notes.lists ?? [];
+  const list = lists.find((l) => l.id === notes.activeList) ?? lists[0];
+  const [skipped, setSkipped] = useState<Set<number>>(new Set());
+  const [repeatAt, setRepeatAt] = useState<number | null>(null);
+  const [auto, setAuto] = useState(false);
+  const [voice, setVoice] = useState(false);
+  const [text, setText] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  // The value just taken and how it compares, kept while the next point is shown.
+  const [last, setLast] = useState<{ label: string; text: string; verdict?: string } | null>(null);
+  const progress = list ? listProgress(notes, list) : null;
+  const index = useMemo(() => {
+    if (!list || !progress) return -1;
+    if (repeatAt !== null) return repeatAt;
+    return progress.done.findIndex((d, i) => !d && !skipped.has(i));
+  }, [list, progress, skipped, repeatAt]);
+  const item: ListItem | undefined = list && index >= 0 ? list.items[index] : undefined;
+  const c = activeCase(notes);
+  const target: Target = c ? { caseId: c.id } : "reference";
+  const label = item ? (item.label ?? item.point ?? item.net) : "";
+
+  // Arriving at a point: show it on the board, and say it.
+  useEffect(() => {
+    if (!item) return;
+    const net = model.findNet(item.net);
+    const at = item.point ? findPoint(model, item.point) : net !== undefined ? ({ kind: "net", net } as const) : undefined;
+    if (at) onSelect(at);
+    setText("");
+    setMessage(null);
+    if (voice && !speakLocal(`${label}. ${t(`measure.${item.quantity}`)}`, lang)) setMessage(t("bench.noVoice"));
+    // The point is what matters, not each render's copies.
+  }, [list?.id, index]);
+
+  const save = (value: Value) => {
+    if (!item || !list) return;
+    update((n) => (item.point ? setPointValue(n, target, item.point, item.net, item.quantity, value) : setValue(n, target, item.net, item.quantity, value)));
+    // How it compares, for the voice.
+    const e = expectedFor(notes, t("measure.reference"), item.net, item.quantity, undefined, item.point);
+    const verdict = e.groups.length || e.limit ? judgeExpected(e, value, item.quantity, tolerance) : compare(notes.reference[item.net]?.[item.quantity], value, item.quantity, tolerance);
+    const said = `${formatValue(value, item.quantity, lang)}${verdict === "ok" ? `, ${t("bench.ok")}` : verdict === "deviation" ? `, ${t("bench.deviation")}` : ""}`;
+    if (voice) speakLocal(said, lang);
+    setLast({ label, text: formatValue(value, item.quantity, lang), ...(verdict && { verdict }) });
+    setRepeatAt(null);
+  };
+
+  const measure = async (q: Quantity) => {
+    if (!meter.connected) return setMessage(t("bench.noMeter"));
+    const { value, stable } = await readStable(q);
+    if (!stable) {
+      setMessage(t("meter.unstable"));
+      if (voice) speakLocal(t("meter.unstable"), lang);
+      return false;
+    }
+    save(value);
+    return true;
+  };
+
+  const actions: BenchHandle = {
+    commit: () => {
+      if (!item) return;
+      const parsed = text.trim() ? parseValue(text, item.quantity) : null;
+      if (parsed !== null && parsed !== undefined) return save(parsed);
+      void measure(item.quantity);
+    },
+    skip: () => {
+      if (index < 0) return;
+      setSkipped((s) => new Set(s).add(index));
+      setRepeatAt(null);
+    },
+    repeat: () => {
+      if (!progress) return;
+      // The last point done before this one, to measure it again.
+      const before = index < 0 ? progress.done.length : index;
+      for (let i = before - 1; i >= 0; i--) if (progress.done[i]) return setRepeatAt(i);
+    },
+  };
+  if (handle) handle.current = actions;
+
+  // Automatic: the meter is read until the display settles, then on to the next point.
+  const running = useRef(false);
+  useEffect(() => {
+    if (!auto || !item || !meter.connected || running.current) return;
+    let stop = false;
+    running.current = true;
+    void (async () => {
+      while (!stop) {
+        try {
+          if (await measure(item.quantity)) break;
+        } catch {
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      running.current = false;
+    })();
+    return () => {
+      stop = true;
+    };
+  }, [auto, list?.id, index, meter.connected]);
+
+  if (!list) {
+    return (
+      <div className="bench-bar">
+        <p>{t("bench.noList")}</p>
+        <button className="small" onClick={onClose}>
+          {t("bench.close")}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bench-bar" role="region" aria-label={t("bench.title")}>
+      <div className="bench-head">
+        <strong>{t("bench.title")}</strong>
+        <span className="muted">
+          {list.title} · {progress!.count}/{list.items.length}
+          {c ? ` · ${c.title}` : ` · ${t("measure.reference")}`}
+        </span>
+        <span className="bench-spacer" />
+        <div className="bench-mode" role="group" aria-label={t("bench.mode")}>
+          <button className={`small${!auto ? " on" : ""}`} aria-pressed={!auto} onClick={() => setAuto(false)}>
+            {t("bench.manual")}
+          </button>
+          <button className={`small${auto ? " on" : ""}`} aria-pressed={auto} disabled={!meter.connected} title={meter.connected ? t("bench.autoHint") : t("bench.noMeter")} onClick={() => setAuto(true)}>
+            {t("bench.auto")}
+          </button>
+        </div>
+        <label className="check">
+          <input type="checkbox" checked={voice} onChange={(e) => setVoice(e.target.checked)} /> {t("bench.voice")}
+        </label>
+        <button className="tool icon-only" onClick={onClose} aria-label={t("bench.close")} title={t("bench.close")}>
+          ×
+        </button>
+      </div>
+      {item ? (
+        <div className="bench-main">
+          <div className="bench-point">
+            <span className="bench-label">{label}</span>
+            <span className="bench-q">{t(`measure.${item.quantity}`)}</span>
+            {repeatAt !== null && <span className="src-tag">{t("bench.again")}</span>}
+          </div>
+          <input
+            className="bench-input"
+            value={text}
+            inputMode="decimal"
+            placeholder={meter.connected ? t("bench.placeholderMeter") : t("bench.placeholder")}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                actions.commit();
+              }
+            }}
+          />
+          <button className="bench-button primary" onClick={actions.commit}>
+            {text.trim() || !meter.connected ? t("bench.take") : t("bench.measure")}
+          </button>
+          <button className="bench-button" onClick={actions.skip}>
+            {t("bench.skip")}
+          </button>
+          <button className="bench-button" onClick={actions.repeat}>
+            {t("bench.repeat")}
+          </button>
+          <button className="bench-button" onClick={undo}>
+            {t("bench.undo")}
+          </button>
+        </div>
+      ) : (
+        <div className="bench-main">
+          <span>{t("lists.allDone", { title: list.title })}</span>
+          {skipped.size > 0 && (
+            <button className="bench-button" onClick={() => setSkipped(new Set())}>
+              {t("bench.skippedBack", { n: skipped.size })}
+            </button>
+          )}
+        </div>
+      )}
+      {last && (
+        <p className={`bench-message bench-last status-${last.verdict ?? "measured"}`}>
+          {t("bench.last", { label: last.label, value: last.text })}
+          {last.verdict === "ok" && ` ✓ ${t("bench.ok")}`}
+          {last.verdict === "deviation" && ` ✗ ${t("bench.deviation")}`}
+          {last.verdict === "mismatch" && ` ≠ ${t("measure.status.mismatch")}`}
+        </p>
+      )}
+      {message && <p className="bench-message">{message}</p>}
+    </div>
+  );
+}
