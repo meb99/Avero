@@ -671,7 +671,7 @@ fn remove_datasheet(app: tauri::AppHandle, path: String) -> Result<(), String> {
 
 /// App-wide JSON stores in the data folder, by name: saved diagnosis flows,
 /// the datasheet register, the workspace to restore, key bindings.
-const STORES: &[&str] = &["flows", "datasheets", "workspace", "shortcuts"];
+const STORES: &[&str] = &["flows", "datasheets", "workspace", "shortcuts", "projects"];
 
 fn store_name(name: &str) -> Result<&str, String> {
     STORES.iter().copied().find(|s| *s == name).ok_or_else(|| format!("unknown store {name}"))

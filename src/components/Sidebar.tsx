@@ -1,3 +1,4 @@
+import type { CrossHit } from "./Details";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "./Icons";
 import { Diagnosis } from "./Diagnosis";
@@ -57,6 +58,9 @@ interface Props {
   onSchematicJump(text: string, hit: number, doc: SchematicDocument): void;
   onRenameNet(net: number, name: string): string | null;
   onSetNetKind?(net: number, kind: NetKind | undefined): void;
+  /** Where a pin continues on another board of the device (see project.ts). */
+  crossBoard?(pin: number): CrossHit[];
+  onCrossBoard?(path: string, part: string, pin: string): void;
   /** Changes when net names change, so name-sorted lists refresh. */
   namesRevision: number;
   pinnedNets: ReadonlyMap<number, RGBA>;
@@ -118,6 +122,8 @@ export function Sidebar({
   onSchematicJump,
   onRenameNet,
   onSetNetKind,
+  crossBoard,
+  onCrossBoard,
   namesRevision,
   pinnedNets,
   onTogglePin,
@@ -353,6 +359,8 @@ export function Sidebar({
             onSchematicJump={onSchematicJump}
             onRenameNet={onRenameNet}
             onSetNetKind={onSetNetKind}
+            crossBoard={crossBoard}
+            onCrossBoard={onCrossBoard}
             pinnedNets={pinnedNets}
             onTogglePin={onTogglePin}
             onPinNets={onPinNets}

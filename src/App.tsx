@@ -61,6 +61,8 @@ import { SchematicView, type SchematicFocus, type SchematicViewHandle, type Word
 import { DocTabs } from "./schematic/DocTabs";
 import { currentScreens, placeOnScreens } from "./core/windowFrame";
 import { dataScope } from "./core/dataScope";
+import { continuations, parseProjects, projectOf, type DeviceProject } from "./workbench/project";
+import { ProjectDialog } from "./components/ProjectDialog";
 import type { Word } from "./schematic/textIndex";
 import { clearRecent, loadRecent, loadSettings, rememberRecent, saveSettings, type DockPane, type SavedLayout, type Settings } from "./settings";
 import { DOCK_ORDER, paneWeights, parseLayouts, PRESETS, PRESET_IDS, sidebarPixels, withLayout, type PresetId } from "./workbench/layouts";
@@ -264,7 +266,7 @@ export function App() {
   const [error, setError] = useState<{ name: string; path?: string; error: LoadError } | null>(null);
   // A file that failed for lack of an XZZ key, reopened once the key is set.
   const retryPath = useRef<string | null>(null);
-  const [dialog, setDialog] = useState<"settings" | "help" | "library" | "palette" | "report" | null>(null);
+  const [dialog, setDialog] = useState<"settings" | "help" | "library" | "palette" | "report" | "project" | null>(null);
   const dialogRef = useRef(dialog);
   dialogRef.current = dialog;
   const [libraryDrop, setLibraryDrop] = useState<LibraryDrop | null>(null);
@@ -1644,6 +1646,55 @@ export function App() {
   const shortcutRef = useRef(runShortcut);
   shortcutRef.current = runShortcut;
 
+  // --- device projects: several boards joined by connectors ---------------------
+  const [projects, setProjects] = useState<DeviceProject[]>([]);
+  useEffect(() => {
+    loadStore("projects").then((json) => setProjects(parseProjects(json ? JSON.parse(json) : [])), () => {});
+  }, []);
+  const saveProjects = (next: DeviceProject[]) => {
+    setProjects(next);
+    void saveStore("projects", next).catch((e) => setToast(String(e)));
+  };
+  const projectHere = projectOf(projects, source?.path);
+  /** Where a pin of this board continues through a connector: the board, pin and (when that board is open) its net. */
+  const crossBoard = (pinIndex: number) => {
+    if (!model || !projectHere) return [];
+    const pin = model.pins[pinIndex];
+    const part = model.parts[pin.part].name;
+    return continuations(projectHere.project, projectHere.board.id, part, pin.number).map((c) => {
+      const board = projectHere.project.boards.find((b) => b.id === c.board)!;
+      const tab = tabsRef.current.find((tb) => (tb.id === live.current.id ? live.current : tb).source?.path === board.path);
+      const other = tab ? (tab.id === live.current.id ? live.current : tab).model : null;
+      const otherPart = other?.findPart(c.part);
+      const otherPin = otherPart !== undefined ? other!.findPin(otherPart, c.pin) : undefined;
+      return {
+        board: board.name,
+        path: board.path,
+        part: c.part,
+        pin: c.pin,
+        cable: c.link.cable,
+        net: otherPin !== undefined ? other!.nets[other!.pins[otherPin].net].name : undefined,
+        missing: !!other && otherPin === undefined,
+      };
+    });
+  };
+  /** To a pin on another board of the device: its tab, or the board opened. */
+  const goToBoardPin = (path: string, part: string, pin: string) => {
+    const tab = tabsRef.current.find((tb) => (tb.id === live.current.id ? live.current : tb).source?.path === path);
+    pendingBoardSearch.current = `${part}.${pin}`;
+    if (tab) {
+      if (tab.id !== live.current.id) switchTab(tab.id);
+      // Same tab: search right away.
+      else {
+        const [hit] = search(model!, `${part}.${pin}`, 1);
+        pendingBoardSearch.current = null;
+        if (hit) select(hit.selection, true);
+      }
+      return;
+    }
+    void openPath(path);
+  };
+
   // --- datasheets ---------------------------------------------------------------
   const [datasheets, setDatasheets] = useState<Datasheet[]>([]);
   useEffect(() => {
@@ -2009,6 +2060,7 @@ export function App() {
     togglePhoto: () => setShowPhoto((v) => !v),
     compare: toggleCompare,
     toggleGrid: () => setSettings((s) => ({ ...s, grid: !s.grid })),
+    project: () => setDialog("project"),
     layout: (id: string) => {
       if (id.startsWith("preset:")) {
         const preset = PRESET_IDS.find((p) => `preset:${p}` === id);
@@ -2076,6 +2128,7 @@ export function App() {
       { id: "pad-values", label: t("pad.command"), shortcut: "V", enabled: board, run: cyclePadValues },
       { id: "hide-selected", label: t("hide.command"), shortcut: "H", enabled: board && notesForModel !== null, run: hideSelected },
       { id: "isolate", label: t(isolationFor ? "isolate.end" : "isolate.command"), shortcut: "I", enabled: board, run: toggleIsolation },
+      { id: "project", label: t("project.command"), run: () => setDialog("project") },
       { id: "enter-value", label: t("keys.enterValue"), shortcut: "E", enabled: board && selection.kind !== "none", run: enterValue },
       {
         id: "case-new",
@@ -2833,6 +2886,8 @@ export function App() {
                   onSchematicJump={jumpInSchematic}
                   onRenameNet={renameModelNet}
                   onSetNetKind={(net, kind) => model && updateNotes((n) => setNetKind(n, model.fileNetName(net), kind))}
+                  crossBoard={projectHere ? crossBoard : undefined}
+                  onCrossBoard={goToBoardPin}
                   namesRevision={namesRevision}
                   pinnedNets={pinnedNets}
                   onTogglePin={togglePinned}
@@ -3014,6 +3069,25 @@ export function App() {
           onReport={() => setDialog("report")}
         />
         {dialog === "report" && model && <ImportReport model={model} source={source} scope={scope ?? []} onClose={() => setDialog(null)} />}
+        {dialog === "project" && (
+          <ProjectDialog
+            projects={projects}
+            current={source?.path ? { path: source.path, name: source.name } : undefined}
+            open={tabsRef.current.flatMap((tb) => {
+              const shown = tb.id === live.current.id ? live.current : tb;
+              return shown.source?.path ? [{ path: shown.source.path, name: shown.source.name, parts: shown.model?.parts.map((p) => p.name) }] : [];
+            })}
+            onChange={saveProjects}
+            onOpenBoard={(path) => {
+              setDialog(null);
+              const tab = tabsRef.current.find((tb) => (tb.id === live.current.id ? live.current : tb).source?.path === path);
+              if (tab) switchTab(tab.id);
+              else void openPath(path);
+            }}
+            onPickFile={() => pickPath(t("project.addFile"), "any")}
+            onClose={() => setDialog(null)}
+          />
+        )}
         {showDiff && model && compareModel && compared && (
           <DiffView
             a={model}

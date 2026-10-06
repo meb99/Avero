@@ -4628,3 +4628,29 @@ body.resizing-rows {
   color: var(--accent);
   font-weight: 600;
 }
+
+/* Device projects: boards and the connectors between them. */
+.project-dialog .wb-table td {
+  vertical-align: middle;
+}
+.project-link-form {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.project-end {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.project-end input {
+  min-width: 90px;
+  flex: 1;
+}
+.cross-board .net-chip {
+  margin-left: 4px;
+}

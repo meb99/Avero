@@ -40,6 +40,9 @@ interface Props {
   onRenameNet?(net: number, name: string): string | null;
   /** Corrects the net's kind (undefined: back to the file's). */
   onSetNetKind?(net: number, kind: NetKind | undefined): void;
+  /** Where a pin continues on another board of the device (see project.ts). */
+  crossBoard?(pin: number): CrossHit[];
+  onCrossBoard?(path: string, part: string, pin: string): void;
   /** Nets pinned in their own colors on the board. */
   pinnedNets?: ReadonlyMap<number, RGBA>;
   onTogglePin?(net: number): void;
@@ -186,6 +189,47 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/** A pin's continuation on another board of the device. */
+export interface CrossHit {
+  board: string;
+  path: string;
+  part: string;
+  pin: string;
+  cable?: string;
+  /** The net there, when that board is open. */
+  net?: string;
+  /** That board is open but has no such pin. */
+  missing?: boolean;
+}
+
+/**
+ * Where pins continue through connectors and cables on other boards of the
+ * device: "J3.2 → FFC → HDMI board J1.39 · HDMI_D0+", each a click away.
+ */
+function CrossBoard({ rows, onGo }: { rows: { from: string; hit: CrossHit }[]; onGo(path: string, part: string, pin: string): void }) {
+  const { t } = useI18n();
+  if (rows.length === 0) return null;
+  return (
+    <section className="details-section cross-board">
+      <h3>{t("cross.title")}</h3>
+      <ul className="marker-list">
+        {rows.map(({ from, hit }, i) => (
+          <li key={i}>
+            <span className="mono">{from}</span>
+            <span className="muted"> → {hit.cable ? `${hit.cable} → ` : ""}</span>
+            <button className="link mono" onClick={() => onGo(hit.path, hit.part, hit.pin)} title={t("cross.go", { board: hit.board })}>
+              {hit.board} {hit.part}.{hit.pin}
+            </button>
+            {hit.net && <span className="net-chip"> {hit.net}</span>}
+            {hit.missing && <span className="wb-error"> {t("cross.missing")}</span>}
+            {!hit.net && !hit.missing && <span className="muted"> · {t("cross.closed")}</span>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function Details({
   model,
   selection,
@@ -198,6 +242,8 @@ export function Details({
   onSchematicJump,
   onRenameNet,
   onSetNetKind,
+  crossBoard,
+  onCrossBoard,
   pinnedNets,
   onTogglePin,
   onPinNets,
@@ -731,6 +777,9 @@ export function Details({
               at={{ x: pin.x, y: pin.y, side: pin.side === "bottom" ? "bottom" : pin.side === "top" ? "top" : side === "bottom" ? "bottom" : "top" }}
             />
           )}
+          {crossBoard && onCrossBoard && (
+            <CrossBoard rows={crossBoard(selection.pin).map((hit) => ({ from: model.pinLabel(selection.pin), hit }))} onGo={onCrossBoard} />
+          )}
           {hits([part.name], mapping(part.name, { number: pin.number, nets: [...new Set([net.name, model.fileNetName(pin.net)])] }))}
           {netMembers(pin.net, selection.pin)}
         </div>
@@ -816,6 +865,9 @@ export function Details({
             )}
           </dl>
           {measure(selection.net)}
+          {crossBoard && onCrossBoard && (
+            <CrossBoard rows={net.pins.flatMap((p) => crossBoard(p).map((hit) => ({ from: model.pinLabel(p), hit })))} onGo={onCrossBoard} />
+          )}
           {hits([net.name, model.fileNetName(selection.net)])}
           {notes && net.pins.length > 0 && (
             <BoundNotes
