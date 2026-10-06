@@ -4,7 +4,7 @@ members = ["crates/avero-formats", "src-tauri"]
 default-members = ["crates/avero-formats"]
 
 [workspace.package]
-version = "0.9.25"
+version = "0.9.26"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/meb99/Avero"
