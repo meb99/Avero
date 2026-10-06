@@ -5,9 +5,11 @@
  * so Excel and Numbers open them right in German locales too.
  */
 import { partCenter, type BoardModel } from "../core/board";
+import type { BoardDiff } from "../core/diff";
 import type { SchematicFacts } from "../schematic/partInfo";
 import { QUANTITIES, type Reading, type Value } from "./measure";
 import { activeCase, type BoardNotes } from "./notes";
+import type { ReadingDifference } from "./readingDiff";
 
 const cell = (v: string | number | undefined | null): string => {
   const s = v === undefined || v === null ? "" : String(v);
@@ -77,5 +79,27 @@ export function annotationsCsv(notes: BoardNotes): Uint8Array {
     const text = d.kind === "jumper" && d.from && d.to ? [d.text, `${d.from} → ${d.to}`].filter(Boolean).join(" · ") : d.text;
     rows.push([d.kind, d.side, "", text ?? "", d.group ?? "", d.color ?? "", d.width ?? "", d.locked ? "yes" : "", "", at(d.points), d.created]);
   }
+  return csv(rows);
+}
+
+/**
+ * The differences of two boards as one list: population, connections and
+ * readings, each row with the part, pin or net it is about.
+ */
+export function differencesCsv(d: BoardDiff, readings: ReadingDifference[], nameA: string, nameB: string): Uint8Array {
+  const rows: (string | number | undefined)[][] = [["Area", "Kind", "Reference", `A: ${nameA}`, `B: ${nameB}`, "Detail"]];
+  for (const c of d.changed) {
+    const fitted = c.changes.filter((x) => x !== "nets");
+    if (fitted.length) rows.push(["population", "changed", c.name, c.deviceA, c.deviceB, fitted.join(", ")]);
+  }
+  for (const c of d.onlyA) rows.push(["population", "only A", c.name, c.deviceA, "", ""]);
+  for (const c of d.onlyB) rows.push(["population", "only B", c.name, "", c.deviceB, ""]);
+  for (const p of d.pins) rows.push(["connections", "pin on other net", `${p.part}.${p.pin}`, p.netA, p.netB, ""]);
+  for (const n of d.netChanges)
+    rows.push(["connections", n.renamedTo ? "net renamed and changed" : "net changed", n.name, n.name, n.renamedTo ?? n.name, [...n.added.map((x) => `+${x}`), ...n.removed.map((x) => `-${x}`)].join(" ")]);
+  for (const r of d.renamed) rows.push(["connections", "net renamed", r.a, r.a, r.b, "same pins"]);
+  for (const n of d.netsOnlyA) rows.push(["connections", "net only A", n, n, "", ""]);
+  for (const n of d.netsOnlyB) rows.push(["connections", "net only B", n, "", n, ""]);
+  for (const r of readings) rows.push(["readings", `${r.quantity} ${r.status}`, r.point ?? r.net, val(r.a), val(r.b), r.netB ? `B: ${r.netB}` : ""]);
   return csv(rows);
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BoardModel } from "./board";
 import { mapSelection } from "./compare";
+import { matchNets } from "./diff";
 import { testBoard } from "./testBoard";
 
 const a = new BoardModel(testBoard());
@@ -19,5 +20,13 @@ describe("mapSelection", () => {
   it("falls back to nothing for parts the other board lacks", () => {
     expect(mapSelection(a, b, { kind: "part", part: 3 })).toEqual({ kind: "none" });
     expect(mapSelection(a, b, { kind: "net", net: 3 })).toEqual({ kind: "none" }); // unconnected
+  });
+
+  it("finds a net renamed on the other board through the matched nets", () => {
+    const board = structuredClone(testBoard());
+    board.nets[4].name = "PP3V3_LX";
+    const renamed = new BoardModel(board);
+    expect(mapSelection(a, renamed, { kind: "net", net: 4 })).toEqual({ kind: "none" });
+    expect(mapSelection(a, renamed, { kind: "net", net: 4 }, matchNets(a, renamed).map)).toEqual({ kind: "net", net: 4 });
   });
 });

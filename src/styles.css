@@ -3555,6 +3555,28 @@ button.danger {
   cursor: pointer;
 }
 
+.diff-pins {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+
+.diff-body tr.status-deviation td:last-child {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.diff-body tr.status-conditions td:last-child,
+.diff-body tr.status-onlyA td:last-child,
+.diff-body tr.status-onlyB td:last-child {
+  color: var(--text-muted);
+}
+
+.segmented.small-seg button {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
 .diff-nets {
   display: grid;
   grid-template-columns: 1fr 1fr;

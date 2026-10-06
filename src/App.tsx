@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AskHost, askConfirm, askText } from "./components/Ask";
 import { copyText } from "./core/clipboard";
-import { annotationsCsv, netsCsv, partsCsv, readingsCsv } from "./workbench/csvExport";
+import { annotationsCsv, differencesCsv, netsCsv, partsCsv, readingsCsv } from "./workbench/csvExport";
 import { answerMcp, type McpContext } from "./workbench/mcpTools";
 import { MCP_DEFAULT_PORT } from "./workbench/mcp";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -33,6 +33,7 @@ import { findPoint } from "./core/points";
 import { padValueSource } from "./workbench/padValues";
 import type { Command } from "./core/commands";
 import { mapSelection } from "./core/compare";
+import { alignedToA, alignedToB, alignOnParts, matchNets } from "./core/diff";
 import { search } from "./core/search";
 import {
   BOARD_EXTENSIONS,
@@ -78,6 +79,7 @@ import {
   addDrawing,
   addMarker,
   boardKey,
+  legacyBoardKey,
   idTokens,
   netStatuses,
   newMarkerId,
@@ -119,7 +121,7 @@ import { guessCategory } from "./workbench/catalog";
 import { PIN_COLORS } from "./render/palette";
 import { alignFromPoints, fitToBounds } from "./workbench/photo";
 import { boardInPicture, loadPhotoImage, renderPageImage } from "./workbench/photoImage";
-import { saveAllNotes, useBoardNotes } from "./workbench/store";
+import { loadNotes, saveAllNotes, useBoardNotes } from "./workbench/store";
 
 const NONE: Selection = { kind: "none" };
 const NO_NETS: number[] = [];
@@ -340,9 +342,18 @@ export function App() {
   const compareModel = compared?.model ?? null;
   const documentsShownFirst = useMemo(() => (schematic ? [schematic, ...docs.filter((d) => d !== schematic)] : []), [docs, schematic]);
   const showSchematic = schematic !== null && schematicVisible && !detached && !compareModel;
+  // How the compared board lines up with this one: nets paired by what they connect (a
+  // renamed net is found), positions by the parts both have.
+  const comparison = useMemo(() => {
+    if (!model || !compareModel) return null;
+    const nets = matchNets(model, compareModel).map;
+    return { nets, back: new Map([...nets].map(([x, y]) => [y, x])), aligned: alignOnParts(model, compareModel) };
+  }, [model, compareModel]);
+  const [coupled, setCoupled] = useState(true);
+  const couple = coupled ? (comparison?.aligned ?? null) : null;
   const compareSelection = useMemo(
-    () => (model && compareModel ? mapSelection(model, compareModel, selection) : NONE),
-    [model, compareModel, selection],
+    () => (model && compareModel ? mapSelection(model, compareModel, selection, comparison?.nets) : NONE),
+    [model, compareModel, selection, comparison],
   );
   const { notes, update: updateNotes, undo: undoNotes, redo: redoNotes, error: notesError, notice: notesNotice } = useBoardNotes(source);
   // A damaged notes file, a recovered snapshot or notes taken over from an older key: say so.
@@ -1916,11 +1927,31 @@ export function App() {
 
   // --- comparison ----------------------------------------------------------
 
-  // The compared board follows the selection.
+  // The compared board follows the selection (coupled, it follows the view instead).
   useEffect(() => {
+    if (couple) return;
     const bounds = compareModel?.selectionBounds(compareSelection);
     if (bounds) compareViewRef.current?.zoomTo(bounds);
-  }, [compareModel, compareSelection]);
+  }, [compareModel, compareSelection, couple]);
+
+  // Coupled views: the same spot of the board in both, turned the way the boards lie.
+  const compareTurns = couple ? Math.round(couple.angle / (Math.PI / 2)) : 0;
+  const compareRotation = (((rotation + (side === "bottom" ? compareTurns : -compareTurns)) % 4) + 4) % 4;
+  const followA = (v: ViewState) => {
+    if (!couple) return;
+    const c = alignedToB(couple, { x: v.centerX, y: v.centerY });
+    compareViewRef.current?.setViewState({ centerX: c.x, centerY: c.y, scale: v.scale * couple.scale });
+  };
+  const followB = (v: ViewState) => {
+    if (!couple) return;
+    const c = alignedToA(couple, { x: v.centerX, y: v.centerY });
+    viewRef.current?.setViewState({ centerX: c.x, centerY: c.y, scale: v.scale / couple.scale });
+  };
+  useEffect(() => {
+    // Coupling starts (or the boards change): B takes A's view.
+    const v = viewRef.current?.viewState();
+    if (couple && v) requestAnimationFrame(() => followA(v));
+  }, [couple, compareRotation]);
 
   const comparable = tabs.filter((t) => t.id !== activeTab && t.model !== null);
 
@@ -2602,7 +2633,14 @@ export function App() {
                     model={model}
                     side={splitViews ? "top" : side}
                     dual={bothSides && !splitViews}
-                    onViewChange={splitViews && settings.bothSidesMode === "synced" ? (v) => viewRef2.current?.setViewState(v) : undefined}
+                    onViewChange={
+                      (splitViews && settings.bothSidesMode === "synced") || couple
+                        ? (v) => {
+                            if (splitViews && settings.bothSidesMode === "synced") viewRef2.current?.setViewState(v);
+                            followA(v);
+                          }
+                        : undefined
+                    }
                     onCursor={splitViews ? (p) => viewRef2.current?.showGhost(p) : undefined}
                     origin={boardOrigin}
                     rotation={rotation}
@@ -2794,6 +2832,12 @@ export function App() {
                         {selection.kind !== "none" && compareSelection.kind === "none" && (
                           <span className="muted">{t("compare.missing")}</span>
                         )}
+                        {comparison?.aligned && (
+                          <label className="check small-check" title={t("compare.coupleHint")}>
+                            <input type="checkbox" checked={coupled} onChange={(e) => setCoupled(e.target.checked)} />
+                            {t("compare.couple")}
+                          </label>
+                        )}
                         <button className="small" onClick={() => setShowDiff(true)}>
                           {t("diff.button")}
                         </button>
@@ -2806,12 +2850,13 @@ export function App() {
                         ref={compareViewRef}
                         model={compareModel}
                         side={side}
-                        rotation={rotation}
+                        rotation={couple ? compareRotation : rotation}
                         selection={compareSelection}
                         settings={settings}
                         palette={palette}
                         initialView={compared.view}
-                        onSelect={(sel, zoom) => select(mapSelection(compareModel, model, sel), zoom)}
+                        onViewChange={couple ? followB : undefined}
+                        onSelect={(sel, zoom) => select(mapSelection(compareModel, model, sel, comparison?.back), zoom)}
                       />
                     </div>
                   </>
@@ -3171,8 +3216,29 @@ export function App() {
             b={compareModel}
             nameA={source?.name ?? ""}
             nameB={compared.source?.name ?? ""}
+            notesA={notesForModel}
+            loadNotesB={async () => {
+              const src = compared.source;
+              if (!src) return null;
+              return (await loadNotes(boardKey(src), legacyBoardKey(src), src.name)).notes;
+            }}
+            tolerance={settings.tolerance}
             onSelect={select}
             onMark={setDiffMarks}
+            onSaveCsv={async (readings, diff) => {
+              const base = (source?.name ?? "board").replace(/\.[^.]+$/, "");
+              try {
+                const path = await saveBytes(
+                  differencesCsv(diff, readings, source?.name ?? "A", compared.source?.name ?? "B"),
+                  t("diff.saveList"),
+                  `${base} ${t("csv.file.differences")}.csv`,
+                  { name: "CSV", extensions: ["csv"] },
+                );
+                if (path) setToast(t("diff.listSaved", { name: fileName(path) }));
+              } catch (e) {
+                setToast(String(e));
+              }
+            }}
             onClose={() => setShowDiff(false)}
           />
         )}
