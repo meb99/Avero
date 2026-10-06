@@ -154,7 +154,11 @@ pub fn parse_with(buf: &[u8], file_name: Option<&str>, options: ParseOptions) ->
         Detected::Pdf => Err(ParseError::Pdf),
         Detected::Unknown => Err(ParseError::Unrecognized),
     }?;
-    finish(raw)
+    let mut board = finish(raw)?;
+    if board.format == FormatId::GenCad {
+        convert::archive::restore(&mut board, buf)?;
+    }
+    Ok(board)
 }
 
 /// Reads an ASUS ASC board from its separate files. Only `pins.asc` is

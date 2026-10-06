@@ -160,11 +160,16 @@ pub fn fold_side_by_side(board: &mut Board) -> bool {
         }
     }
     let mut keep = vec![true; board.test_points.len()];
-    let mut left: std::collections::HashMap<(i64, i64, u32), usize> = std::collections::HashMap::new();
     let cell = |v: f64| (v / 2.0).round() as i64;
+    // Equal coordinates and net alone do not prove equal holes: blind or
+    // buried vias can occupy the same point on different layer spans.
+    let key = |tp: &crate::model::TestPoint| {
+        (cell(tp.x), cell(tp.y), tp.net, tp.via.as_ref().map(|v| (v.layers.clone(), v.drill.to_bits())))
+    };
+    let mut left = std::collections::HashMap::new();
     for (i, tp) in board.test_points.iter().enumerate() {
         if tp.x <= split {
-            left.insert((cell(tp.x), cell(tp.y), tp.net), i);
+            left.insert(key(tp), i);
         }
     }
     for (i, tp) in board.test_points.iter_mut().enumerate() {
@@ -172,10 +177,12 @@ pub fn fold_side_by_side(board: &mut Board) -> bool {
             continue;
         }
         tp.x = fold.x(tp.x);
-        if tp.side == Side::Top {
+        // An explicit padstack's copper span is physical, independent of
+        // which side of the drawing shows it. Keep its surface assignment.
+        if tp.side == Side::Top && tp.via.is_none() {
             tp.side = Side::Bottom;
         }
-        if left.contains_key(&(cell(tp.x), cell(tp.y), tp.net)) {
+        if left.contains_key(&key(tp)) {
             keep[i] = false;
         }
     }
@@ -297,5 +304,35 @@ mod tests {
     fn leaves_ordinary_boards_alone() {
         let mut board = crate::demo::board();
         assert!(!fold_side_by_side(&mut board));
+    }
+
+    #[test]
+    fn folding_keeps_distinct_via_spans_and_their_explicit_surface() {
+        let (_, mut board) = two_views();
+        let f = Frame::of(&board.outline[0]).unwrap();
+        let count = board.test_points.len();
+        let mut left = board.test_points[0].clone();
+        left.kind = crate::model::TestPointKind::Via;
+        left.x = f.min_x + 100.0;
+        left.y = f.min_y + 100.0;
+        left.side = Side::Top;
+        left.via = Some(crate::model::ViaDetails {
+            layers: vec!["TOP".into(), "LAYER_2".into()],
+            drill: 2.0,
+            buried: false,
+        });
+        let mut right = left.clone();
+        right.x = f.max_x + 100.0 + (f.max_x - left.x);
+        right.via.as_mut().unwrap().layers[1] = "LAYER_3".into();
+        let mut duplicate = left.clone();
+        duplicate.x = right.x;
+        for tp in [left, right, duplicate] {
+            board.nets[tp.net as usize].test_points.push(board.test_points.len() as u32);
+            board.test_points.push(tp);
+        }
+        assert!(fold_side_by_side(&mut board));
+        assert_eq!(board.test_points.len(), count + 2);
+        assert!(board.test_points[count..].iter().all(|t| t.side == Side::Top));
+        assert_eq!(board.test_points[count + 1].via.as_ref().unwrap().layers[1], "LAYER_3");
     }
 }

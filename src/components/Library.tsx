@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BOARD_EXTENSIONS } from "../core/loader";
 import { loadSettings } from "../settings";
-import { convertXzzFiles, pickXzz, pickXzzFolder, type ConversionResult, type ConvertedFile } from "../workbench/conversion";
+import { convertXzzFiles, pickXzz, pickXzzFolder, saveOriginalXzz, type ConversionResult, type ConvertedFile } from "../workbench/conversion";
 import { importCollection, pickCollection, type CollectionProgress, type CollectionResult } from "../workbench/collection";
 import { useI18n } from "../i18n";
 import {
@@ -498,9 +498,31 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
         </div>}
         <div className="conversion-results">
         {conversion?.files.filter((f, i, all) => all.findIndex((other) => other.path === f.path) === i).map((file) => (
-          <div className="conversion-file" key={file.path}>
+          <div className="conversion-result" key={file.path}>
+          <div className="conversion-file">
             <span>{file.path.split(/[\\/]/).pop()} · {t("convert.counts", { parts: file.parts, pins: file.pins })}</span>
             <button onClick={() => openConverted(file)}>{t("convert.open")}</button>
+          </div>
+          {file.report && <details className="conversion-report">
+            <summary>{t("convert.report")}</summary>
+            <p>{t("convert.geometry", { traces: file.report.traces, arcs: file.report.arcs, vias: file.report.vias, contours: file.report.contours, texts: file.report.texts, layers: file.report.layers.length })}</p>
+            <p>{t("convert.readings", { assigned: file.report.assignedReadings, total: file.report.readings })}</p>
+            {file.report.unreadableReadings > 0 && <p className="library-warn">{t("convert.unreadableReadings", { n: file.report.unreadableReadings })}</p>}
+            <p>{t("convert.outline", { lines: file.report.outlineLines, arcs: file.report.outlineArcs })}</p>
+            <p>{t("convert.originalKept")}</p>
+            <button onClick={() => void saveOriginalXzz(file.path, t("convert.saveOriginal")).catch((error) => {
+              setConversion((current) => current ? { ...current, errors: [...current.errors, String(error)] } : current);
+            })}>{t("convert.saveOriginal")}</button>
+            {file.report.warnings.map((warning, i) => <p className="library-warn" key={i}>{warning}</p>)}
+            {file.report.preservedBlocks.length > 0 && <p>{t("convert.preservedBlocks", { n: file.report.preservedBlocks.length })}</p>}
+            {file.report.images.length > 0 && <details><summary>{t("convert.imageReferences", { n: file.report.images.length })}</summary>
+              <ul>{file.report.images.map((image, i) => <li key={i}>{image.name} · {image.width} × {image.height}</li>)}</ul>
+            </details>}
+            {file.report.boardTexts.length > 0 && <details><summary>{t("convert.boardTexts", { n: file.report.boardTexts.length })}</summary>
+              <ul>{file.report.boardTexts.map((text, i) => <li key={i}>{text.text} · {text.x}, {text.y} · Layer {text.layer}</li>)}</ul>
+            </details>}
+            {file.report.sections.map((section, i) => <details key={i}><summary>{t("convert.metadata")} · {section.name}</summary><pre>{section.text}</pre></details>)}
+          </details>}
           </div>
         ))}
         {conversion?.errors.map((message, i) => <p className="library-warn" key={`${i}-${message}`}>{message}</p>)}

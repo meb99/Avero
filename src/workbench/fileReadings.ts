@@ -17,7 +17,7 @@ export function fileReadingsOf(model: BoardModel): Map<string, FilePointReading[
     const part = model.findPart(r.part);
     const pin = part === undefined ? undefined : model.findPin(part, r.pin);
     if (pin === undefined) continue;
-    const source = fileSource(format, r.list);
+    const source = fileSource(r.sourceFormat ?? format, r.list);
     const list = out.get(source) ?? [];
     list.push({ point: pinKey(model, pin), net: model.fileNetName(model.pins[pin].net), quantity: r.quantity, value: r.value === null ? "OL" : r.value });
     out.set(source, list);

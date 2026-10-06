@@ -16,6 +16,16 @@ const board = () => new BoardModel({
 });
 
 describe("readings from the board file", () => {
+  it("keeps XZZ provenance when readings are restored from a GenCAD file", () => {
+    const b = board().board;
+    b.format = "gencad";
+    b.formatName = "GenCAD 1.4";
+    b.readings = b.readings!.map((r) => ({ ...r, sourceFormat: "XZZ" }));
+    const result = takeAllFileReadings(emptyNotes("k", "b"), new BoardModel(b));
+    expect(result.sources).toEqual(["XZZ 阻值"]);
+    expect(result.notes.referencePoints!["U10.1"].origin?.diode).toBe("XZZ 阻值");
+    expect(result.notes.referencePoints!["U10.1"].conds).toBeUndefined();
+  });
   it("finds each reading's pin, with its net and source; unknown parts are left out", () => {
     const m = fileReadingsOf(board());
     expect([...m.keys()]).toEqual(["XZZ 阻值"]);

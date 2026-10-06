@@ -76,6 +76,8 @@ export interface TestPoint {
   probe?: number;
   /** Label such as TP1203, when the format has one. */
   name?: string;
+  /** Actual padstack, for distinguishing blind/buried vias from surface pads. */
+  via?: { layers: string[]; drill: number; buried: boolean };
 }
 
 /** Straight copper track segment, from formats that carry routing. */
@@ -142,6 +144,8 @@ export interface FileReading {
   raw: string;
   /** The file's name for the list ("阻值"). */
   list: string;
+  /** Original format, preserved when the enclosing board was converted. */
+  sourceFormat?: string;
 }
 
 export type LoadErrorCode =

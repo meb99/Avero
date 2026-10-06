@@ -31,6 +31,7 @@ enum Section {
     Signals,
     Tracks,
     Routes,
+    Layers,
     Other,
 }
 
@@ -71,6 +72,8 @@ struct Padstack {
     top: bool,
     bottom: bool,
     shape: Option<PadShape>,
+    drill: f64,
+    layers: Vec<String>,
 }
 
 impl Padstack {
@@ -144,7 +147,8 @@ struct Parser {
     components: Vec<Component>,
     devices: HashMap<String, Device>,
     signals: HashMap<(String, String), String>,
-    vias: Vec<(String, Point)>,
+    vias: Vec<(String, Point, String)>,
+    layers: HashSet<String>,
     track_widths: HashMap<String, f64>,
     tracks: Vec<Track>,
     /// Width and layer of the route being read.
@@ -158,7 +162,7 @@ const MAX_EXTENT_MILS: f64 = 100_000.0;
 
 pub fn parse(buf: &[u8]) -> Result<RawBoard, ParseError> {
     let p = read(buf, false);
-    if p.components.is_empty() {
+    if p.components.is_empty() && p.vias.is_empty() && p.tracks.is_empty() && p.outline.is_empty() {
         return Err(ParseError::invalid(FormatId::GenCad, "no $COMPONENTS found"));
     }
     if p.inch && p.extent() > MAX_EXTENT_MILS {
@@ -183,6 +187,7 @@ fn read(buf: &[u8], force_mils: bool) -> Parser {
         devices: HashMap::new(),
         signals: HashMap::new(),
         vias: Vec::new(),
+        layers: HashSet::new(),
         track_widths: HashMap::new(),
         tracks: Vec::new(),
         width: 0.0,
@@ -237,6 +242,7 @@ impl Parser {
                 b"$SIGNALS" => Section::Signals,
                 b"$TRACKS" => Section::Tracks,
                 b"$ROUTES" => Section::Routes,
+                b"$LAYERS" => Section::Layers,
                 _ if line.starts_with(b"$END") => Section::None,
                 _ => Section::Other,
             };
@@ -285,7 +291,7 @@ impl Parser {
                     self.width = self.track_widths.get(&name).copied().unwrap_or(0.0);
                 }
                 b"LAYER" => self.layer = f.string().unwrap_or_default().to_ascii_uppercase(),
-                b"LINE" | b"ARC" => {
+                b"LINE" | b"ARC" | b"CIRCLE" => {
                     if let (Some(net), Some(segments)) =
                         (self.current.clone(), self.geometry(keyword, &mut f))
                     {
@@ -301,13 +307,20 @@ impl Parser {
                     }
                 }
                 b"VIA" => {
-                    let _padstack = f.quoted_or_plain();
-                    if let (Some(net), Some(pos)) = (self.current.clone(), self.xy(&mut f)) {
-                        self.vias.push((net, pos));
+                    let padstack = f.quoted_or_plain();
+                    if let (Some(net), Some(pos), Some(stack)) =
+                        (self.current.clone(), self.xy(&mut f), padstack)
+                    {
+                        self.vias.push((net, pos, stack));
                     }
                 }
                 _ => {}
             },
+            Section::Layers if keyword == b"DEFINE" => {
+                if let Some(layer) = f.quoted_or_plain() {
+                    self.layers.insert(layer.to_ascii_uppercase());
+                }
+            }
             _ => {}
         }
     }
@@ -445,8 +458,9 @@ impl Parser {
     fn padstack_line(&mut self, keyword: &[u8], f: &mut Fields<'_>) {
         if keyword == b"PADSTACK" {
             let name = f.quoted_or_plain().unwrap_or_default();
-            let drilled = f.float().is_some_and(|d| d > 0.0);
-            self.padstacks.insert(name.clone(), Padstack { drilled, ..Default::default() });
+            let drill = self.num(f).unwrap_or(0.0).max(0.0);
+            self.padstacks
+                .insert(name.clone(), Padstack { drilled: drill > 0.0, drill, ..Default::default() });
             self.current = Some(name);
             return;
         }
@@ -461,6 +475,9 @@ impl Parser {
         let (pad_radius, pad_drilled, pad_shape) =
             self.pads.get(&pad_name).map_or((None, false, None), |p| (p.radius, p.drilled, p.shape()));
         if let Some(stack) = self.padstacks.get_mut(&name) {
+            if !stack.layers.contains(&layer) {
+                stack.layers.push(layer.clone());
+            }
             stack.top |= layer.contains("TOP") || layer == "ALL";
             stack.bottom |= layer.contains("BOTTOM") || layer == "ALL";
             stack.drilled |= pad_drilled;
@@ -670,7 +687,9 @@ impl Parser {
             board.parts.push(part);
         }
 
-        let sides = layer_sides(self.tracks.iter().map(|t| t.layer.as_str()));
+        let sides = layer_sides(
+            self.tracks.iter().map(|t| t.layer.as_str()).chain(self.layers.iter().map(String::as_str)),
+        );
         for t in self.tracks {
             board.traces.push(RawTrace {
                 from: t.from,
@@ -681,14 +700,25 @@ impl Parser {
                 net: t.net,
             });
         }
-        for (net, pos) in self.vias {
+        for (net, pos, stack_name) in self.vias {
+            let stack = self.padstacks.get(&stack_name);
+            if let Some(stack) = stack {
+                board.via_details.insert(
+                    board.test_points.len(),
+                    crate::model::ViaDetails {
+                        layers: stack.layers.clone(),
+                        drill: stack.drill,
+                        buried: stack.side().is_none(),
+                    },
+                );
+            }
             board.test_points.push(RawTestPoint {
                 kind: TestPointKind::Via,
                 pos,
-                side: Side::Both,
+                side: stack.and_then(Padstack::side).unwrap_or(Side::Both),
                 net,
                 probe: None,
-                radius: None,
+                radius: stack.and_then(|s| s.radius),
                 name: None,
             });
         }
@@ -720,10 +750,14 @@ fn layer_sides<'a>(layers: impl Iterator<Item = &'a str>) -> HashMap<String, Sid
         digits.chars().rev().collect::<String>().parse().ok()
     };
     let numbers: Vec<u32> = names.iter().filter_map(|n| number(n)).collect();
-    let top = numbers.iter().copied().min();
+    let top = if names.iter().any(|n| n.contains("TOP")) { Some(1) } else { numbers.iter().copied().min() };
     // 16 is the bottom copper layer in 16-layer numbering; above it are
     // non-copper layers.
-    let bottom = if numbers.contains(&16) { Some(16) } else { numbers.iter().copied().max() };
+    let bottom = if numbers.contains(&16) || names.iter().any(|n| n.contains("BOT")) {
+        Some(16)
+    } else {
+        numbers.iter().copied().max()
+    };
     names
         .into_iter()
         .map(|n| {
