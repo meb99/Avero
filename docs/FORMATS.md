@@ -61,3 +61,10 @@ Einstellungen. Ein eingetragener Schlüssel überschreibt auch beim Konvertieren
 den Standard. Alle Ausgaben werden vor dem Speichern mit Averos GenCAD-Reader
 geprüft. Vorhandene Dateien werden nicht überschrieben und gleiche Ausgaben
 werden erkannt. Tests im Repository verwenden ausschließlich synthetische Daten.
+
+Die erweiterte Ausgabe erhält zusätzlich Bauteilkonturen und Texte,
+Via-Bohrungen und Layer-Spannen, Bildverweise und Zusatzabschnitte. Reguläre
+GenCAD-Header-Attribute enthalten die komprimierte Originaldatei und einen
+Konvertierungsbericht. Avero stellt pinbezogene XZZ-Messwerte daraus auch beim
+erneuten Öffnen wieder her. Undokumentierte Inhalte werden erhalten und
+ausgewiesen, aber nicht semantisch geraten. Siehe [XZZ-Konvertierung](XZZ_CONVERSION.md).

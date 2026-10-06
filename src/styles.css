@@ -1660,6 +1660,10 @@ button.danger {
 .conversion-file span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .conversion-results { grid-column: 1 / -1; display: grid; gap: 6px; max-height: 150px; overflow-y: auto; }
 .conversion-results:empty { display: none; }
+.conversion-report { font-size: 12px; padding: 6px 0; }
+.conversion-report > * + * { margin-top: 6px; }
+.conversion-report pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow-y: auto; }
+.conversion-report summary { cursor: pointer; }
 .conversion-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .conversion-progress { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; }
 .conversion-progress progress { flex: 1; min-width: 0; accent-color: var(--accent); }

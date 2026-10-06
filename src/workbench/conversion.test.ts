@@ -1,14 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
-import { convertXzzFiles, pickXzz, pickXzzFolder } from "./conversion";
+import { open, save } from "@tauri-apps/plugin-dialog";
+import { convertXzzFiles, pickXzz, pickXzzFolder, saveOriginalXzz } from "./conversion";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), save: vi.fn() }));
 
 beforeEach(() => vi.resetAllMocks());
 
 describe("XZZ conversion", () => {
+  it("restores the original through a save panel; cancellation writes nothing", async () => {
+    vi.mocked(save).mockResolvedValueOnce(null).mockResolvedValueOnce("/saved/Board-original.pcb");
+    await saveOriginalXzz("/library/Board.cad", "Original");
+    expect(invoke).not.toHaveBeenCalled();
+    await saveOriginalXzz("/library/Board.cad", "Original");
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ defaultPath: "Board-original.pcb" }));
+    expect(invoke).toHaveBeenCalledWith("restore_xzz_source", { path: "/library/Board.cad", output: "/saved/Board-original.pcb" });
+  });
+
+  it("keeps each conversion inventory with its file in a mixed batch", async () => {
+    const report = { readings: 12, assignedReadings: 10, warnings: ["2 readings have no matching pin"] };
+    vi.mocked(invoke).mockResolvedValueOnce({ path: "/library/A.cad", report }).mockRejectedValueOnce("wrong key");
+    const result = await convertXzzFiles(["/A.pcb", "/B.pcb"], "", "", vi.fn());
+    expect(result.files[0].report).toEqual(report);
+    expect(result.errors).toEqual(["B.pcb: wrong key"]);
+  });
   it("cancelling the picker starts no work", async () => {
     vi.mocked(open).mockResolvedValue(null);
     expect(await pickXzz("Browse files")).toEqual([]);

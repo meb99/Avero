@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { BoardModel } from "./board";
+import { BoardModel, netSides } from "./board";
 import { search } from "./search";
 import { testBoard } from "./testBoard";
+import { computeStyle } from "../render/style";
+import { DARK } from "../render/palette";
 
 const model = new BoardModel(testBoard());
 
@@ -18,6 +20,25 @@ describe("BoardModel.hitTest", () => {
 
   it("finds test points", () => {
     expect(model.hitTest({ x: 705, y: 400 }, "bottom", 2, true)).toEqual({ kind: "testPoint", testPoint: 0 });
+  });
+
+  it("buried vias are selectable with their inner copper, not as surface contacts", () => {
+    const board = testBoard();
+    board.testPoints.push({ kind: "via", x: 800, y: 500, radius: 4, side: "both", net: 1,
+      via: { layers: ["LAYER_2", "LAYER_3"], drill: 2, buried: true } });
+    board.layers = [{ name: "LAYER_2", side: "both" }, { name: "LAYER_3", side: "both" }];
+    board.nets[1].testPoints.push(1);
+    const model = new BoardModel(board);
+    const at = { x: 800, y: 500 };
+    expect(model.hitTest(at, "top", 2, true, false)).toBeUndefined();
+    expect(model.hitTest(at, "top", 2, true, true, new Set([0, 1]))).toBeUndefined();
+    expect(model.hitTest(at, "top", 2, true, true, new Set([0]))).toEqual({ kind: "testPoint", testPoint: 1 });
+    const options = { ghostOtherSide: true, showVias: true, showTraces: false, dimUnselected: false };
+    expect(computeStyle(model, "top", { kind: "net", net: 1 }, options, DARK).testPointColors[7]).toBe(0);
+    expect(computeStyle(model, "top", { kind: "net", net: 1 }, { ...options, showTraces: true, hiddenLayers: new Set([0, 1]) }, DARK).testPointColors[7]).toBe(0);
+    expect(computeStyle(model, "top", { kind: "none" }, { ...options, showTraces: true }, DARK).testPointColors[7]).toBeGreaterThan(0);
+    board.nets[1].pins = [];
+    expect(netSides(model, 1)).toBeUndefined();
   });
 });
 

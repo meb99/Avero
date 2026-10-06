@@ -402,6 +402,15 @@ async fn find_xzz_files(path: String) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
+async fn restore_xzz_source(path: String, output: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        conversion::restore_source(Path::new(&path), Path::new(&output))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 async fn import_console_collection(
     app: tauri::AppHandle,
     path: String,
@@ -882,6 +891,7 @@ pub fn run() {
             library_root,
             import_files,
             convert_xzz_file,
+            restore_xzz_source,
             find_xzz_files,
             import_console_collection,
             board_words,

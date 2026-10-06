@@ -28,6 +28,14 @@ use crate::model::{FileReading, FormatId, Mount, Point, Side, TestPointKind};
 use crate::text::{decode, find};
 use crate::ParseError;
 
+/// XZZ text is UTF-8 in some files and GBK/GB2312 in others. Keep this
+/// separate from the Latin-1 fallback used by the other boardview formats.
+pub(crate) fn decode_text(bytes: &[u8]) -> std::borrow::Cow<'_, str> {
+    std::str::from_utf8(bytes)
+        .map(std::borrow::Cow::Borrowed)
+        .unwrap_or_else(|_| encoding_rs::GBK.decode_without_bom_handling(bytes).0)
+}
+
 const MAGIC: &[u8] = b"XZZPCB";
 const XOR_END_MARKER: &[u8] = b"v6v6555v6v6";
 const SCALE: f64 = 10_000.0;
@@ -362,18 +370,17 @@ pub fn readings(input: &[u8]) -> FileReadings {
             out.other_lists.push(other);
         }
     };
-    for raw in text.split(|&b| b == b'\n') {
+    for raw in crate::text::lines(text) {
         let line = crate::text::trim(raw);
         if line.is_empty() {
             continue;
         }
         if let Some(title) = line.strip_prefix(b"===") {
             close(list.take(), &mut out);
-            list = Some(if title == DIODE_LIST {
+            list = Some(if title == DIODE_LIST || title == "阻值".as_bytes() {
                 Ok("阻值")
             } else {
-                // Shown as hex: the title is GBK, which Avero does not decode.
-                Err((title.iter().map(|b| format!("{b:02X}")).collect(), 0))
+                Err((decode_text(title).into_owned(), 0))
             });
             continue;
         }
@@ -397,10 +404,15 @@ pub fn attach_readings(board: &mut crate::model::Board, found: FileReadings) {
     let mut missing = 0usize;
     for r in found.readings {
         let fits = board
-            .find_part(&r.part)
-            .is_some_and(|part| board.part_pins(part).iter().any(|p| p.number.eq_ignore_ascii_case(&r.pin)));
+            .parts
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| p.name.eq_ignore_ascii_case(&r.part))
+            .any(|(part, _)| board.part_pins(part).iter().any(|p| p.number.eq_ignore_ascii_case(&r.pin)));
         if fits {
-            board.readings.push(r);
+            if !board.readings.contains(&r) {
+                board.readings.push(r);
+            }
         } else {
             missing += 1;
         }
@@ -425,7 +437,7 @@ pub fn attach_readings(board: &mut crate::model::Board, found: FileReadings) {
 
 /// `=480=N65594(1)`: millivolts (or `OL`), part, pin.
 fn diode_line(line: &[u8], list: &str) -> Option<FileReading> {
-    let line = std::str::from_utf8(line).ok()?;
+    let line = decode_text(line);
     let rest = line.strip_prefix('=')?;
     let (value, target) = rest.split_once('=')?;
     let (part, pin) = target.strip_suffix(')')?.split_once('(')?;
@@ -449,6 +461,7 @@ fn diode_line(line: &[u8], list: &str) -> Option<FileReading> {
         value: volts,
         raw: value.to_string(),
         list: list.to_string(),
+        source_format: Some("XZZ"),
     })
 }
 
@@ -509,7 +522,7 @@ mod tests {
         assert_eq!((r.readings[2].pin.as_str(), r.readings[2].value), ("G5", None));
         assert_eq!(r.unreadable, 1);
         // A list of another kind is left out and named.
-        assert_eq!(r.other_lists, vec![("B5E7D1B9".to_string(), 2)]);
+        assert_eq!(r.other_lists, vec![("电压".to_string(), 2)]);
         // No marker, no readings.
         assert_eq!(readings(b"XZZPCB no marker"), FileReadings::default());
     }

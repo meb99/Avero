@@ -213,6 +213,17 @@ pub struct TestPoint {
     pub probe: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// Actual GenCAD padstack span and hole, when the format supplies them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub via: Option<ViaDetails>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ViaDetails {
+    pub layers: Vec<String>,
+    pub drill: f64,
+    pub buried: bool,
 }
 
 /// A straight copper track segment, from formats that carry routing.
@@ -359,6 +370,9 @@ pub struct FileReading {
     pub raw: String,
     /// The file's name for the list it stood in (`阻值`).
     pub list: String,
+    /// Origin survives conversion; the enclosing file can now be GenCAD.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_format: Option<&'static str>,
 }
 
 impl Board {

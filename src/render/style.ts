@@ -112,7 +112,11 @@ export function computeStyle(
     // On boards with routing, vias belong to the copper and stay visible.
     // In the isolation view the vias of the nets shown are part of what you look at.
     const shown = t.kind !== "via" || options.showVias || model.traces.length > 0 || model.isolated;
-    if (model.netHidden(t.net)) {
+    const innerHidden = t.via?.buried && (!options.showTraces || t.via.layers.every((name) => {
+      const layer = model.layers.findIndex((l) => l.name === name);
+      return layer >= 0 && options.hiddenLayers?.has(layer);
+    }));
+    if (model.netHidden(t.net) || innerHidden) {
       put(testPointColors, i, base, 0);
     } else if (selection.kind === "testPoint" && selection.testPoint === i) {
       put(testPointColors, i, palette.pinSelected, near ? 1 : farHighlight);
@@ -123,7 +127,7 @@ export function computeStyle(
     } else if (!shown) {
       put(testPointColors, i, base, 0);
     } else {
-      put(testPointColors, i, base, near ? dim : farGhost);
+      put(testPointColors, i, base, t.via?.buried ? dim * 0.45 : near ? dim : farGhost);
     }
   }
 
