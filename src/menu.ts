@@ -10,6 +10,8 @@ export interface MenuActions {
   importToLibrary(): void;
   /** The device project of the open board (several boards joined by connectors). */
   project(): void;
+  /** The open board with everything as one package. */
+  exportPackage(): void;
   closeBoard(): void;
   newTab(): void;
   nextTab(): void;
@@ -152,6 +154,7 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
         item("library", t("menu.library"), (a) => a.library(), "CmdOrCtrl+L"),
         item("import", t("menu.import"), (a) => a.importToLibrary(), "CmdOrCtrl+Shift+I"),
         item("project", t("project.command"), (a) => a.project()),
+        item("package-export", t("package.export"), (a) => a.exportPackage()),
         SEP,
         item("export-image", t("menu.exportImage"), (a) => a.exportImage(), "CmdOrCtrl+Shift+E"),
         item("export-pdf", t("menu.exportPdf"), (a) => a.exportPdf(), "CmdOrCtrl+Alt+E"),

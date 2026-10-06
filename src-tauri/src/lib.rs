@@ -11,6 +11,7 @@ mod library;
 mod mcp;
 mod meter;
 mod notes;
+mod package;
 mod updater;
 
 use std::path::{Path, PathBuf};
@@ -476,6 +477,28 @@ async fn backup_create(
     backup::create(Path::new(&path), &library, &data, &settings, &version, &created)
 }
 
+/// Packs one board with its notes, photos and (on request) files into a portable package.
+#[tauri::command]
+async fn package_create(
+    app: tauri::AppHandle,
+    path: String,
+    request: package::PackRequest,
+    created: String,
+) -> Result<package::PackResult, String> {
+    let version = app.package_info().version.to_string();
+    package::create(Path::new(&path), &request, &version, &created)
+}
+
+/// Opens a package: photos into the photo folder, board and PDFs into the library.
+#[tauri::command]
+async fn package_open(app: tauri::AppHandle, path: String) -> Result<package::Unpacked, String> {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or_default();
+    package::open(Path::new(&path), &library_dir(&app)?, &photos_dir(&app)?, stamp)
+}
+
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RestoreResult {
@@ -876,6 +899,8 @@ pub fn run() {
             set_notes_aside,
             load_note_version,
             backup_create,
+            package_create,
+            package_open,
             find_donors,
             import_datasheet,
             import_knowledge_images,

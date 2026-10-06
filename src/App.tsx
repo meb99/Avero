@@ -64,6 +64,7 @@ import { dataScope } from "./core/dataScope";
 import { continuations, parseProjects, projectOf, type DeviceProject } from "./workbench/project";
 import { ProjectDialog } from "./components/ProjectDialog";
 import { BenchBar, type BenchHandle } from "./components/BenchBar";
+import { exportPackage, openPackage, PACKAGE_EXTENSION } from "./workbench/package";
 import type { Word } from "./schematic/textIndex";
 import { clearRecent, loadRecent, loadSettings, rememberRecent, saveSettings, type DockPane, type SavedLayout, type Settings } from "./settings";
 import { DOCK_ORDER, paneWeights, parseLayouts, PRESETS, PRESET_IDS, sidebarPixels, withLayout, type PresetId } from "./workbench/layouts";
@@ -1077,6 +1078,20 @@ export function App() {
         await openSchematicPath(path);
         return;
       }
+      // A board package: unpacked, its notes saved, then its board and PDFs opened.
+      if (path.toLowerCase().endsWith(`.${PACKAGE_EXTENSION}`)) {
+        try {
+          const opened = await openPackage(path);
+          setToast(t(opened.merged ? "package.openedMerged" : "package.opened", { name: opened.name }));
+          if (opened.board) await openPathRef.current(opened.board, opened.docs[0]);
+          else if (opened.docs[0]) await openSchematicPathRef.current(opened.docs[0]);
+          for (const doc of opened.docs.slice(1)) await openSchematicPathRef.current(doc);
+          if (opened.noBoard) setToast(t("package.noBoard", { name: opened.name }));
+        } catch (e) {
+          setToast(t("package.failed", { message: String(e) }));
+        }
+        return;
+      }
       // Already open in a tab: show that tab (with the requested schematic).
       const openIn = tabsRef.current.find((t) => (t.id === live.current.id ? live.current : t).source?.path === path);
       if (openIn) {
@@ -1666,6 +1681,23 @@ export function App() {
   const shortcutRef = useRef(runShortcut);
   shortcutRef.current = runShortcut;
 
+  // --- board packages: one board with everything, to take to another Mac ----------
+  const exportBoardPackage = async () => {
+    if (!model || !notesForModel || !source) return;
+    const originals = await askConfirm(t("package.originalsAsk"), { title: t("package.export"), ok: t("package.withOriginals") });
+    const base = source.name.replace(/\.[^.]+$/, "");
+    const { save } = await import("@tauri-apps/plugin-dialog");
+    const out = await save({ title: t("package.export"), defaultPath: `${base}.${PACKAGE_EXTENSION}`, filters: [{ name: "Avero", extensions: [PACKAGE_EXTENSION] }] });
+    if (!out) return;
+    try {
+      const r = await exportPackage(out, notesForModel, base, source.path, docs.flatMap((d) => (d.path ? [d.path] : [])), originals);
+      if (r.missing.length) await askConfirm(t("package.missing", { n: r.missing.length, list: r.missing.join("\n") }), { title: t("package.export") });
+      setToast(t("package.saved", { name: fileName(out), n: r.files }));
+    } catch (e) {
+      setToast(t("package.failed", { message: String(e) }));
+    }
+  };
+
   // --- device projects: several boards joined by connectors ---------------------
   const [projects, setProjects] = useState<DeviceProject[]>([]);
   useEffect(() => {
@@ -2081,6 +2113,7 @@ export function App() {
     compare: toggleCompare,
     toggleGrid: () => setSettings((s) => ({ ...s, grid: !s.grid })),
     project: () => setDialog("project"),
+    exportPackage: () => void exportBoardPackage(),
     layout: (id: string) => {
       if (id.startsWith("preset:")) {
         const preset = PRESET_IDS.find((p) => `preset:${p}` === id);
@@ -2149,6 +2182,7 @@ export function App() {
       { id: "hide-selected", label: t("hide.command"), shortcut: "H", enabled: board && notesForModel !== null, run: hideSelected },
       { id: "isolate", label: t(isolationFor ? "isolate.end" : "isolate.command"), shortcut: "I", enabled: board, run: toggleIsolation },
       { id: "project", label: t("project.command"), run: () => setDialog("project") },
+      { id: "package-export", label: t("package.export"), enabled: board && notesForModel !== null, run: () => void exportBoardPackage() },
       { id: "enter-value", label: t("keys.enterValue"), shortcut: "E", enabled: board && selection.kind !== "none", run: enterValue },
       { id: "bench", label: t(bench ? "bench.close" : "bench.open"), shortcut: "W", enabled: board && notesForModel !== null, run: () => setBench((b) => !b) },
       {
