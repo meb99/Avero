@@ -60,6 +60,7 @@ import { readSchematicFacts, type SchematicFacts } from "./schematic/partInfo";
 import { SchematicView, type SchematicFocus, type SchematicViewHandle, type WordTarget } from "./schematic/SchematicView";
 import { DocTabs } from "./schematic/DocTabs";
 import { currentScreens, placeOnScreens } from "./core/windowFrame";
+import { dataScope } from "./core/dataScope";
 import type { Word } from "./schematic/textIndex";
 import { clearRecent, loadRecent, loadSettings, rememberRecent, saveSettings, type DockPane, type SavedLayout, type Settings } from "./settings";
 import { DOCK_ORDER, paneWeights, parseLayouts, PRESETS, PRESET_IDS, sidebarPixels, withLayout, type PresetId } from "./workbench/layouts";
@@ -2230,6 +2231,22 @@ export function App() {
   dockWeightsRef.current = dockWeights;
   const saveDock = () => setSettings((old) => ({ ...old, dockWeights: dockWeightsRef.current }));
 
+  // --- what the board's data holds and where it comes from (import report, status bar) ---
+  const scope = useMemo(
+    () =>
+      model
+        ? dataScope(model, {
+            showTraces: settings.showTraces,
+            hiddenLayers,
+            notes: notesForModel,
+            docs: docs.map((d) => ({ pageCount: d.pageCount, recognisedPages: d.recognisedPages })),
+            schematicValues: schematicFacts ? [...schematicFacts.parts.values()].filter((p) => p.value).length : 0,
+          })
+        : null,
+    // namesRevision: own net kinds change the model in place.
+    [model, settings.showTraces, hiddenLayers, notesForModel, docs, schematicFacts, namesRevision],
+  );
+
   // --- layouts: panes, their sizes and the sidebar, kept as shares ----------
   const layouts = useMemo(() => parseLayouts(settings.layouts), [settings.layouts]);
   const applyLayout = (layout: SavedLayout & { compare?: boolean }) => {
@@ -2854,8 +2871,8 @@ export function App() {
           {dragOver && <div className="drop-overlay">{t(dialog === "library" ? "library.dropHere" : "drop.hint")}</div>}
         </main>
 
-        <StatusBar model={model} source={source} schematic={schematic} loading={loading} settings={settings} onReport={() => setDialog("report")} />
-        {dialog === "report" && model && <ImportReport model={model} source={source} onClose={() => setDialog(null)} />}
+        <StatusBar model={model} source={source} schematic={schematic} loading={loading} settings={settings} scope={scope} onReport={() => setDialog("report")} />
+        {dialog === "report" && model && <ImportReport model={model} source={source} scope={scope ?? []} onClose={() => setDialog(null)} />}
         {showDiff && model && compareModel && compared && (
           <DiffView
             a={model}

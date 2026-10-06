@@ -3,11 +3,49 @@ import type { BoardSource } from "../core/loader";
 import { importQuality, type QualityCheck } from "../core/quality";
 import { useI18n, type MessageKey } from "../i18n";
 import { Dialog } from "./Dialogs";
+import type { ScopeRow, ScopeState } from "../core/dataScope";
 
 const MARK: Record<QualityCheck["level"], string> = { ok: "✓", info: "ℹ", warn: "⚠" };
 
+const STATE_MARK: Record<ScopeState, string> = {
+  yes: "✓",
+  none: "–",
+  hidden: "◌",
+  derived: "↻",
+  estimated: "≈",
+  text: "Aa",
+  manual: "✎",
+  notRead: "✗",
+  empty: "○",
+};
+
+/** What the board's data holds and where each part comes from. */
+export function DataScope({ rows }: { rows: ScopeRow[] }) {
+  const { t } = useI18n();
+  return (
+    <table className="scope-table">
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.id} className={`scope-${r.state}`}>
+            <th scope="row">{t(`scope.${r.id}` as MessageKey)}</th>
+            <td>
+              <span className={`scope-state scope-state-${r.state}`} title={t(`scope.stateHint.${r.state}` as MessageKey)}>
+                {STATE_MARK[r.state]} {t(`scope.state.${r.state}` as MessageKey)}
+              </span>
+            </td>
+            <td className="scope-detail">
+              {t(`scope.detail.${r.id}.${r.state}` as MessageKey, { n: r.n ?? 0, m: r.m ?? 0 })}
+              {r.how && <span className="muted"> – {r.how}</span>}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 /** What came over from the board file, what was estimated and what is missing. */
-export function ImportReport({ model, source, onClose }: { model: BoardModel; source: BoardSource | null; onClose(): void }) {
+export function ImportReport({ model, source, scope, onClose }: { model: BoardModel; source: BoardSource | null; scope: ScopeRow[]; onClose(): void }) {
   const { t } = useI18n();
   const b = model.board;
   const checks = importQuality(model);
@@ -17,6 +55,9 @@ export function ImportReport({ model, source, onClose }: { model: BoardModel; so
       <p>
         <strong>{source?.name}</strong> <span className="muted">· {b.formatName}</span>
       </p>
+      <h3>{t("scope.title")}</h3>
+      <DataScope rows={scope} />
+      <h3>{t("quality.checks")}</h3>
       <p className={warn ? "kb-note kb-warning" : "muted"}>{warn ? t("quality.summaryWarn", { n: warn }) : t("quality.summaryOk")}</p>
       <dl className="props quality-counts">
         <dt>{t("quality.count.parts")}</dt>

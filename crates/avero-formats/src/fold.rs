@@ -230,6 +230,15 @@ pub fn fold_side_by_side(board: &mut Board) -> bool {
         "Two views side by side: the right one was folded onto the board as the bottom side ({}).",
         if fold.mirrors() { "mirrored" } else { "shifted" }
     ));
+    let bottom = board.parts.iter().filter(|p| p.side == Side::Bottom).count();
+    board.derived.push(crate::model::Derived {
+        what: "bottom-side",
+        how: format!(
+            "the second view of the drawing, {}",
+            if fold.mirrors() { "mirrored" } else { "shifted" }
+        ),
+        count: bottom,
+    });
     true
 }
 
@@ -279,6 +288,7 @@ mod tests {
             assert!((a.x - b.x).abs() < 1e-6 && (a.y - b.y).abs() < 1e-6);
         }
         assert!((board.bounds.max_x - original.bounds.max_x).abs() < 1.0);
+        assert!(board.derived.iter().any(|d| d.what == "bottom-side"));
         // Once folded, nothing more to do.
         assert!(!fold_side_by_side(&mut board));
     }

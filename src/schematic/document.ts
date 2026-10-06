@@ -230,14 +230,20 @@ export class SchematicDocument {
 
   /** Words that came from text recognition (shown as such where a match is checked). */
   private readonly recognised = new WeakSet<Word>();
+  private readonly recognisedOn = new Set<number>();
   isRecognised(w: Word): boolean {
     return this.recognised.has(w);
+  }
+  /** Pages whose text comes from text recognition. */
+  get recognisedPages(): number {
+    return this.recognisedOn.size;
   }
 
   /** Recognised words of a scanned page, searchable like PDF text. */
   addWords(page: number, words: Word[]): void {
     if (this.cancelled) return;
     for (const w of words) this.recognised.add(w);
+    if (words.length) this.recognisedOn.add(page);
     this.index.add(words);
     this.wordCount[page] = (this.wordCount[page] ?? 0) + words.length;
     this.added++;

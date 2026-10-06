@@ -4480,3 +4480,49 @@ body.resizing-rows {
   margin: 6px 0;
   font-size: 12.5px;
 }
+
+/* What the board's data holds and where it comes from. */
+.scope-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  margin-bottom: 10px;
+}
+.scope-table th,
+.scope-table td {
+  text-align: left;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.scope-table th {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.scope-state {
+  white-space: nowrap;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  border: 1px solid var(--border);
+}
+.scope-state-yes {
+  border-color: color-mix(in srgb, #2e7d32 60%, var(--border));
+}
+.scope-state-derived,
+.scope-state-estimated,
+.scope-state-text {
+  border-color: #e6a100;
+  background: color-mix(in srgb, #e6a100 14%, transparent);
+}
+.scope-state-manual {
+  border-color: var(--accent);
+}
+.scope-state-none,
+.scope-state-notRead,
+.scope-state-hidden {
+  color: var(--text-muted);
+}
+.status-scope.scope-state-derived {
+  color: #e6a100;
+}

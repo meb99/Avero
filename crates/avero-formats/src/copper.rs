@@ -121,6 +121,15 @@ pub fn add_copper_from(target: &mut Board, source: &Board) -> Result<(usize, usi
         target.test_points.push(copy);
         vias += 1;
     }
+    if traces + vias > 0 {
+        target.derived.push(crate::model::Derived {
+            what: "copper",
+            how: format!(
+                "another reading of the same file ({traces} tracks, {vias} vias), lined up on shared pins"
+            ),
+            count: traces + vias,
+        });
+    }
     Ok((traces, vias))
 }
 
@@ -170,6 +179,8 @@ mod tests {
         }
         let (traces, _) = add_copper_from(&mut target, &source).unwrap();
         assert_eq!(traces, 20);
+        // Marked as added, not read from the file.
+        assert!(target.derived.iter().any(|d| d.what == "copper" && d.count >= 20));
         assert_eq!(target.traces.len(), 20);
         for (a, b) in target_original.traces.iter().zip(&target.traces) {
             assert!((a.x1 - b.x1).abs() < 1e-6 && (a.y2 - b.y2).abs() < 1e-6);

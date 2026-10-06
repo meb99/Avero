@@ -125,6 +125,8 @@ export interface Board {
   warnings: string[];
   /** Encrypted parts left out (XinZhiZao without key). */
   lockedParts?: number;
+  /** What Avero added or reconstructed rather than read from the file. */
+  derived?: { what: string; how: string; count: number }[];
 }
 
 export type LoadErrorCode =

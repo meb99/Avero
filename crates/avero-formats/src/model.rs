@@ -301,6 +301,19 @@ impl FormatId {
     }
 }
 
+/// Data Avero added or reconstructed rather than read as such from the
+/// file, so it is never shown as part of the original data set.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Derived {
+    /// What it is: `"outline"`, `"copper"`, `"bottom-side"`.
+    pub what: &'static str,
+    /// How it was made, e.g. "a box around the pins and copper".
+    pub how: String,
+    /// How many items (tracks, parts …) it concerns.
+    pub count: usize,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Board {
@@ -324,6 +337,9 @@ pub struct Board {
     /// Parts left out because they are encrypted and no key was given
     /// (XinZhiZao without key): the board shows outline and test points only.
     pub locked_parts: u32,
+    /// What Avero added or reconstructed (see [`Derived`]).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub derived: Vec<Derived>,
 }
 
 impl Board {

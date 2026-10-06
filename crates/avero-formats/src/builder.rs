@@ -234,7 +234,13 @@ impl RawBoard {
             content.include(Point::new(t.x2, t.y2));
         }
 
+        let mut derived = Vec::new();
         if outline.is_empty() && !content.is_empty() {
+            derived.push(crate::model::Derived {
+                what: "outline",
+                how: "a box around the pins and copper".into(),
+                count: 1,
+            });
             let mut b = content;
             b.expand(50.0);
             outline.push(vec![
@@ -285,6 +291,7 @@ impl RawBoard {
             },
             warnings: self.warnings,
             locked_parts: self.locked_parts,
+            derived,
         }
     }
 }
