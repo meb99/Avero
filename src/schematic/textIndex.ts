@@ -123,8 +123,13 @@ export class WordIndex {
    */
   findPart(text: string): Word[] {
     const exact = this.find(text);
+    return exact.length ? exact : this.findUnits(text);
+  }
+
+  /** The units of a multi-part symbol (U2 → U2A, U2B, U2-C), in reading order. */
+  findUnits(text: string): Word[] {
     const name = text.trim().toUpperCase();
-    if (exact.length || !/^[A-Z]{1,3}\d+$/.test(name)) return exact;
+    if (!/^[A-Z]{1,3}\d+$/.test(name)) return [];
     const unit = new RegExp(`^${name}[-_.]?[A-H]$`);
     const out: Word[] = [];
     for (const [key, list] of this.byKey) if (unit.test(key)) out.push(...list);

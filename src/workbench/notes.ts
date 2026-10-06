@@ -1,3 +1,4 @@
+import { parseDocLinks, type DocLinks } from "../schematic/mapping";
 import { compareReadings, condOf, hasValues, HISTORY_MAX, QUANTITIES, takenAt, type Comparison, type Conditions, type HistoryEntry, type Quantity, type Reading, type Value } from "./measure";
 import { parsePhoto, type BoardPhoto, type PhotoSide } from "./photo";
 import type { NetKind } from "../core/types";
@@ -92,6 +93,8 @@ export interface BoardNotes {
   hidden?: { parts: string[]; mode: "body" | "all" };
   /** Own net kinds by file net name, where the file is wrong (a signal that is ground). */
   netKinds?: Record<string, NetKind>;
+  /** Places in the documents confirmed or blocked per part, and the parts' other names there. */
+  docLinks?: DocLinks;
   /** Notes pinned to spots on the board. */
   markers?: BoardMarker[];
   /** Lines, areas and jumpers drawn on the board. */
@@ -644,6 +647,11 @@ function parseNetKinds(value: unknown): Record<string, NetKind> | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
+/** Changes the corrections of document matches. */
+export function updateDocLinks(notes: BoardNotes, change: (all: DocLinks | undefined) => DocLinks | undefined): BoardNotes {
+  return { ...notes, docLinks: change(notes.docLinks), updated: now() };
+}
+
 /** Corrects (or, with `undefined`, resets) the kind of a net. */
 export function setNetKind(notes: BoardNotes, fileName: string, kind: NetKind | undefined): BoardNotes {
   const netKinds = { ...notes.netKinds };
@@ -805,6 +813,7 @@ export function parseNotes(json: string): BoardNotes | null {
       photos: parsePhotos(d.photos),
       netNames: parseNetNames(d.netNames),
       netKinds: parseNetKinds(d.netKinds),
+      docLinks: parseDocLinks(d.docLinks),
       hidden: parseHidden(d.hidden),
       markers: parseMarkers(d.markers),
       drawings: parseDrawings(d.drawings),
@@ -877,6 +886,7 @@ export function mergeNotes(mine: BoardNotes, theirs: BoardNotes): BoardNotes {
       mine.referencePoints || theirs.referencePoints ? mergeReadings(mine.referencePoints ?? {}, theirs.referencePoints ?? {}) : undefined,
     netNames: theirs.netNames || mine.netNames ? { ...theirs.netNames, ...mine.netNames } : undefined,
     netKinds: theirs.netKinds || mine.netKinds ? { ...theirs.netKinds, ...mine.netKinds } : undefined,
+    docLinks: theirs.docLinks || mine.docLinks ? { ...theirs.docLinks, ...mine.docLinks } : undefined,
     hidden: mine.hidden ?? theirs.hidden,
     markers: mergeMarkers(mine.markers, theirs.markers),
     drawings: mergeById(mine.drawings, theirs.drawings),

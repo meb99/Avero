@@ -350,6 +350,9 @@ export function App() {
   const netNames = notesForModel?.netNames;
   const netKinds = notesForModel?.netKinds;
   const hiddenParts = notesForModel?.hidden;
+  const docLinks = notesForModel?.docLinks;
+  const docLinksRef = useRef(docLinks);
+  docLinksRef.current = docLinks;
   useEffect(() => {
     if (!model || !notesForModel) return;
     const kinds = model.applyNetKinds(netKinds ?? {});
@@ -824,7 +827,8 @@ export function App() {
     const index = doc ? live.current.docs.indexOf(doc) : -1;
     if (index >= 0) setDocIndex(index);
     setSchematicVisible(true);
-    setFocus({ text, jump: true, hit, nonce: ++focusNonce.current });
+    const links = docLinksRef.current?.[text.toUpperCase()];
+    setFocus({ text, jump: true, hit, nonce: ++focusNonce.current, ...(links && { links }) });
   }, []);
 
   useEffect(() => {
@@ -1326,8 +1330,10 @@ export function App() {
             nets: [...new Set([model.nets[model.pins[selection.pin].net].name, model.fileNetName(model.pins[selection.pin].net)])],
           }
         : undefined;
-    setFocus(text ? { text, jump, nonce: ++focusNonce.current, ...(pin && { pin }) } : null);
-  }, [model, selection, textQuery]);
+    // A part's corrections: blocked places left out, its other names searched.
+    const links = model && (selection.kind === "part" || selection.kind === "pin") && text ? docLinks?.[text.toUpperCase()] : undefined;
+    setFocus(text ? { text, jump, nonce: ++focusNonce.current, ...(pin && { pin }), ...(links && { links }) } : null);
+  }, [model, selection, textQuery, docLinks]);
 
   // Schematic -> board.
   const classifyWord = useCallback(
@@ -2602,6 +2608,7 @@ export function App() {
                                         docs={docs}
                                         active={i}
                                         text={focus?.partial ? undefined : focus?.text}
+                                        links={focus?.links}
                                         onSwitch={setDocIndex}
                                         onAdd={() => void addDocument()}
                                         onClose={closeSchematic}

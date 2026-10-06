@@ -2,12 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { CloseIcon } from "../components/Icons";
 import { useI18n } from "../i18n";
 import type { SchematicDocument } from "./document";
+import { mappedWords, type PartLinks } from "./mapping";
 
 interface Props {
   docs: SchematicDocument[];
   active: number;
   /** What the board selection looks for, to count it in every document. */
   text?: string;
+  /** Its corrections (blocked places do not count). */
+  links?: PartLinks;
   onSwitch(index: number): void;
   onAdd(): void;
   onClose(index: number): void;
@@ -30,13 +33,13 @@ function useIndexing(docs: SchematicDocument[]): number {
  * another document is offered with one click, never shown silently from a
  * different revision.
  */
-export function DocTabs({ docs, active, text, onSwitch, onAdd, onClose }: Props) {
+export function DocTabs({ docs, active, text, links, onSwitch, onAdd, onClose }: Props) {
   const { t } = useI18n();
   const revision = useIndexing(docs);
   const counts = useMemo(
-    () => docs.map((d) => (text ? d.index.findPart(text).length : 0)),
+    () => docs.map((d) => (text ? mappedWords(d.index, d, text, links).length : 0)),
     // `revision`: more pages searchable.
-    [docs, text, revision],
+    [docs, text, links, revision],
   );
   const here = docs[active];
   const hereDone = !!here && here.indexedPages >= here.pageCount;

@@ -18,6 +18,7 @@ import { PageCamera } from "./pageCamera";
 import { findPinSpot, type PinSpot } from "./pinFind";
 import type { Box, Word } from "./textIndex";
 import { useOcr } from "./useOcr";
+import { mappedWords, type PartLinks } from "./mapping";
 
 /** What the schematic should show; a new nonce re-applies the same text. */
 export interface SchematicFocus {
@@ -31,6 +32,8 @@ export interface SchematicFocus {
   hit?: number;
   /** A pin of the part: show the occurrence where it is, and mark it. */
   pin?: { number: string; nets: string[] };
+  /** The part's corrections: places confirmed or blocked, its other names. */
+  links?: PartLinks;
 }
 
 export interface SchematicViewHandle {
@@ -464,7 +467,7 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
   const jumpedFor = useRef<number | string>(-1);
   const typed = query.trim();
   useEffect(() => {
-    const found = typed ? doc.index.search(typed) : focus ? doc.index.findPart(focus.text) : [];
+    const found = typed ? doc.index.search(typed) : focus ? mappedWords(doc.index, doc, focus.text, focus.links) : [];
     hitsRef.current = found;
     pinSpotRef.current = !typed && focus?.pin && found.length ? findPinSpot(doc.index, found, focus.pin.number, focus.pin.nets) : null;
     setHits(found);

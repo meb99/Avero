@@ -4308,3 +4308,99 @@ body.resizing-rows {
   cursor: row-resize;
   user-select: none;
 }
+
+/* Checking which document places belong to a part. */
+.mapping {
+  margin-top: 8px;
+}
+.mapping > summary {
+  cursor: pointer;
+  font-size: 12px;
+}
+.mapping-attention {
+  color: #e6a100;
+  font-weight: 600;
+}
+.mapping-hint {
+  font-size: 11.5px;
+  margin: 6px 0;
+}
+.mapping-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.mapping-table td {
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.mapping-table tr.confirmed td {
+  background: color-mix(in srgb, var(--ok, #2e7d32) 12%, transparent);
+}
+.mapping-doc {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mapping-word {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-weight: 600;
+}
+.mapping-source {
+  font-size: 11px;
+  padding: 0 5px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.mapping-source.src-ocr {
+  border-color: #e6a100;
+}
+.mapping-pin {
+  margin-left: 4px;
+  font-size: 11px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: color-mix(in srgb, #d81b60 22%, transparent);
+  white-space: nowrap;
+}
+.mapping-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+.mapping-actions button {
+  margin-left: 3px;
+}
+.mapping-recheck {
+  margin-top: 8px;
+  padding: 6px 8px;
+  border: 1px solid #e6a100;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.mapping-recheck-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+}
+.mapping-blocked,
+.mapping-aliases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 12px;
+}
+.hits-doc-name {
+  font-size: 11.5px;
+  margin-top: 4px;
+}
+.mapping-blocked .pin-chip .link,
+.mapping-aliases .pin-chip .link {
+  margin-left: 6px;
+}

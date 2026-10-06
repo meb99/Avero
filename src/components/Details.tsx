@@ -7,7 +7,7 @@ import { chipFor, type ChipInfo, type ChipPin } from "../knowledge/chips";
 import { checkPinout, type PinoutCheck } from "../knowledge/pinout";
 import { netReadings, partValues, type ObdData } from "../knowledge/obdata";
 import type { SchematicDocument } from "../schematic/document";
-import { SchematicHits } from "./SchematicHits";
+import { SchematicHits, type PartMapping } from "./SchematicHits";
 import { ballGrid } from "../core/bga";
 import type { SchematicFacts } from "../schematic/partInfo";
 import type { RGBA } from "../render/palette";
@@ -16,7 +16,7 @@ import type { NetKind, Selection, Side } from "../core/types";
 import { formatLength, formatSize } from "../format";
 import { useI18n, type MessageKey } from "../i18n";
 import type { Settings } from "../settings";
-import { activeCase, addDrawing, readingsFor, type BoardNotes } from "../workbench/notes";
+import { activeCase, addDrawing, readingsFor, updateDocLinks, type BoardNotes } from "../workbench/notes";
 import { jumperTargets } from "../core/jumper";
 import { datasheetsFor, partNumbers, type Datasheet } from "../workbench/datasheets";
 import { formatValue } from "../workbench/measure";
@@ -434,8 +434,13 @@ export function Details({
     );
   };
 
-  const hits = (names: string[]) =>
-    documents?.length && onSchematicJump ? <SchematicHits docs={documents} names={names} onJump={onSchematicJump} /> : null;
+  const hits = (names: string[], part?: PartMapping) =>
+    documents?.length && onSchematicJump ? <SchematicHits docs={documents} names={names} onJump={onSchematicJump} part={part} /> : null;
+  /** A part's document matches with its corrections (and the selected pin), changeable when the notes are there. */
+  const mapping = (name: string, pin?: PartMapping["pin"]): PartMapping | undefined =>
+    notes
+      ? { name, links: notes.docLinks?.[name.toUpperCase()], ...(pin && { pin }), onChange: (change) => updateNotes((n) => updateDocLinks(n, change)) }
+      : undefined;
 
   switch (selection.kind) {
     case "none":
@@ -565,7 +570,7 @@ export function Details({
             </Row>
             <Row label={t("details.size")}>{formatSize(b.maxX - b.minX, b.maxY - b.minY, u)}</Row>
           </dl>
-          {hits([part.name])}
+          {hits([part.name], mapping(part.name))}
           <section className="details-section">
             <h3>{t("details.pins")}</h3>
             <table className="pin-table">
@@ -690,6 +695,7 @@ export function Details({
               </section>
             );
           })()}
+          {hits([part.name], mapping(part.name, { number: pin.number, nets: [...new Set([net.name, model.fileNetName(pin.net)])] }))}
           {netMembers(pin.net, selection.pin)}
         </div>
       );
