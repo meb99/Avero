@@ -3,6 +3,25 @@ import type { MeterSettings } from "./workbench/meter";
 import type { OwnColors } from "./render/palette";
 import type { Shortcuts } from "./shortcuts";
 
+/** Panes that can be stacked beside the board. */
+export type DockPane = "camera" | "photo" | "sheet" | "schematic";
+
+/** A workbench arrangement: which panes are open and how much room each gets. */
+export interface SavedLayout {
+  name: string;
+  /** Share of the width beside the sidebar taken by the panes (0.2 … 0.8). */
+  share: number;
+  panes: DockPane[];
+  weights: Partial<Record<DockPane, number>>;
+  sidebar: boolean;
+  sidebarTab?: string;
+  /** Sidebar width as a share of the window, so it holds on another screen. */
+  sidebarShare?: number;
+  boardHidden?: boolean;
+  /** Both sides at once, and how. */
+  bothSides?: "together" | "separate" | "synced" | null;
+}
+
 export interface Settings {
   /** Bumped when a default changes for everyone, see loadSettings. */
   revision?: number;
@@ -51,6 +70,10 @@ export interface Settings {
   sidebarCollapsed: boolean;
   /** Width of the schematic panel as a share of the space next to the sidebar. */
   schematicShare: number;
+  /** Heights of the panes stacked beside the board, as weights (flex-grow). */
+  dockWeights?: Partial<Record<DockPane, number>>;
+  /** Own layouts saved by name. */
+  layouts?: SavedLayout[];
   /** Allowed relative deviation from reference readings (0.1 = 10 %). */
   tolerance: number;
   /** DES key for XinZhiZao .pcb files, as typed (hex). */

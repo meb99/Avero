@@ -35,7 +35,9 @@ function isRail(n: Net): boolean {
 
 const formatVolts = (v: number, lang: string) => `${v.toLocaleString(lang, { maximumFractionDigits: 3 })} V`;
 
-type Tab = "details" | "parts" | "nets" | "layers" | "knowledge" | "measure" | "diagnose";
+export type SidebarTab = "details" | "parts" | "nets" | "layers" | "knowledge" | "measure" | "diagnose";
+type Tab = SidebarTab;
+export const SIDEBAR_TABS: readonly SidebarTab[] = ["details", "parts", "nets", "layers", "knowledge", "measure", "diagnose"];
 
 interface Props {
   model: BoardModel;
@@ -80,7 +82,9 @@ interface Props {
   onAddDatasheet(part: number): void;
   onRemoveDatasheet(sheet: Datasheet): void;
   /** Shows a tab from outside (next measuring point by key). */
-  tabRequest?: { tab: "measure" | "details"; n: number } | null;
+  tabRequest?: { tab: SidebarTab; n: number } | null;
+  /** Told which tab is shown (layouts remember it). */
+  onTabChange?(tab: SidebarTab): void;
   listFocus?: { listId: string; index: number; n: number } | null;
   /** Contents of the "Knowledge" tab. */
   knowledge: ReactNode;
@@ -136,6 +140,7 @@ export function Sidebar({
   onAddDatasheet,
   onRemoveDatasheet,
   tabRequest,
+  onTabChange,
   listFocus,
   width,
   onWidth,
@@ -180,6 +185,7 @@ export function Sidebar({
   useEffect(() => {
     if (tabRequest) setTab(tabRequest.tab);
   }, [tabRequest?.n]);
+  useEffect(() => onTabChange?.(tab), [tab, onTabChange]);
   const [partFilter, setPartFilter] = useState("");
   const [partKind, setPartKind] = useState<PartRole | "all">("all");
   const [netFilter, setNetFilter] = useState("");

@@ -48,3 +48,46 @@ export function Splitter({ container, share, onDrag, onDone }: Props) {
     />
   );
 }
+
+/** Smallest height a stacked pane is dragged down to, in pixels. */
+const MIN_PANE = 90;
+
+/**
+ * Draggable divider between two panes stacked in the side area. Weights are
+ * flex-grow values, so they hold whatever the window's size or scaling.
+ */
+export function StackSplitter({ onDrag, onDone }: { onDrag(before: number, after: number): void; onDone(): void }) {
+  const start = useRef<{ y: number; before: number; after: number } | null>(null);
+  return (
+    <div
+      className="stack-splitter"
+      role="separator"
+      aria-orientation="horizontal"
+      onPointerDown={(e) => {
+        const el = e.currentTarget;
+        const before = el.previousElementSibling?.getBoundingClientRect().height ?? 0;
+        const after = el.nextElementSibling?.getBoundingClientRect().height ?? 0;
+        start.current = { y: e.clientY, before, after };
+        el.setPointerCapture(e.pointerId);
+        document.body.classList.add("resizing-rows");
+      }}
+      onPointerMove={(e) => {
+        const s = start.current;
+        if (!s || !e.currentTarget.hasPointerCapture(e.pointerId)) return;
+        const total = s.before + s.after;
+        const before = Math.min(total - MIN_PANE, Math.max(MIN_PANE, s.before + e.clientY - s.y));
+        onDrag(before / total, (total - before) / total);
+      }}
+      onPointerUp={(e) => {
+        document.body.classList.remove("resizing-rows");
+        e.currentTarget.releasePointerCapture(e.pointerId);
+        start.current = null;
+        onDone();
+      }}
+      onDoubleClick={() => {
+        onDrag(0.5, 0.5);
+        onDone();
+      }}
+    />
+  );
+}

@@ -3748,6 +3748,7 @@ button.danger {
 }
 
 .work-area.board-hidden > .schematic-pane,
+.work-area.board-hidden > .dock,
 .work-area.board-hidden > .compare-pane {
   flex: 1;
   width: auto !important;
@@ -4264,4 +4265,46 @@ button.danger {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+}
+
+/* Panes stacked beside the board. */
+.dock {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+}
+.dock-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.dock > .schematic-pane {
+  flex-direction: row;
+}
+.stack-splitter {
+  height: 7px;
+  margin: -3px 0;
+  flex-shrink: 0;
+  cursor: row-resize;
+  z-index: 3;
+  position: relative;
+}
+.stack-splitter::after {
+  content: "";
+  position: absolute;
+  inset: 3px 0;
+  background: var(--border);
+}
+.stack-splitter:hover::after,
+body.resizing-rows .stack-splitter::after {
+  background: var(--accent);
+}
+body.resizing-rows {
+  cursor: row-resize;
+  user-select: none;
 }

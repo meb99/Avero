@@ -43,6 +43,9 @@ export interface MenuActions {
   checkUpdates(): void;
   /** Saves what is unsaved, then quits. */
   quit(): void;
+  /** A built-in layout ("preset:repair") or an own one ("own:Name"). */
+  layout(id: string): void;
+  saveLayout(): void;
   website(): void;
 }
 
@@ -94,7 +97,7 @@ export function menuOwnsKey(e: { key: string; code: string; metaKey: boolean; ct
  * Builds the macOS menu bar. Actions go through `actions()` so the menu
  * always calls the current handlers without being rebuilt on every render.
  */
-export async function installMenu(t: Translate, actions: () => MenuActions, recent: string[], version: string): Promise<void> {
+export async function installMenu(t: Translate, actions: () => MenuActions, recent: string[], version: string, layouts: { presets: string[]; own: string[] } = { presets: [], own: [] }): Promise<void> {
   const item = (id: string, text: string, run: (a: MenuActions) => void, accelerator?: string): MenuItemOptions => {
     if (accelerator) remember(accelerator.replace("CmdOrCtrl+", ""));
     return { id, text, accelerator, action: () => run(actions()) };
@@ -217,6 +220,16 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
         // ⌃⇥ / ⌃⇧⇥ are handled by the web view; menus cannot take Tab.
         item("next-tab", `${t("tabs.next")}  ⌃⇥`, (a) => a.nextTab()),
         item("prev-tab", `${t("tabs.prev")}  ⌃⇧⇥`, (a) => a.prevTab()),
+        SEP,
+        {
+          text: t("layout.menu"),
+          items: [
+            ...layouts.presets.map((id) => item(`layout-${id}`, t(`layout.${id}` as Parameters<Translate>[0]), (a) => a.layout(`preset:${id}`))),
+            ...(layouts.own.length ? [SEP, ...layouts.own.map((name, i) => item(`layout-own-${i}`, name, (a) => a.layout(`own:${name}`)))] : []),
+            SEP,
+            item("layout-save", t("layout.save"), (a) => a.saveLayout()),
+          ],
+        },
         SEP,
         { item: "BringAllToFront" },
       ],

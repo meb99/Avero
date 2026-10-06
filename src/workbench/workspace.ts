@@ -22,6 +22,8 @@ export interface WindowFrame {
   width: number;
   height: number;
   maximized: boolean;
+  /** In points (logical pixels); older workspaces saved device pixels. */
+  logical?: boolean;
 }
 
 export interface Workspace {
@@ -60,7 +62,7 @@ export function parseWorkspace(json: string | null): Workspace | null {
       version: 1,
       tabs,
       active: finite(d.active) ? Math.min(Math.max(0, d.active as number), Math.max(0, tabs.length - 1)) : 0,
-      ...(w && finite(w.x, w.y, w.width, w.height) && w.width > 200 && w.height > 150 && { window: { x: w.x, y: w.y, width: w.width, height: w.height, maximized: !!w.maximized } }),
+      ...(w && finite(w.x, w.y, w.width, w.height) && w.width > 200 && w.height > 150 && { window: { x: w.x, y: w.y, width: w.width, height: w.height, maximized: !!w.maximized, ...(w.logical === true && { logical: true }) } }),
     };
   } catch {
     return null;

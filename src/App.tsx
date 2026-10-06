@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AskHost, askConfirm, askText } from "./components/Ask";
 import { copyText } from "./core/clipboard";
 import { netsCsv, partsCsv, readingsCsv } from "./workbench/csvExport";
@@ -22,8 +22,8 @@ import { CommandPalette } from "./components/CommandPalette";
 import { HelpDialog, SettingsDialog } from "./components/Dialogs";
 import { LibraryDialog, type LibraryDrop } from "./components/Library";
 import { CloseIcon } from "./components/Icons";
-import { Sidebar } from "./components/Sidebar";
-import { Splitter } from "./components/Splitter";
+import { Sidebar, SIDEBAR_TABS, type SidebarTab } from "./components/Sidebar";
+import { Splitter, StackSplitter } from "./components/Splitter";
 import { StatusBar } from "./components/StatusBar";
 import { TabBar, type TabInfo } from "./components/TabBar";
 import { Toolbar } from "./components/Toolbar";
@@ -59,8 +59,10 @@ import { setPdfPasswordPrompt, type SchematicDocument } from "./schematic/docume
 import { readSchematicFacts, type SchematicFacts } from "./schematic/partInfo";
 import { SchematicView, type SchematicFocus, type SchematicViewHandle, type WordTarget } from "./schematic/SchematicView";
 import { DocTabs } from "./schematic/DocTabs";
+import { currentScreens, placeOnScreens } from "./core/windowFrame";
 import type { Word } from "./schematic/textIndex";
-import { clearRecent, loadRecent, loadSettings, rememberRecent, saveSettings, type Settings } from "./settings";
+import { clearRecent, loadRecent, loadSettings, rememberRecent, saveSettings, type DockPane, type SavedLayout, type Settings } from "./settings";
+import { DOCK_ORDER, paneWeights, parseLayouts, PRESETS, PRESET_IDS, sidebarPixels, withLayout, type PresetId } from "./workbench/layouts";
 import { useTheme } from "./theme";
 import { dailyCheck, fetchUpdate, type Update } from "./updates";
 import { pickImport, type LibraryEntry, type LibraryFile } from "./workbench/library";
@@ -318,6 +320,8 @@ export function App() {
   // schematic highlights the word without jumping away from it.
   const pickedInSchematic = useRef(false);
 
+  // Own layout names, for the menu bar (rebuilt when they change).
+  const layoutNames = useMemo(() => parseLayouts(settings.layouts).map((l) => l.name).join("\n"), [settings.layouts]);
   const lang = settings.language === "auto" ? systemLanguage() : settings.language;
   const i18n = useMemo(() => ({ t: translator(lang), lang }), [lang]);
   const { t } = i18n;
@@ -327,7 +331,7 @@ export function App() {
   const compared = compareTab !== null && compareTab !== activeTab ? tabs.find((t) => t.id === compareTab) : undefined;
   const compareModel = compared?.model ?? null;
   const documentsShownFirst = useMemo(() => (schematic ? [schematic, ...docs.filter((d) => d !== schematic)] : []), [docs, schematic]);
-  const showSchematic = schematic !== null && schematicVisible && !detached && !compareModel && !photoPane && !sheetPane && !cameraPane;
+  const showSchematic = schematic !== null && schematicVisible && !detached && !compareModel;
   const compareSelection = useMemo(
     () => (model && compareModel ? mapSelection(model, compareModel, selection) : NONE),
     [model, compareModel, selection],
@@ -819,7 +823,6 @@ export function App() {
   const jumpInSchematic = useCallback((text: string, hit: number, doc?: SchematicDocument) => {
     const index = doc ? live.current.docs.indexOf(doc) : -1;
     if (index >= 0) setDocIndex(index);
-    setPhotoPane(false);
     setSchematicVisible(true);
     setFocus({ text, jump: true, hit, nonce: ++focusNonce.current });
   }, []);
@@ -863,7 +866,6 @@ export function App() {
         const next = add(live.current.docs);
         setDocs(next.docs);
         setDocIndex(next.docIndex);
-        setPhotoPane(false);
         setSchematicVisible(true);
         return;
       }
@@ -885,7 +887,6 @@ export function App() {
       const open = live.current.docs.findIndex((d) => d.path === path);
       if (open >= 0) {
         setDocIndex(open);
-        setPhotoPane(false);
         setSchematicVisible(true);
         return;
       }
@@ -1051,7 +1052,6 @@ export function App() {
       const board = entry.boards[0]?.path;
       if (board) await openPath(board, file.path);
       else await openSchematicPath(file.path);
-      setPhotoPane(false);
       setSchematicVisible(true);
       setTextQuery(query);
     },
@@ -1095,10 +1095,7 @@ export function App() {
       return;
     }
     if (schematic) {
-      if (photoPane) {
-        setPhotoPane(false);
-        setSchematicVisible(true);
-      } else setSchematicVisible((v) => !v);
+      setSchematicVisible((v) => !v);
       return;
     }
     const path = await pickPath(t("schematic.open"), "pdf");
@@ -1429,7 +1426,12 @@ export function App() {
   }, [openPath]);
 
   // --- bench keys: next measuring point, flip … (changeable, also for a foot pedal) ---
-  const [tabRequest, setTabRequest] = useState<{ tab: "measure" | "details"; n: number } | null>(null);
+  const [tabRequest, setTabRequest] = useState<{ tab: SidebarTab; n: number } | null>(null);
+  // The sidebar tab shown, for layouts.
+  const sidebarTabRef = useRef<SidebarTab>("details");
+  const onSidebarTab = useCallback((tab: SidebarTab) => {
+    sidebarTabRef.current = tab;
+  }, []);
   const [listFocus, setListFocus] = useState<{ listId: string; index: number; n: number } | null>(null);
   const nextListPoint = () => {
     if (!model || !notesForModel) return;
@@ -1543,8 +1545,6 @@ export function App() {
         old?.doc.destroy();
         return { doc, sheet, page };
       });
-      setPhotoPane(false);
-      setCameraPane(false);
     } catch (e) {
       setToast(t("sheet.failed", { message: e instanceof Error ? e.message : String(e) }));
     }
@@ -1582,14 +1582,8 @@ export function App() {
   }, []);
 
   // --- camera ---------------------------------------------------------------------
-  const openCamera = () => {
-    setCameraPane(true);
-    setPhotoPane(false);
-    setSheetPane((old) => {
-      old?.doc.destroy();
-      return null;
-    });
-  };
+  // Next to whatever else is open beside the board.
+  const openCamera = () => setCameraPane(true);
   const cameraSnapshot = async (png: Uint8Array, use: "case" | "board") => {
     if (!notes) return setToast(t("photo.notesLoading"));
     try {
@@ -1618,8 +1612,11 @@ export function App() {
     try {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       const win = getCurrentWindow();
-      const [pos, size, maximized] = await Promise.all([win.outerPosition(), win.outerSize(), win.isMaximized()]);
-      frame = { x: pos.x, y: pos.y, width: size.width, height: size.height, maximized };
+      const [pos, size, maximized, scale] = await Promise.all([win.outerPosition(), win.outerSize(), win.isMaximized(), win.scaleFactor()]);
+      // In points, so the frame fits a screen with another scaling.
+      const p = pos.toLogical(scale);
+      const z = size.toLogical(scale);
+      frame = { x: p.x, y: p.y, width: z.width, height: z.height, maximized, logical: true };
     } catch {
       frame = undefined;
     }
@@ -1664,10 +1661,15 @@ export function App() {
       if (!ws) return;
       if (ws.window) {
         try {
-          const { getCurrentWindow, PhysicalPosition, PhysicalSize } = await import("@tauri-apps/api/window");
+          const { getCurrentWindow, LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize } = await import("@tauri-apps/api/window");
           const win = getCurrentWindow();
           if (ws.window.maximized) await win.maximize();
-          else {
+          else if (ws.window.logical) {
+            // On a screen there is now: a monitor unplugged since does not take the window with it.
+            const f = placeOnScreens(ws.window, await currentScreens());
+            await win.setSize(new LogicalSize(f.width, f.height));
+            await win.setPosition(new LogicalPosition(f.x, f.y));
+          } else {
             await win.setSize(new PhysicalSize(ws.window.width, ws.window.height));
             await win.setPosition(new PhysicalPosition(ws.window.x, ws.window.y));
           }
@@ -1858,7 +1860,6 @@ export function App() {
       searchRef.current?.select();
     },
     searchSchematic: () => {
-      setPhotoPane(false);
       if (schematic && !schematicVisible) setSchematicVisible(true);
       // After the pane is shown.
       requestAnimationFrame(() => schematicViewRef.current?.focusSearch());
@@ -1885,6 +1886,16 @@ export function App() {
     addPhoto: () => void addPhoto(),
     togglePhoto: () => setShowPhoto((v) => !v),
     compare: toggleCompare,
+    layout: (id: string) => {
+      if (id.startsWith("preset:")) {
+        const preset = PRESET_IDS.find((p) => `preset:${p}` === id);
+        if (preset) applyPreset(preset);
+      } else {
+        const own = layouts.find((l) => `own:${l.name}` === id);
+        if (own) applyLayout(own);
+      }
+    },
+    saveLayout: () => void saveLayout(),
     back: () => navigate(-1),
     forward: () => navigate(1),
     bookmark: () => void addBookmarkHere(),
@@ -1899,10 +1910,10 @@ export function App() {
 
   // The menu calls through actionsRef, so it is rebuilt only for new texts.
   useEffect(() => {
-    installMenu(t, () => actionsRef.current, recent, __APP_VERSION__).catch(() => {
+    installMenu(t, () => actionsRef.current, recent, __APP_VERSION__, { presets: PRESET_IDS, own: layoutNames.split("\n").filter(Boolean) }).catch(() => {
       // No native menu outside the desktop app (browser preview, tests).
     });
-  }, [t, recent]);
+  }, [t, recent, layoutNames]);
 
   // Once per start; dailyCheck itself limits the requests to one a day.
   useEffect(() => {
@@ -1939,6 +1950,10 @@ export function App() {
       { id: "pad-values", label: t("pad.command"), shortcut: "V", enabled: board, run: cyclePadValues },
       { id: "hide-selected", label: t("hide.command"), shortcut: "H", enabled: board && notesForModel !== null, run: hideSelected },
       { id: "isolate", label: t(isolationFor ? "isolate.end" : "isolate.command"), shortcut: "I", enabled: board, run: toggleIsolation },
+      ...PRESET_IDS.map((id) => ({ id: `layout-${id}`, label: t("layout.apply", { name: t(`layout.${id}`) }), run: () => applyPreset(id) })),
+      ...layouts.map((l) => ({ id: `layout-own-${l.name}`, label: t("layout.apply", { name: l.name }), run: () => applyLayout(l) })),
+      { id: "layout-save", label: t("layout.save"), run: () => void saveLayout() },
+      ...layouts.map((l) => ({ id: `layout-delete-${l.name}`, label: t("layout.delete", { name: l.name }), run: () => deleteLayout(l.name) })),
       {
         id: "show-all-parts",
         label: t("hide.showAllCommand"),
@@ -1952,7 +1967,6 @@ export function App() {
       { id: "photo-toggle", label: t("photo.toggle"), enabled: !!storedPhoto, run: a.togglePhoto },
       { id: "photo-pane", label: t("photo.paneCommand"), enabled: !!model, run: () => {
           setPhotoPane((v) => !v);
-          setCameraPane(false);
         } },
       { id: "csv-parts", label: t("csv.parts"), enabled: board, run: () => void exportCsv("parts") },
       { id: "csv-nets", label: t("csv.nets"), enabled: board, run: () => void exportCsv("nets") },
@@ -2155,6 +2169,73 @@ export function App() {
   // --- layout --------------------------------------------------------------
 
   const [share, setShare] = useState(settings.schematicShare);
+  // Panes stacked beside the board, top to bottom, and their heights (live while dragging).
+  const dockOpen = DOCK_ORDER.filter((p) =>
+    p === "schematic" ? showSchematic : p === "sheet" ? model !== null && sheetPane !== null : p === "camera" ? model !== null && cameraPane : model !== null && photoPane && !aligning,
+  );
+  const [dockWeights, setDockWeights] = useState(settings.dockWeights ?? {});
+  const dockFlex = paneWeights(dockOpen, dockWeights);
+  const dragDock = (above: DockPane, below: DockPane, a: number, b: number) => {
+    const total = (dockWeights[above] ?? 1) + (dockWeights[below] ?? 1);
+    setDockWeights((w) => ({ ...w, [above]: a * total, [below]: b * total }));
+  };
+  const dockWeightsRef = useRef(dockWeights);
+  dockWeightsRef.current = dockWeights;
+  const saveDock = () => setSettings((old) => ({ ...old, dockWeights: dockWeightsRef.current }));
+
+  // --- layouts: panes, their sizes and the sidebar, kept as shares ----------
+  const layouts = useMemo(() => parseLayouts(settings.layouts), [settings.layouts]);
+  const applyLayout = (layout: SavedLayout & { compare?: boolean }) => {
+    setShare(layout.share);
+    setDockWeights(layout.weights);
+    const width = sidebarPixels(layout, window.innerWidth, settings.sidebarWidth);
+    setSidebarWidth(width);
+    setSettings((old) => ({
+      ...old,
+      schematicShare: layout.share,
+      dockWeights: layout.weights,
+      showSidebar: layout.sidebar,
+      sidebarCollapsed: false,
+      sidebarWidth: width,
+      ...(layout.bothSides === null ? { bothSides: false } : layout.bothSides ? { bothSides: true, bothSidesMode: layout.bothSides } : {}),
+    }));
+    setCameraPane(layout.panes.includes("camera"));
+    setPhotoPane(layout.panes.includes("photo"));
+    if (!layout.panes.includes("sheet"))
+      setSheetPane((old) => {
+        old?.doc.destroy();
+        return null;
+      });
+    setSchematicVisible(layout.panes.includes("schematic"));
+    if (layout.panes.includes("schematic") && detached) void closeSchematicWindow();
+    setBoardHidden(!!layout.boardHidden);
+    const tab = SIDEBAR_TABS.find((x) => x === layout.sidebarTab);
+    if (tab) setTabRequest((r) => ({ tab, n: (r?.n ?? 0) + 1 }));
+    if (layout.compare) {
+      if (!compareModel) toggleCompare();
+    } else if (compareModel) setCompareTab(null);
+  };
+  const applyPreset = (id: PresetId) => applyLayout(PRESETS[id]);
+  /** The arrangement on screen now, under a name. */
+  const currentLayout = (name: string): SavedLayout => ({
+    name,
+    share,
+    panes: dockOpen,
+    weights: Object.fromEntries(dockOpen.map((p) => [p, dockWeights[p] ?? 1])),
+    sidebar: settings.showSidebar,
+    sidebarTab: sidebarTabRef.current,
+    sidebarShare: Math.min(0.5, sidebarWidth / Math.max(1, window.innerWidth)),
+    boardHidden,
+    bothSides: settings.bothSides ? settings.bothSidesMode : null,
+  });
+  const saveLayout = async () => {
+    const name = await askText(t("layout.saveAsk"), "", { title: t("layout.save") });
+    if (!name?.trim()) return;
+    setSettings((old) => ({ ...old, layouts: withLayout(old.layouts ?? [], currentLayout(name.trim())) }));
+    setToast(t("layout.saved", { name: name.trim() }));
+  };
+  const deleteLayout = (name: string) =>
+    setSettings((old) => ({ ...old, layouts: (old.layouts ?? []).filter((l) => l.name !== name) }));
   // Live while dragging; stored in the settings when the drag ends.
   const [sidebarWidth, setSidebarWidth] = useState(settings.sidebarWidth);
   useEffect(() => setShare(settings.schematicShare), [settings.schematicShare]);
@@ -2419,95 +2500,10 @@ export function App() {
                     </div>
                   </>
                 )}
-                {model && sheetPane && (
+                {/* Beside the board: camera, photo, datasheet and documents stacked, each as tall as its weight. */}
+                {(dockOpen.length > 0 || (docs.length > 0 && !detached)) && (
                   <>
-                    <Splitter
-                      container={workAreaRef}
-                      share={share}
-                      onDrag={setShare}
-                      onDone={(s) => setSettings((old) => ({ ...old, schematicShare: s }))}
-                    />
-                    <div className="compare-pane" style={{ width: `${share * 100}%` }}>
-                      <DatasheetPane
-                        doc={sheetPane.doc}
-                        sheet={sheetPane.sheet}
-                        page={sheetPane.page}
-                        scroll={settings.scroll}
-                        onRemember={(page, label) => {
-                          const next = datasheets.map((s) => (s.id === sheetPane.sheet.id ? { ...s, pages: [...s.pages, { label, page }] } : s));
-                          saveDatasheets(next);
-                          setSheetPane((p) => (p ? { ...p, sheet: next.find((s) => s.id === p.sheet.id) ?? p.sheet } : p));
-                        }}
-                        onClose={() =>
-                          setSheetPane((old) => {
-                            old?.doc.destroy();
-                            return null;
-                          })
-                        }
-                      />
-                    </div>
-                  </>
-                )}
-                {model && cameraPane && !sheetPane && (
-                  <>
-                    <Splitter
-                      container={workAreaRef}
-                      share={share}
-                      onDrag={setShare}
-                      onDone={(s) => setSettings((old) => ({ ...old, schematicShare: s }))}
-                    />
-                    <div className="compare-pane" style={{ width: `${share * 100}%` }}>
-                      <CameraPane onSnapshot={(png, use) => void cameraSnapshot(png, use)} onClose={() => setCameraPane(false)} />
-                    </div>
-                  </>
-                )}
-                {model && photoPane && !aligning && !sheetPane && !cameraPane && (
-                  <>
-                    <Splitter
-                      container={workAreaRef}
-                      share={share}
-                      onDrag={setShare}
-                      onDone={(s) => setSettings((old) => ({ ...old, schematicShare: s }))}
-                    />
-                    <div className="compare-pane" style={{ width: `${share * 100}%` }}>
-                      {storedPhoto && photoImage?.file === storedPhoto.file ? (
-                        <PhotoPane
-                          image={photoImage.image}
-                          matrix={storedPhoto.matrix}
-                          perspective={storedPhoto.perspective}
-                          model={model}
-                          side={side}
-                          selection={selection}
-                          onSelect={select}
-                          onClose={() => setPhotoPane(false)}
-                        />
-                      ) : (
-                        <div className="photo-pane-empty">
-                          <p>{t(side === "top" ? "photo.noneTop" : "photo.noneBottom")}</p>
-                          <div className="photo-pane-actions">
-                            {notes && schematic && (
-                              <button className="small primary" onClick={() => void photoFromPdf()}>
-                                {t("photo.pdfUse")}
-                              </button>
-                            )}
-                            {notes && (
-                              <button className={schematic ? "small" : "small primary"} onClick={() => void addPhoto()}>
-                                {t("photo.add")}
-                              </button>
-                            )}
-                            <button className="small" onClick={() => setPhotoPane(false)}>
-                              {t("photo.paneClose")}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-                {/* Every document stays mounted (put aside while another pane is shown), keeping its page, zoom and search. */}
-                {docs.length > 0 && !detached && (
-                  <>
-                    {model && showSchematic && (
+                    {model && dockOpen.length > 0 && (
                       <Splitter
                         container={workAreaRef}
                         share={share}
@@ -2515,40 +2511,109 @@ export function App() {
                         onDone={(s) => setSettings((old) => ({ ...old, schematicShare: s }))}
                       />
                     )}
-                    <div
-                      className="schematic-pane"
-                      style={!showSchematic ? { display: "none" } : model ? { width: `${share * 100}%` } : { flex: 1 }}
-                    >
-                      {docs.map((doc, i) => {
-                        const shown = i === Math.min(docIndex, docs.length - 1);
-                        // The board's selection goes to the document shown; the others keep theirs.
-                        if (shown) docFocus.current.set(doc, focus);
-                        return (
-                          <div key={doc.id} className="schematic-doc" style={shown ? undefined : { display: "none" }}>
-                            <SchematicView
-                              ref={shown ? (showSchematic ? schematicViewRef : docViewRef) : undefined}
-                              doc={doc}
-                              focus={shown ? focus : (docFocus.current.get(doc) ?? null)}
-                              scroll={settings.scroll}
-                              classify={classifyWord}
-                              onPick={pickWord}
-                              onClose={() => closeSchematic(i)}
-                              onPopOut={() => void popOutSchematic()}
-                              onShowBoard={boardAway ? () => setBoardHidden(false) : undefined}
-                              switcher={
-                                <DocTabs
-                                  docs={docs}
-                                  active={i}
-                                  text={focus?.partial ? undefined : focus?.text}
-                                  onSwitch={setDocIndex}
-                                  onAdd={() => void addDocument()}
-                                  onClose={closeSchematic}
+                    <div className="dock" style={dockOpen.length === 0 ? { display: "none" } : model ? { width: `${share * 100}%` } : { flex: 1 }}>
+                      {dockOpen
+                        .filter((p) => p !== "schematic")
+                        .map((p, k) => (
+                          <Fragment key={p}>
+                            {k > 0 && <StackSplitter onDrag={(a, b) => dragDock(dockOpen[k - 1], p, a, b)} onDone={saveDock} />}
+                            <div className="dock-pane" style={{ flex: `${dockFlex[p]} 1 0` }}>
+                              {p === "sheet" && sheetPane && (
+                                <DatasheetPane
+                                  doc={sheetPane.doc}
+                                  sheet={sheetPane.sheet}
+                                  page={sheetPane.page}
+                                  scroll={settings.scroll}
+                                  onRemember={(page, label) => {
+                                    const next = datasheets.map((s) => (s.id === sheetPane.sheet.id ? { ...s, pages: [...s.pages, { label, page }] } : s));
+                                    saveDatasheets(next);
+                                    setSheetPane((p) => (p ? { ...p, sheet: next.find((s) => s.id === p.sheet.id) ?? p.sheet } : p));
+                                  }}
+                                  onClose={() =>
+                                    setSheetPane((old) => {
+                                      old?.doc.destroy();
+                                      return null;
+                                    })
+                                  }
                                 />
-                              }
-                            />
+                              )}
+                              {p === "camera" && <CameraPane onSnapshot={(png, use) => void cameraSnapshot(png, use)} onClose={() => setCameraPane(false)} />}
+                              {p === "photo" &&
+                                model &&
+                                (storedPhoto && photoImage?.file === storedPhoto.file ? (
+                                  <PhotoPane
+                                    image={photoImage.image}
+                                    matrix={storedPhoto.matrix}
+                                    perspective={storedPhoto.perspective}
+                                    model={model}
+                                    side={side}
+                                    selection={selection}
+                                    onSelect={select}
+                                    onClose={() => setPhotoPane(false)}
+                                  />
+                                ) : (
+                                  <div className="photo-pane-empty">
+                                    <p>{t(side === "top" ? "photo.noneTop" : "photo.noneBottom")}</p>
+                                    <div className="photo-pane-actions">
+                                      {notes && schematic && (
+                                        <button className="small primary" onClick={() => void photoFromPdf()}>
+                                          {t("photo.pdfUse")}
+                                        </button>
+                                      )}
+                                      {notes && (
+                                        <button className={schematic ? "small" : "small primary"} onClick={() => void addPhoto()}>
+                                          {t("photo.add")}
+                                        </button>
+                                      )}
+                                      <button className="small" onClick={() => setPhotoPane(false)}>
+                                        {t("photo.paneClose")}
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+                          </Fragment>
+                        ))}
+                      {/* Every document stays mounted (put aside while hidden), keeping its page, zoom and search. */}
+                      {docs.length > 0 && !detached && (
+                        <Fragment key="schematic">
+                          {showSchematic && dockOpen.length > 1 && (
+                            <StackSplitter onDrag={(a, b) => dragDock(dockOpen[dockOpen.length - 2], "schematic", a, b)} onDone={saveDock} />
+                          )}
+                          <div className="schematic-pane dock-pane" style={showSchematic ? { flex: `${dockFlex.schematic} 1 0` } : { display: "none" }}>
+                            {docs.map((doc, i) => {
+                              const shown = i === Math.min(docIndex, docs.length - 1);
+                              // The board's selection goes to the document shown; the others keep theirs.
+                              if (shown) docFocus.current.set(doc, focus);
+                              return (
+                                <div key={doc.id} className="schematic-doc" style={shown ? undefined : { display: "none" }}>
+                                  <SchematicView
+                                    ref={shown ? (showSchematic ? schematicViewRef : docViewRef) : undefined}
+                                    doc={doc}
+                                    focus={shown ? focus : (docFocus.current.get(doc) ?? null)}
+                                    scroll={settings.scroll}
+                                    classify={classifyWord}
+                                    onPick={pickWord}
+                                    onClose={() => closeSchematic(i)}
+                                    onPopOut={() => void popOutSchematic()}
+                                    onShowBoard={boardAway ? () => setBoardHidden(false) : undefined}
+                                    switcher={
+                                      <DocTabs
+                                        docs={docs}
+                                        active={i}
+                                        text={focus?.partial ? undefined : focus?.text}
+                                        onSwitch={setDocIndex}
+                                        onAdd={() => void addDocument()}
+                                        onClose={closeSchematic}
+                                      />
+                                    }
+                                  />
+                                </div>
+                              );
+                            })}
                           </div>
-                        );
-                      })}
+                        </Fragment>
+                      )}
                     </div>
                   </>
                 )}
@@ -2601,6 +2666,7 @@ export function App() {
                     void invoke("remove_datasheet", { path: sheet.file }).catch(() => {});
                   }}
                   tabRequest={tabRequest}
+                  onTabChange={onSidebarTab}
                   listFocus={listFocus}
                   width={sidebarWidth}
                   onWidth={(w, done) => {
@@ -2701,10 +2767,7 @@ export function App() {
               <button className="small" onClick={() => setShowPhoto((v) => !v)}>
                 {showPhoto ? t("photo.hide") : t("photo.show")}
               </button>
-              <button className={photoPane ? "small on" : "small"} onClick={() => {
-                  setPhotoPane((v) => !v);
-                  setCameraPane(false);
-                }} title={t("photo.paneHint")}>
+              <button className={photoPane ? "small on" : "small"} onClick={() => setPhotoPane((v) => !v)} title={t("photo.paneHint")}>
                 {t("photo.pane")}
               </button>
               <button className="small" onClick={() => void startAlignment(storedPhoto.file, false)}>

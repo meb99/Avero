@@ -7,6 +7,7 @@ import { useTheme } from "../theme";
 import { setPdfPasswordPrompt, type SchematicDocument } from "./document";
 import { AskHost, askText } from "../components/Ask";
 import { closeSchematicWindow, LINK, type LinkedDoc } from "./link";
+import { currentScreens, placeOnScreens, saveSchematicFrame, savedSchematicFrame } from "../core/windowFrame";
 import { SchematicView, type SchematicFocus, type SchematicViewHandle } from "./SchematicView";
 
 /** The schematic on its own, in the separate window. */
@@ -89,6 +90,45 @@ export function SchematicWindow() {
   useEffect(() => {
     void setWindowTitle(doc ? `${doc.name} — Avero` : "Avero");
   }, [doc]);
+
+  // Back where it was last (on the second monitor, say), or onto a screen
+  // there is now when that monitor is gone; remembered as it moves.
+  useEffect(() => {
+    let off: (() => void)[] = [];
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { getCurrentWindow, LogicalPosition, LogicalSize } = await import("@tauri-apps/api/window");
+        const win = getCurrentWindow();
+        const saved = savedSchematicFrame();
+        if (saved) {
+          const f = placeOnScreens(saved, await currentScreens());
+          await win.setSize(new LogicalSize(f.width, f.height));
+          await win.setPosition(new LogicalPosition(f.x, f.y));
+        }
+        let timer = 0;
+        const remember = () => {
+          window.clearTimeout(timer);
+          timer = window.setTimeout(async () => {
+            const scale = await win.scaleFactor();
+            const [p, z] = await Promise.all([win.outerPosition(), win.outerSize()]);
+            const pos = p.toLogical(scale);
+            const size = z.toLogical(scale);
+            saveSchematicFrame({ x: pos.x, y: pos.y, width: size.width, height: size.height });
+          }, 400);
+        };
+        const subs = await Promise.all([win.onMoved(remember), win.onResized(remember)]);
+        if (cancelled) subs.forEach((u) => u());
+        else off = subs;
+      } catch {
+        // Outside the desktop app there is no window to place.
+      }
+    })();
+    return () => {
+      cancelled = true;
+      off.forEach((u) => u());
+    };
+  }, []);
 
   const names = useMemo(() => ({ parts: new Set(linked?.parts), nets: new Set(linked?.nets) }), [linked]);
 
