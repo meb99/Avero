@@ -243,13 +243,9 @@ pub fn parse(files: &Files, member: &str) -> Result<RawBoard, ParseError> {
                         .get(6)
                         .and_then(Value::as_array)
                         .ok_or_else(|| err("Board outline is missing"))?;
-                    match polygon(path, scale) {
-                        Ok(points) => {
-                            for pair in points.windows(2) {
-                                out.outline_segments.push((pair[0], pair[1]));
-                            }
-                        }
-                        Err(e) => return Err(e),
+                    let points = polygon(path, scale)?;
+                    for pair in points.windows(2) {
+                        out.outline_segments.push((pair[0], pair[1]));
                     }
                 } else {
                     *unshown.entry("polygon".into()).or_default() += 1;
