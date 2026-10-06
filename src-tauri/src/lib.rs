@@ -1108,7 +1108,11 @@ mod tests {
         assert_eq!(at("1"), Some(Some(0.48)));
         assert_eq!(at("2"), Some(None));
         assert_eq!(board.readings.len(), 2);
-        assert!(board.warnings.iter().any(|w| w.starts_with("1 readings of the file")), "{:?}", board.warnings);
+        assert!(
+            board.warnings.iter().any(|w| w.starts_with("1 readings of the file")),
+            "{:?}",
+            board.warnings
+        );
     }
 
     #[test]
