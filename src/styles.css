@@ -5028,3 +5028,41 @@ body.resizing-rows {
 .if-own li {
   margin: 4px 0 8px;
 }
+
+.pt-conflict .pt-measured,
+.pt-conflict {
+  color: #ffb74d;
+}
+
+:root[data-theme="light"] .pt-conflict .pt-measured,
+:root[data-theme="light"] .pt-conflict {
+  color: #b26a00;
+}
+
+p.pt-conflict,
+.pt-unchecked-text {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pt-unchecked-text {
+  color: #ffb74d;
+}
+
+:root[data-theme="light"] .pt-unchecked-text {
+  color: #b26a00;
+}
+
+.pt-steps li.pt-unchecked {
+  outline: 1px dashed #ffb74d;
+  border-radius: 4px;
+}
+
+.pt-course-other td {
+  opacity: 0.55;
+}
+
+.pt-judged {
+  margin: 4px 0;
+  font-size: 12px;
+}

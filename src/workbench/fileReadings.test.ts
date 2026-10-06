@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { BoardModel } from "../core/board";
 import { testBoard } from "../core/testBoard";
 import { fileReadingsOf, takeAllFileReadings } from "./fileReadings";
-import { emptyNotes, setPointValue, takeFileReadings, type FilePointReading } from "./notes";
+import { emptyNotes, parseNotes, setPointValue, takeFileReadings, type FilePointReading } from "./notes";
 
 const board = () => new BoardModel({
   ...testBoard(),
@@ -57,5 +57,56 @@ describe("readings from the board file", () => {
     expect(r.notes.referencePoints!["U10.1"].diode).toBe(0.5);
     // The file's earlier value goes to the history.
     expect(r.notes.referencePoints!["U10.1"].history?.at(-1)?.diode).toBe(0.48);
+  });
+
+  it("moves a taken value to the point's new net, also when the value stays the same", () => {
+    const at = (net: string, value = 0.48): FilePointReading[] => [{ point: "U10.1", net, quantity: "diode", value }];
+    const first = takeFileReadings(emptyNotes("k", "b"), at("OLD"), "XZZ 阻值").notes;
+    expect(first.referencePoints!["U10.1"]).toMatchObject({ diode: 0.48, net: "OLD" });
+    const moved = takeFileReadings(first, at("NEW"), "XZZ 阻值");
+    expect(moved.already).toBe(false);
+    expect(moved.updated).toBe(1);
+    expect(moved.notes.referencePoints!["U10.1"]).toMatchObject({ diode: 0.48, net: "NEW", origin: { diode: "XZZ 阻值" } });
+    // Nothing else of the file changed, the value's history stays as it was.
+    expect(moved.notes.referencePoints!["U10.1"].history).toBeUndefined();
+  });
+
+  it("updates nets of unchanged values when something else in the file changed", () => {
+    const file: FilePointReading[] = [
+      { point: "U10.1", net: "OLD", quantity: "diode", value: 0.48 },
+      { point: "U10.2", net: "GND", quantity: "diode", value: 0 },
+    ];
+    const first = takeFileReadings(emptyNotes("k", "b"), file, "XZZ 阻值").notes;
+    const changed = takeFileReadings(first, [{ ...file[0], net: "NEW" }, { ...file[1], value: 0.01 }], "XZZ 阻值").notes;
+    expect(changed.referencePoints!["U10.1"]).toMatchObject({ diode: 0.48, net: "NEW" });
+    expect(changed.referencePoints!["U10.2"].diode).toBe(0.01);
+  });
+
+  it("keeps a deleted value deleted when the file changes, takes points new in the file", () => {
+    const file: FilePointReading[] = [{ point: "U10.1", net: "A", quantity: "diode", value: 0.48 }];
+    const first = takeFileReadings(emptyNotes("k", "b"), file, "XZZ 阻值").notes;
+    const deleted = setPointValue(first, "reference", "U10.1", "A", "diode", undefined);
+    const next = takeFileReadings(deleted, [{ ...file[0], net: "B" }, { point: "U10.2", net: "C", quantity: "diode", value: 0.3 }], "XZZ 阻值");
+    expect(next.notes.referencePoints!["U10.1"]?.diode).toBeUndefined();
+    expect(next.notes.referencePoints!["U10.2"]).toMatchObject({ diode: 0.3, net: "C" });
+    expect(next.added).toBe(1);
+  });
+
+  it("leaves a value of one's own and its net alone", () => {
+    const own = setPointValue(emptyNotes("k", "b"), "reference", "U10.1", "OLD", "diode", 0.48);
+    const r = takeFileReadings(own, [{ point: "U10.1", net: "NEW", quantity: "diode", value: 0.48 }], "XZZ 阻值");
+    expect(r.kept).toBe(1);
+    expect(r.notes.referencePoints!["U10.1"].net).toBe("OLD");
+  });
+
+  it("reads the fingerprint 0.9.28 kept, and still keeps deletions", () => {
+    const file: FilePointReading[] = [{ point: "U10.1", net: "A", quantity: "diode", value: 0.48 }];
+    const first = takeFileReadings(emptyNotes("k", "b"), file, "XZZ 阻值").notes;
+    const deleted = setPointValue(first, "reference", "U10.1", "A", "diode", undefined);
+    // As 0.9.28 stored it: the fingerprint as a string.
+    const old = parseNotes(JSON.stringify({ ...deleted, fileImports: { "XZZ 阻值": "1:deadbeef" } }))!;
+    expect(old.fileImports).toEqual({ "XZZ 阻值": { print: "1:deadbeef" } });
+    const again = takeFileReadings(old, file, "XZZ 阻值");
+    expect(again.notes.referencePoints!["U10.1"]?.diode).toBeUndefined();
   });
 });

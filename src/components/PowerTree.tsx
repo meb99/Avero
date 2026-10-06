@@ -1,26 +1,29 @@
 import { useMemo, useState } from "react";
 import type { BoardModel } from "../core/board";
 import { buildPowerTree, powerTreeRoots, type ConverterKind, type TreeNode } from "../core/powerTree";
+import { findPoint } from "../core/points";
 import type { Selection } from "../core/types";
 import { useI18n, type MessageKey } from "../i18n";
 import type { SchematicFacts } from "../schematic/partInfo";
-import { judge } from "../workbench/diagnosis";
 import { formatValue, type Value } from "../workbench/measure";
 import { activeCase, type BoardNotes } from "../workbench/notes";
 import {
   expectedSequence,
-  latestStatus,
+  diagnosisState,
   measuredCourse,
   resolvePower,
-  sequenceBreak,
+  sequenceFinding,
   setConverterEdit,
+  supplyStates,
+  type MeasuredPoint,
+  type PowerState,
   type ConverterEdit,
   type Provenance,
   type ResolvedConverter,
   type ResolvedTree,
 } from "../workbench/power";
 
-type Status = "ok" | "bad" | "measured" | undefined;
+type Status = "ok" | "bad" | "measured" | "conflict" | undefined;
 
 interface Props {
   model: BoardModel;
@@ -66,22 +69,23 @@ export function PowerTree({ model, notes, schematicFacts, onSelect, update }: Pr
 
   const kase = notes ? activeCase(notes) : undefined;
   const readings = kase?.readings;
-  const course = useMemo(() => measuredCourse(model, tree, readings), [model, tree, readings]);
-  const latest = useMemo(() => latestStatus(course), [course]);
-  const stop = sequenceBreak(sequence, latest);
+  const points = kase?.points;
+  // Net and point values of the case, each with the state it was taken in.
+  const course = useMemo(() => measuredCourse(model, tree, readings, points), [model, tree, readings, points]);
+  const measuredStates = useMemo(() => [...new Set(course.map((p) => p.power ?? "none"))], [course]);
+  const [chosenState, setChosenState] = useState<PowerState | "auto">("auto");
+  const state = chosenState === "auto" ? diagnosisState(course) : chosenState;
+  const states = useMemo(() => supplyStates(model, tree, course, state), [model, tree, course, state]);
+  const finding = sequenceFinding(sequence, states);
+  const fits = (p: MeasuredPoint) => p.power === state || (p.power === undefined && state !== "off");
 
-  const measured = (supply: number): Value | undefined => {
-    for (const net of tree.supplies[supply].nets) {
-      const v = readings?.[model.nets[net].name]?.voltage;
-      if (v !== undefined) return v;
-    }
-    return undefined;
-  };
+  // The supply's latest value in the judged state (a conflict shows the first place).
+  const measured = (supply: number): Value | undefined => states.get(supply)?.places.at(-1)?.value;
   const status = (supply: number): Status => {
-    const v = measured(supply);
-    if (v === undefined) return undefined;
-    const expected = tree.supplies[supply].volts;
-    return expected === undefined ? "measured" : judge({ kind: "volts", volts: expected }, v);
+    const st = states.get(supply)?.status;
+    if (st === undefined || st === "idle") return undefined;
+    if (st === "conflict") return "conflict";
+    return st === "ok" ? "ok" : st === "measured" ? "measured" : "bad";
   };
 
   // Converters whose input is there but an output is not: look there first.
@@ -279,7 +283,7 @@ export function PowerTree({ model, notes, schematicFacts, onSelect, update }: Pr
           <>
             <ol className="pt-steps">
               {sequence.steps.map((s, i) => (
-                <li key={i} className={stop?.step === i ? "pt-stop" : undefined}>
+                <li key={i} className={finding?.step === i ? (finding.kind === "break" ? "pt-stop" : "pt-unchecked") : undefined}>
                   {s.supplies.map((x) => (
                     <span key={x}>{supplyRow(x)} </span>
                   ))}
@@ -328,22 +332,51 @@ export function PowerTree({ model, notes, schematicFacts, onSelect, update }: Pr
             <table className="wb-table pt-course-table">
               <tbody>
                 {course.map((p, i) => (
-                  <tr key={i} className={`pt-course-${p.status}`}>
+                  <tr key={i} className={fits(p) ? `pt-course-${p.status}` : "pt-course-other"}>
                     <td className="muted">{time(p.at)}</td>
                     <td>
-                      <button className="link" onClick={() => onSelect({ kind: "net", net: p.net }, true)}>
-                        {model.nets[p.net].name}
+                      <button className="link" onClick={() => onSelect(p.point ? (findPoint(model, p.point) ?? { kind: "net", net: p.net }) : { kind: "net", net: p.net }, true)}>
+                        {p.point ?? model.nets[p.net].name}
                       </button>
+                      {p.point && <span className="muted"> · {model.nets[p.net].name}</span>}
                     </td>
                     <td className="mono">{formatValue(p.value, "voltage", lang)}</td>
-                    <td>{t(`power.course.${p.status}` as MessageKey)}</td>
+                    <td className="muted">{t(`power.state.${p.power ?? "none"}` as MessageKey)}</td>
+                    <td>{fits(p) ? t(`power.course.${p.status}` as MessageKey) : t("power.course.notJudged")}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {stop && (
-              <p className="pt-break">
-                {t("power.course.break", { step: stop.step + 1, rails: stop.supplies.map(railName).join(", ") })}
+            <div className="wb-row pt-judged">
+              <span className="muted">{t("power.judgedBy")}</span>
+              <select value={chosenState} onChange={(e) => setChosenState(e.target.value as PowerState | "auto")} aria-label={t("power.judgedBy")}>
+                <option value="auto">{t("power.state.auto", { state: t(`power.state.${state ?? "none"}` as MessageKey) })}</option>
+                {(["on", "standby", "off"] as const)
+                  .filter((x) => measuredStates.includes(x))
+                  .map((x) => (
+                    <option key={x} value={x}>
+                      {t(`power.state.${x}` as MessageKey)}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            {state === "off" && <p className="muted pt-hint">{t("power.course.offHint")}</p>}
+            {[...states].filter(([, v]) => v.status === "conflict").map(([supply, v]) => (
+              <p key={supply} className="pt-conflict">
+                {t("power.course.conflict", {
+                  rail: railName(supply),
+                  places: v.places.map((p) => `${p.point ?? model.nets[p.net].name} ${formatValue(p.value, "voltage", lang)} (${t(`power.course.${p.status}` as MessageKey)})`).join(", "),
+                })}
+              </p>
+            ))}
+            {finding?.kind === "break" && state !== "off" && (
+              <p className="pt-break">{t("power.course.break", { step: finding.step + 1, rails: finding.supplies.map(railName).join(", ") })}</p>
+            )}
+            {finding?.kind === "unchecked" && state !== "off" && (
+              <p className="pt-unchecked-text">
+                {t("power.course.firstMissing", { step: finding.step + 1, rail: railName(finding.supply) })}{" "}
+                {finding.unchecked.length > 0 && t("power.course.unchecked", { rail: railName(finding.supply), rails: finding.unchecked.map(railName).join(", ") })}{" "}
+                {finding.missing.length > 0 && t("power.course.missingBefore", { rails: finding.missing.map(railName).join(", ") })}
               </p>
             )}
           </>

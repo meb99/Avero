@@ -6,9 +6,10 @@
  * order it was measured.
  */
 import type { BoardModel } from "../core/board";
+import { findPoint } from "../core/points";
 import { railRank, type Converter, type ConverterKind, type PowerTree } from "../core/powerTree";
 import { railVolts } from "./diagnosis";
-import type { Reading, Value } from "./measure";
+import { condOf, type Conditions, type Reading, type Value } from "./measure";
 
 /** A statement and where it comes from ("Schaltplan S. 34", "Datenblatt TPS51285", "gemessen"). */
 export interface Sourced<T> {
@@ -143,6 +144,12 @@ export interface ExpectedSequence {
   steps: SequenceStep[];
   /** Set by hand (with its source), or worked out from the tree. */
   source: { from: "user"; source: string } | { from: "derived" };
+  /**
+   * What each supply needs to be there first: worked out, its input and the
+   * rail or power good its enable hangs on; set by hand, everything in the
+   * steps before it.
+   */
+  needs: Map<number, number[]>;
 }
 
 /**
@@ -161,7 +168,12 @@ export function expectedSequence(model: BoardModel, tree: ResolvedTree, set: Pow
         return s === undefined ? [] : [s];
       }))] }))
       .filter((s) => s.supplies.length);
-    return { steps, source: { from: "user", source: set.source } };
+    const needs = new Map<number, number[]>();
+    steps.forEach((step, i) => {
+      const before = steps.slice(0, i).flatMap((x) => x.supplies);
+      for (const sup of step.supplies) needs.set(sup, before.filter((b) => b !== sup));
+    });
+    return { steps, source: { from: "user", source: set.source }, needs };
   }
   // Each supply waits for these.
   const after = new Map<number, Set<number>>();
@@ -211,20 +223,32 @@ export function expectedSequence(model: BoardModel, tree: ResolvedTree, set: Pow
   const volts = (s: number) => tree.supplies[s].volts ?? -1;
   const rank = (s: number) => Math.max(...tree.supplies[s].nets.map((n) => railRank(model.nets[n].name)));
   for (const step of steps) step.supplies.sort((a, b) => rank(b) - rank(a) || volts(b) - volts(a));
-  return { steps: steps.filter((s) => s.supplies.length), source: { from: "derived" } };
+  return {
+    steps: steps.filter((s) => s.supplies.length),
+    source: { from: "derived" },
+    needs: new Map([...after].map(([sup, before]) => [sup, [...before]])),
+  };
 }
+
+export type PowerState = "off" | "standby" | "on";
+export type RailStatus = "ok" | "low" | "high" | "absent" | "measured";
 
 export interface MeasuredPoint {
   supply: number;
   net: number;
+  /** Where it was measured: a pin or test point ("U1.1"); absent for the net as a whole. */
+  point?: string;
   value: Value;
   at?: string;
-  /** Against the supply's voltage, when it has one. */
-  status: "ok" | "low" | "high" | "absent" | "measured";
+  /** The board's state noted with the value; undefined when none was noted. */
+  power?: PowerState;
+  cond?: Conditions;
+  /** Against the supply's voltage, whatever the state it was taken in. */
+  status: RailStatus;
 }
 
 /** How a voltage compares with a rail's: present within 10 %, absent below 10 % of it. */
-export function railStatus(expected: number | undefined, v: Value): MeasuredPoint["status"] {
+export function railStatus(expected: number | undefined, v: Value): RailStatus {
   if (expected === undefined) return "measured";
   if (v === "OL") return "absent";
   if (v < expected * 0.1) return "absent";
@@ -235,43 +259,131 @@ export function railStatus(expected: number | undefined, v: Value): MeasuredPoin
 
 /**
  * What was measured on the rails, in the order it was measured: every
- * voltage of the case on a net of a supply, earlier values from the
- * history included, oldest first. This is the actual course, kept apart
- * from the expected sequence.
+ * voltage of the case on a net of a supply and at a pin or test point of
+ * one (found by the point, else by the net it was on), earlier values from
+ * the history included, oldest first – each with the conditions it was
+ * taken under. This is the actual course, kept apart from the expected
+ * sequence.
  */
-export function measuredCourse(model: BoardModel, tree: ResolvedTree, readings: Record<string, Reading> | undefined): MeasuredPoint[] {
-  if (!readings) return [];
+export function measuredCourse(
+  model: BoardModel,
+  tree: ResolvedTree,
+  readings: Record<string, Reading> | undefined,
+  points?: Record<string, Reading>,
+): MeasuredPoint[] {
   const out: MeasuredPoint[] = [];
-  for (const [name, r] of Object.entries(readings)) {
-    const net = model.findNet(name);
+  const add = (net: number | undefined, r: Reading, point?: string) => {
     const supply = net === undefined ? undefined : tree.supplyOf.get(net);
-    if (net === undefined || supply === undefined) continue;
+    if (net === undefined || supply === undefined) return;
     const expected = tree.supplies[supply].volts;
-    for (const h of r.history ?? []) if (h.voltage !== undefined) out.push({ supply, net, value: h.voltage, at: h.at, status: railStatus(expected, h.voltage) });
-    if (r.voltage !== undefined) out.push({ supply, net, value: r.voltage, ...((r.at?.voltage ?? r.updated) && { at: r.at?.voltage ?? r.updated }), status: railStatus(expected, r.voltage) });
+    const entry = (value: Value, at: string | undefined, cond: Conditions | undefined): MeasuredPoint => ({
+      supply,
+      net,
+      ...(point && { point }),
+      value,
+      ...(at && { at }),
+      ...(cond?.power && { power: cond.power }),
+      ...(cond && { cond }),
+      status: railStatus(expected, value),
+    });
+    for (const h of r.history ?? []) if (h.voltage !== undefined) out.push(entry(h.voltage, h.at, h.cond));
+    if (r.voltage !== undefined) out.push(entry(r.voltage, r.at?.voltage ?? r.updated, condOf(r, "voltage")));
+  };
+  for (const [name, r] of Object.entries(readings ?? {})) add(model.findNet(name), r);
+  for (const [point, r] of Object.entries(points ?? {})) {
+    // The point's net on this board; the net noted with the value when the point is not found.
+    const at = findPoint(model, point);
+    const net = at?.kind === "pin" ? model.pins[at.pin].net : at?.kind === "testPoint" ? model.testPoints[at.testPoint].net : r.net ? model.findNet(r.net) : undefined;
+    add(net, r, point);
   }
   return out.sort((a, b) => (a.at ?? "").localeCompare(b.at ?? ""));
 }
 
 /**
- * Where the expected sequence stops in what was measured: the first step
- * with a supply measured absent or low while every step before it is
- * present. Undefined when nothing stops it (or too little was measured).
+ * The state the diagnosis judges by: on, when anything was measured with
+ * the board on; else standby; else the values without a noted state. Values
+ * taken with the board off never show a supply missing.
  */
-export function sequenceBreak(sequence: ExpectedSequence, latest: Map<number, MeasuredPoint["status"]>): { step: number; supplies: number[] } | undefined {
-  for (let i = 0; i < sequence.steps.length; i++) {
-    const bad = sequence.steps[i].supplies.filter((s) => latest.get(s) === "absent" || latest.get(s) === "low");
-    if (bad.length) return { step: i, supplies: bad };
-    if (!sequence.steps[i].supplies.some((s) => latest.get(s) === "ok")) return undefined;
-  }
+export function diagnosisState(course: readonly MeasuredPoint[]): PowerState | undefined {
+  if (course.some((p) => p.power === "on")) return "on";
+  if (course.some((p) => p.power === "standby")) return "standby";
   return undefined;
 }
 
-/** The latest status of each supply from the measured course. */
-export function latestStatus(course: readonly MeasuredPoint[]): Map<number, MeasuredPoint["status"]> {
-  const out = new Map<number, MeasuredPoint["status"]>();
-  for (const p of course) out.set(p.supply, p.status);
+/** A supply as measured in one state: one status, or a conflict between measuring points. */
+export interface SupplyState {
+  status: RailStatus | "conflict" | "idle";
+  /** The latest value at each place it was measured (pin, test point, net) in that state. */
+  places: MeasuredPoint[];
+}
+
+/**
+ * Each supply's state from the values that fit `state` (those noted with it,
+ * and those with no state noted); values taken with the board off are left
+ * out unless the state asked for is "off". The latest value of each place
+ * counts; places that disagree (one present, one missing) are a conflict,
+ * named with their places. In standby, a supply that is not always-on is
+ * expected to be off ("idle"), not missing.
+ */
+export function supplyStates(model: BoardModel, tree: ResolvedTree, course: readonly MeasuredPoint[], state: PowerState | undefined): Map<number, SupplyState> {
+  const fits = (p: MeasuredPoint) => p.power === state || (p.power === undefined && state !== "off");
+  const latest = new Map<number, Map<string, MeasuredPoint>>();
+  for (const p of course) {
+    if (!fits(p)) continue;
+    const places = latest.get(p.supply) ?? new Map<string, MeasuredPoint>();
+    places.set(p.point ?? `net:${p.net}`, p);
+    latest.set(p.supply, places);
+  }
+  const out = new Map<number, SupplyState>();
+  for (const [supply, places] of latest) {
+    const list = [...places.values()];
+    const statuses = new Set(list.map((p) => p.status));
+    let status: SupplyState["status"] = statuses.size === 1 ? list[0].status : "conflict";
+    if (status === "absent" && state === "standby") {
+      const alwaysOn = Math.max(...tree.supplies[supply].nets.map((n) => railRank(model.nets[n].name))) >= 3;
+      if (!alwaysOn) status = "idle";
+    }
+    out.set(supply, { status, places: list });
+  }
   return out;
+}
+
+export type SequenceFinding =
+  /** The supplies are missing while everything they need is present: the order stops here. */
+  | { kind: "break"; step: number; supplies: number[] }
+  /** The first supply measured missing, with what it needs that is not checked (or missing itself). */
+  | { kind: "unchecked"; step: number; supply: number; unchecked: number[]; missing: number[] };
+
+/**
+ * Where the expected order stops, as far as the measurements show it. A
+ * stop is only stated where a missing supply's every requirement (see
+ * `needs`) is measured present. Otherwise the first missing supply is named
+ * with the requirements still unchecked – nothing more is claimed.
+ */
+export function sequenceFinding(sequence: ExpectedSequence, states: Map<number, SupplyState>): SequenceFinding | undefined {
+  const status = (s: number) => states.get(s)?.status;
+  const missing = (s: number) => status(s) === "absent" || status(s) === "low";
+  let first: SequenceFinding | undefined;
+  for (let i = 0; i < sequence.steps.length; i++) {
+    const established: number[] = [];
+    for (const s of sequence.steps[i].supplies) {
+      if (!missing(s)) continue;
+      const needs = sequence.needs.get(s) ?? [];
+      const notPresent = needs.filter((n) => status(n) !== "ok");
+      if (notPresent.length === 0) established.push(s);
+      else
+        first ??= {
+          kind: "unchecked",
+          step: i,
+          supply: s,
+          unchecked: notPresent.filter((n) => !missing(n)),
+          missing: notPresent.filter(missing),
+        };
+    }
+    if (established.length) return first && first.step < i ? first : { kind: "break", step: i, supplies: established };
+    if (first) return first;
+  }
+  return undefined;
 }
 
 export function parsePower(value: unknown): PowerNotes | undefined {

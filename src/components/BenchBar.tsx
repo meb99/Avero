@@ -3,10 +3,9 @@ import type { BoardModel } from "../core/board";
 import { findPoint } from "../core/points";
 import type { Selection } from "../core/types";
 import { useI18n } from "../i18n";
-import { expectedFor, judgeExpected } from "../workbench/expected";
-import { compare, formatValue, parseValue, type Quantity, type Value } from "../workbench/measure";
+import { formatValue, parseValue, type Quantity, type Value } from "../workbench/measure";
 import { looksOpen, movedFrom, readMeter, readStable, useMeter } from "../workbench/meter";
-import { activeCase, listProgress, setPointValue, setValue, type BoardNotes, type ListItem, type Target } from "../workbench/notes";
+import { activeCase, judgeTaken, listProgress, setPointValue, setValue, type BoardNotes, type ListItem, type Target } from "../workbench/notes";
 
 /** Speaks with a voice of this Mac only (never a voice that goes online); false when there is none. */
 export function speakLocal(text: string, lang: string): boolean {
@@ -103,10 +102,10 @@ export function BenchBar({ model, notes, update, undo, tolerance, onSelect, onCl
   const save = (value: Value) => {
     if (!item || !list) return;
     update((n) => (item.point ? setPointValue(n, target, item.point, item.net, item.quantity, value) : setValue(n, target, item.net, item.quantity, value)));
-    // How it compares, for the voice.
-    const e = expectedFor(notes, t("measure.reference"), item.net, item.quantity, undefined, item.point);
-    const verdict = e.groups.length || e.limit ? judgeExpected(e, value, item.quantity, tolerance) : compare(notes.reference[item.net]?.[item.quantity], value, item.quantity, tolerance);
-    const said = `${formatValue(value, item.quantity, lang)}${verdict === "ok" ? `, ${t("bench.ok")}` : verdict === "deviation" ? `, ${t("bench.deviation")}` : ""}`;
+    // How it compares – under the conditions it is saved with, for the display and the voice.
+    const verdict = judgeTaken(notes, target, t("measure.reference"), item.net, item.quantity, value, tolerance, item.point);
+    const word = verdict === "ok" ? t("bench.ok") : verdict === "deviation" ? t("bench.deviation") : verdict === "mismatch" ? t("measure.status.mismatch") : "";
+    const said = `${formatValue(value, item.quantity, lang)}${word ? `, ${word}` : ""}`;
     if (voice) speakLocal(said, lang);
     setLast({ label, text: formatValue(value, item.quantity, lang), ...(verdict && { verdict }) });
     setRepeatAt(null);

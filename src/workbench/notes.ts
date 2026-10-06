@@ -161,7 +161,7 @@ export interface BoardNotes {
    * fingerprint of what was taken, so the same file is not taken again
    * (values deleted here stay deleted) but a changed one is.
    */
-  fileImports?: Record<string, string>;
+  fileImports?: Record<string, FileImportRecord>;
   /** The power tree as corrected and confirmed by hand, with sources, and the expected power-up order. */
   power?: PowerNotes;
   /** Interfaces with their confirmed parts, and own function groups. */
@@ -310,6 +310,25 @@ export function conditionsOf(notes: BoardNotes, target: Target): Conditions | un
   return notes.cases.find((c) => c.id === target.caseId)?.conditions;
 }
 
+/**
+ * How a value just taken at `target` compares with what is expected: under
+ * the conditions it is saved with there (the case's or the reference's), so
+ * a reading taken with the probes the other way round, or with the board in
+ * another state, is "mismatch" (not comparable) rather than "ok".
+ */
+export function judgeTaken(
+  notes: BoardNotes,
+  target: Target,
+  referenceTitle: string,
+  net: string,
+  q: Quantity,
+  value: Value,
+  tolerance: number,
+  point?: string,
+): Comparison | "mismatch" | undefined {
+  return judgeExpected(expectedFor(notes, referenceTitle, net, q, conditionsOf(notes, target), point), value, q, tolerance);
+}
+
 export function setConditions(notes: BoardNotes, target: Target, conditions: Conditions): BoardNotes {
   const clean = Object.fromEntries(Object.entries(conditions).filter(([, v]) => v !== undefined && v !== "")) as Conditions;
   const value = Object.keys(clean).length ? clean : undefined;
@@ -442,6 +461,17 @@ export function setPointValue(notes: BoardNotes, target: Target, point: string, 
   return setPointReading(notes, target, point, net, { [q]: value });
 }
 
+/**
+ * What was taken from one source of a board file: a fingerprint of its
+ * content (point, quantity, value and net), and the points taken, so a
+ * value deleted here is known as deleted even when the file changes.
+ * Notes of 0.9.28 kept the fingerprint alone (`points` absent).
+ */
+export interface FileImportRecord {
+  print: string;
+  points?: string[];
+}
+
 /** A reading the board file carries for one point. */
 export interface FilePointReading {
   point: string;
@@ -461,41 +491,55 @@ export interface FileImport {
   already: boolean;
 }
 
-/** A short fingerprint of what a file holds. */
+/** A short fingerprint of what a file holds: each point with its quantity, value and net. */
 function fingerprint(entries: readonly FilePointReading[]): string {
   let h = 0x811c9dc5;
-  for (const e of entries) for (const c of `${e.point}|${e.quantity}|${e.value};`) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193);
+  for (const e of entries) for (const c of `${e.point}|${e.quantity}|${e.value}|${e.net};`) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193);
   return `${entries.length}:${(h >>> 0).toString(16)}`;
 }
 
 /**
  * Takes the readings a board file carries into the reference, each at its
  * pin and marked with where it came from (`source`). A value of one's own
- * (typed, measured, or from another source) is never replaced; a value
- * from this source is brought up to date when the file changed. The same
- * file is taken once: values deleted afterwards stay deleted.
+ * (typed, measured, or from another source) is never replaced. A value from
+ * this source is brought up to date when the file changed – its value, and
+ * the net the point is on, each on its own. A point taken before whose
+ * value was deleted here stays deleted; only points new in the file come
+ * in. The same file content is taken once.
  */
 export function takeFileReadings(notes: BoardNotes, entries: readonly FilePointReading[], source: string): FileImport {
   const print = fingerprint(entries);
-  const result: FileImport = { notes, added: 0, updated: 0, kept: 0, differ: 0, already: notes.fileImports?.[source] === print };
+  const before = notes.fileImports?.[source];
+  const result: FileImport = { notes, added: 0, updated: 0, kept: 0, differ: 0, already: before?.print === print };
   if (result.already) return result;
+  // Points taken before. Notes that did not record them: every point of the file counts as taken.
+  const taken = new Set(before ? (before.points ?? entries.map((e) => e.point)) : []);
   let points = notes.referencePoints ?? {};
   for (const e of entries) {
     const old = points[e.point];
-    const before = old?.[e.quantity];
-    if (before !== undefined && old?.origin?.[e.quantity] !== source) {
+    const value = old?.[e.quantity];
+    const ours = value !== undefined && old?.origin?.[e.quantity] === source;
+    if (value !== undefined && !ours) {
       result.kept++;
-      if (before !== e.value) result.differ++;
+      if (value !== e.value) result.differ++;
       continue;
     }
-    if (before === e.value) continue;
-    if (before === undefined) result.added++;
-    else result.updated++;
-    // The file says nothing about the conditions, so none are claimed.
-    points = withReading(points, e.point, { [e.quantity]: e.value }, undefined, { origin: source });
-    points[e.point] = { ...points[e.point], net: e.net };
+    // Deleted here after it was taken: stays deleted.
+    if (value === undefined && taken.has(e.point)) continue;
+    if (value !== e.value) {
+      if (value === undefined) result.added++;
+      else result.updated++;
+      // The file says nothing about the conditions, so none are claimed.
+      points = withReading(points, e.point, { [e.quantity]: e.value }, undefined, { origin: source });
+      points[e.point] = { ...points[e.point], net: e.net };
+    } else if (old?.net !== e.net) {
+      // Same value, the point now on another net.
+      points = { ...points, [e.point]: { ...old, net: e.net } };
+      result.updated++;
+    }
   }
-  result.notes = { ...notes, referencePoints: points, fileImports: { ...notes.fileImports, [source]: print }, updated: now() };
+  const record: FileImportRecord = { print, points: [...new Set([...taken, ...entries.map((e) => e.point)])] };
+  result.notes = { ...notes, referencePoints: points, fileImports: { ...notes.fileImports, [source]: record }, updated: now() };
   return result;
 }
 
@@ -1045,6 +1089,17 @@ function parseLists(value: unknown): MeasureList[] | undefined {
   return lists.length ? lists : undefined;
 }
 
+function parseFileImports(value: Record<string, unknown>): Record<string, FileImportRecord> | undefined {
+  const out: Record<string, FileImportRecord> = {};
+  for (const [source, v] of Object.entries(value)) {
+    // 0.9.28 kept the fingerprint as a string.
+    if (typeof v === "string") out[source] = { print: v };
+    else if (isRecord(v) && typeof v.print === "string")
+      out[source] = { print: v.print, ...(Array.isArray(v.points) && { points: v.points.filter((p): p is string => typeof p === "string") }) };
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 export function parseNotes(json: string): BoardNotes | null {
   try {
     const d = JSON.parse(json) as Partial<BoardNotes>;
@@ -1073,9 +1128,7 @@ export function parseNotes(json: string): BoardNotes | null {
       obdata: typeof d.obdata === "string" && d.obdata ? d.obdata : undefined,
       power: parsePower(d.power),
       groups: parseGroups(d.groups),
-      fileImports: isRecord(d.fileImports)
-        ? Object.fromEntries(Object.entries(d.fileImports).filter((e): e is [string, string] => typeof e[1] === "string"))
-        : undefined,
+      fileImports: isRecord(d.fileImports) ? parseFileImports(d.fileImports) : undefined,
       referenceConditions: parseConditions(d.referenceConditions),
       lists: parseLists(d.lists),
       activeList: typeof d.activeList === "string" ? d.activeList : undefined,
