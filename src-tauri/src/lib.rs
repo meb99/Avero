@@ -503,6 +503,28 @@ async fn package_open(app: tauri::AppHandle, path: String) -> Result<package::Un
     package::open(Path::new(&path), &library_dir(&app)?, &photos_dir(&app)?, stamp)
 }
 
+/// Packs a device of several boards with its project as one file.
+#[tauri::command]
+async fn device_package_create(
+    app: tauri::AppHandle,
+    path: String,
+    request: package::DeviceRequest,
+    created: String,
+) -> Result<package::PackResult, String> {
+    let version = app.package_info().version.to_string();
+    package::create_device(Path::new(&path), &request, &version, &created)
+}
+
+/// Opens a board package or a device package.
+#[tauri::command]
+async fn package_open_any(app: tauri::AppHandle, path: String) -> Result<package::Opened, String> {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or_default();
+    package::open_any(Path::new(&path), &library_dir(&app)?, &photos_dir(&app)?, stamp)
+}
+
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RestoreResult {
@@ -905,6 +927,8 @@ pub fn run() {
             backup_create,
             package_create,
             package_open,
+            package_open_any,
+            device_package_create,
             find_donors,
             import_datasheet,
             import_knowledge_images,

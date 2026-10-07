@@ -4,6 +4,10 @@
 //! not needed to open it: photos are referred to inside the package and put
 //! back into the photo folder of the Mac it is opened on, board and PDFs go
 //! into the library under a name of their own.
+//!
+//! A device of several boards (see the device projects of the UI) packs as
+//! one file too: its project (boards and the connectors between them) and,
+//! for every board, a package of its own as above.
 
 use std::fs::File;
 use std::io::{Read, Write};
@@ -211,6 +215,11 @@ fn free_folder(parent: &Path, name: &str) -> PathBuf {
 
 /// Opens a package: photos into `photos_dir`, board and PDFs into a folder of their own in `library_dir`.
 pub fn open(path: &Path, library_dir: &Path, photos_dir: &Path, stamp: u128) -> Result<Unpacked, String> {
+    open_into(path, &library_dir.join("Pakete"), photos_dir, stamp)
+}
+
+/// As `open`, with the board's folder made in `packages_dir`.
+fn open_into(path: &Path, packages_dir: &Path, photos_dir: &Path, stamp: u128) -> Result<Unpacked, String> {
     let file = File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut zip = zip::ZipArchive::new(file).map_err(|e| format!("not an Avero package: {e}"))?;
     let read = |zip: &mut zip::ZipArchive<File>, name: &str| -> Result<Vec<u8>, String> {
@@ -237,7 +246,7 @@ pub fn open(path: &Path, library_dir: &Path, photos_dir: &Path, stamp: u128) -> 
 
     let has_files = manifest.board.as_ref().is_some_and(|b| b.file.is_some())
         || manifest.docs.iter().any(|d| d.file.is_some());
-    let folder = has_files.then(|| free_folder(&library_dir.join("Pakete"), &manifest.name));
+    let folder = has_files.then(|| free_folder(packages_dir, &manifest.name));
     let place =
         |zip: &mut zip::ZipArchive<File>, f: &PackedFile, dir: &str| -> Result<Option<String>, String> {
             let (Some(inner), Some(folder)) = (&f.file, &folder) else { return Ok(None) };
@@ -258,6 +267,153 @@ pub fn open(path: &Path, library_dir: &Path, photos_dir: &Path, stamp: u128) -> 
         }
     }
     Ok(Unpacked { notes, board, docs, folder: folder.map(|f| f.to_string_lossy().into_owned()), manifest })
+}
+
+const DEVICE_MANIFEST: &str = "avero-device.json";
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceBoardRequest {
+    /// The board's id in the project.
+    pub id: String,
+    pub request: PackRequest,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceRequest {
+    pub name: String,
+    /// The device project as the UI keeps it (boards, connectors), as JSON.
+    pub project: String,
+    pub boards: Vec<DeviceBoardRequest>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceManifest {
+    pub version: u32,
+    pub app: String,
+    pub created: String,
+    pub name: String,
+    pub project: String,
+    /// Board id in the project → its package inside.
+    pub boards: Vec<DeviceBoardEntry>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceBoardEntry {
+    pub id: String,
+    pub name: String,
+    pub file: String,
+    pub missing: Vec<String>,
+}
+
+/// Packs a device: the project, and every board as a package of its own inside.
+pub fn create_device(
+    out: &Path,
+    req: &DeviceRequest,
+    app: &str,
+    created: &str,
+) -> Result<PackResult, String> {
+    let tmp = out.with_extension("averopkg.part");
+    let file = File::create(&tmp).map_err(|e| format!("{}: {e}", tmp.display()))?;
+    let mut zip = zip::ZipWriter::new(file);
+    let stored =
+        SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored).large_file(true);
+    let mut result = PackResult::default();
+    let mut entries = Vec::new();
+    for (i, b) in req.boards.iter().enumerate() {
+        let inner = out.with_extension(format!("board{i}.part"));
+        let r = create(&inner, &b.request, app, created);
+        let data =
+            r.as_ref().map_err(String::clone).and_then(|_| std::fs::read(&inner).map_err(|e| e.to_string()));
+        let _ = std::fs::remove_file(&inner);
+        let (r, data) = (r?, data?);
+        let name = format!("boards/{i}.averopkg");
+        zip.start_file(&name, stored).map_err(|e| e.to_string())?;
+        zip.write_all(&data).map_err(|e| e.to_string())?;
+        result.files += r.files;
+        result.bytes += r.bytes;
+        result.missing.extend(r.missing.iter().cloned());
+        entries.push(DeviceBoardEntry {
+            id: b.id.clone(),
+            name: b.request.name.clone(),
+            file: name,
+            missing: r.missing,
+        });
+    }
+    let manifest = DeviceManifest {
+        version: 1,
+        app: app.to_string(),
+        created: created.to_string(),
+        name: req.name.clone(),
+        project: req.project.clone(),
+        boards: entries,
+    };
+    let packed =
+        SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated).large_file(true);
+    zip.start_file(DEVICE_MANIFEST, packed).map_err(|e| e.to_string())?;
+    zip.write_all(serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?.as_bytes())
+        .map_err(|e| e.to_string())?;
+    zip.finish().map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, out).map_err(|e| format!("{}: {e}", out.display()))?;
+    Ok(result)
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct UnpackedDeviceBoard {
+    pub id: String,
+    pub unpacked: Unpacked,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum Opened {
+    Board(Box<Unpacked>),
+    Device { name: String, project: String, folder: String, boards: Vec<UnpackedDeviceBoard> },
+}
+
+/// Opens a board package or a device package. A device's boards go into one
+/// folder of the device in the library, each in a folder of its own.
+pub fn open_any(path: &Path, library_dir: &Path, photos_dir: &Path, stamp: u128) -> Result<Opened, String> {
+    let file = File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| format!("not an Avero package: {e}"))?;
+    let manifest: DeviceManifest = match zip.by_name(DEVICE_MANIFEST) {
+        Err(_) => return open(path, library_dir, photos_dir, stamp).map(|u| Opened::Board(Box::new(u))),
+        Ok(mut f) => {
+            let mut buf = Vec::new();
+            f.read_to_end(&mut buf).map_err(|e| e.to_string())?;
+            serde_json::from_slice(&buf).map_err(|e| format!("device manifest: {e}"))?
+        }
+    };
+    if manifest.version != 1 {
+        return Err(format!("package version {} is newer than this Avero", manifest.version));
+    }
+    let device_dir = free_folder(&library_dir.join("Pakete"), &manifest.name);
+    let mut boards = Vec::new();
+    for (i, entry) in manifest.boards.iter().enumerate() {
+        if inside(&entry.file, "boards").is_none() {
+            return Err(format!("device package: unexpected entry {}", entry.file));
+        }
+        let mut data = Vec::new();
+        zip.by_name(&entry.file)
+            .map_err(|_| format!("device package: {} missing", entry.file))?
+            .read_to_end(&mut data)
+            .map_err(|e| e.to_string())?;
+        let inner = std::env::temp_dir().join(format!("avero-device-{stamp}-{i}.averopkg"));
+        std::fs::write(&inner, data).map_err(|e| e.to_string())?;
+        let opened = open_into(&inner, &device_dir, photos_dir, stamp + i as u128);
+        let _ = std::fs::remove_file(&inner);
+        boards.push(UnpackedDeviceBoard { id: entry.id.clone(), unpacked: opened? });
+    }
+    Ok(Opened::Device {
+        name: manifest.name,
+        project: manifest.project,
+        folder: device_dir.to_string_lossy().into_owned(),
+        boards,
+    })
 }
 
 #[cfg(test)]
@@ -319,6 +475,69 @@ mod tests {
         // Opened twice: a folder of its own, nothing overwritten.
         let again = open(&out, &there.join("library"), &there.join("photos"), 8).unwrap();
         assert!(again.folder.unwrap().ends_with("PS5 EDM-010 (2)"));
+    }
+
+    #[test]
+    fn packs_and_opens_a_device_of_two_boards() {
+        let home = tmp("device-home");
+        let main = home.join("820-02016.brd");
+        let io = home.join("820-02017.brd");
+        let photo = home.join("io-top.jpg");
+        std::fs::write(&main, b"MAIN").unwrap();
+        std::fs::write(&io, b"IO").unwrap();
+        std::fs::write(&photo, b"JPEG").unwrap();
+        let photo_path = photo.to_string_lossy().into_owned();
+        let board = |key: &str, name: &str, path: &Path, photos: Vec<String>| DeviceBoardRequest {
+            id: key.to_lowercase(),
+            request: PackRequest {
+                key: key.into(),
+                name: name.into(),
+                notes: format!(
+                    r#"{{"version":1,"key":"{key}","photo":{}}}"#,
+                    serde_json::to_string(&photo_path).unwrap()
+                ),
+                board: Some(path.to_string_lossy().into_owned()),
+                docs: vec![],
+                photos,
+                originals: true,
+                extra: serde_json::Value::Null,
+            },
+        };
+        let req = DeviceRequest {
+            name: "MacBook A2338".into(),
+            project: r#"{"id":"p1","name":"MacBook A2338","boards":[],"links":[]}"#.into(),
+            boards: vec![
+                board("820-02016", "Hauptplatine", &main, vec![]),
+                board("820-02017", "IO-Platine", &io, vec![photo_path.clone()]),
+            ],
+        };
+        let out = home.join("device.averopkg");
+        let r = create_device(&out, &req, "0.9.30", "now").unwrap();
+        assert!(r.missing.is_empty());
+        let there = tmp("device-there");
+        let Opened::Device { name, project, folder, boards } =
+            open_any(&out, &there.join("library"), &there.join("photos"), 5).unwrap()
+        else {
+            panic!("a device")
+        };
+        assert_eq!(name, "MacBook A2338");
+        assert!(project.contains("\"links\""));
+        assert!(folder.ends_with("Pakete/MacBook A2338"));
+        assert_eq!(boards.len(), 2);
+        assert_eq!(boards[0].id, "820-02016");
+        let b0 = boards[0].unpacked.board.clone().unwrap();
+        let b1 = boards[1].unpacked.board.clone().unwrap();
+        assert!(b0.starts_with(&folder) && b1.starts_with(&folder));
+        assert_eq!(std::fs::read(&b0).unwrap(), b"MAIN");
+        assert_eq!(std::fs::read(&b1).unwrap(), b"IO");
+        assert!(!boards[1].unpacked.notes.contains(&photo_path), "no path of the old Mac left");
+        // A single board package still opens as one.
+        let single = home.join("single.averopkg");
+        create(&single, &req.boards[0].request, "0.9.30", "now").unwrap();
+        assert!(matches!(
+            open_any(&single, &there.join("library"), &there.join("photos"), 9).unwrap(),
+            Opened::Board(_)
+        ));
     }
 
     #[test]

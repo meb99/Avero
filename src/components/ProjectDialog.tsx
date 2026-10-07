@@ -18,6 +18,8 @@ interface Props {
   /** Boards open in tabs. */
   open: OpenBoard[];
   onChange(projects: DeviceProject[]): void;
+  /** Saves the device with all its boards as one package. */
+  onExport?(project: DeviceProject): void;
   onOpenBoard(path: string): void;
   onPickFile(): Promise<string | undefined>;
   onClose(): void;
@@ -36,7 +38,7 @@ function mappingText(m: PinMapping, t: ReturnType<typeof useI18n>["t"]): string 
  * own file and notes) and which connectors meet, pin by pin, directly or
  * through a cable.
  */
-export function ProjectDialog({ projects, current, open, onChange, onOpenBoard, onPickFile, onClose }: Props) {
+export function ProjectDialog({ projects, current, open, onChange, onExport, onOpenBoard, onPickFile, onClose }: Props) {
   const { t } = useI18n();
   const mine = current ? projects.find((p) => p.boards.some((b) => b.path === current.path)) : undefined;
   const [chosen, setChosen] = useState<string | null>(mine?.id ?? projects[0]?.id ?? null);
@@ -75,6 +77,11 @@ export function ProjectDialog({ projects, current, open, onChange, onOpenBoard, 
         <button className="small" onClick={() => void create()}>
           {t("project.new")}
         </button>
+        {project && onExport && (
+          <button className="small" disabled={project.boards.length === 0} title={t("package.exportDeviceHint")} onClick={() => onExport(project)}>
+            {t("package.exportDevice")}
+          </button>
+        )}
         {project && (
           <button
             className="small danger"

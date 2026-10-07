@@ -66,7 +66,7 @@ import { dataScope } from "./core/dataScope";
 import { continuations, parseProjects, projectOf, type DeviceProject } from "./workbench/project";
 import { ProjectDialog } from "./components/ProjectDialog";
 import { BenchBar, type BenchHandle } from "./components/BenchBar";
-import { exportPackage, openPackage, PACKAGE_EXTENSION } from "./workbench/package";
+import { exportDevicePackage, exportPackage, openPackage, PACKAGE_EXTENSION } from "./workbench/package";
 import type { Word } from "./schematic/textIndex";
 import { clearRecent, loadRecent, loadSettings, rememberRecent, saveSettings, type DockPane, type SavedLayout, type Settings } from "./settings";
 import { DOCK_ORDER, paneWeights, parseLayouts, PRESETS, PRESET_IDS, sidebarPixels, withLayout, type PresetId } from "./workbench/layouts";
@@ -1107,7 +1107,20 @@ export function App() {
       // A board package: unpacked, its notes saved, then its board and PDFs opened.
       if (path.toLowerCase().endsWith(`.${PACKAGE_EXTENSION}`)) {
         try {
-          const opened = await openPackage(path);
+          const any = await openPackage(path);
+          if (any.kind === "device") {
+            // The device's project under a new id, its boards where they lie now; the first board opened.
+            setProjects((old) => {
+              const next = [...old, any.project];
+              void saveStore("projects", next).catch((e) => setToast(String(e)));
+              return next;
+            });
+            const first = any.boards.find((b) => b.board);
+            if (first?.board) await openPathRef.current(first.board, first.docs[0]);
+            setToast(t("package.deviceOpened", { name: any.project.name, n: any.boards.length, missing: any.boards.filter((b) => b.noBoard).length }));
+            return;
+          }
+          const opened = any;
           setToast(t(opened.merged ? "package.openedMerged" : "package.opened", { name: opened.name }));
           if (opened.board) await openPathRef.current(opened.board, opened.docs[0]);
           else if (opened.docs[0]) await openSchematicPathRef.current(opened.docs[0]);
@@ -1734,6 +1747,25 @@ export function App() {
     void saveStore("projects", next).catch((e) => setToast(String(e)));
   };
   const projectHere = projectOf(projects, source?.path);
+  /** A device project as one package: every board with its notes, photos and (on request) files. */
+  const exportDevice = async (project: DeviceProject) => {
+    const originals = await askConfirm(t("package.originalsAsk"), { title: t("package.exportDevice"), ok: t("package.withOriginals") });
+    const { save } = await import("@tauri-apps/plugin-dialog");
+    const out = await save({ title: t("package.exportDevice"), defaultPath: `${project.name}.${PACKAGE_EXTENSION}`, filters: [{ name: "Avero", extensions: [PACKAGE_EXTENSION] }] });
+    if (!out) return;
+    // PDFs of boards open in tabs go along as they are open.
+    const docsOf = (path: string) => {
+      const tab = tabsRef.current.map((tb) => (tb.id === live.current.id ? live.current : tb)).find((tb) => tb.source?.path === path);
+      return tab ? tab.docs.flatMap((d) => (d.path ? [d.path] : [])) : undefined;
+    };
+    try {
+      const r = await exportDevicePackage(out, project, docsOf, originals);
+      if (r.missing.length) await askConfirm(t("package.missing", { n: r.missing.length, list: r.missing.join("\n") }), { title: t("package.exportDevice") });
+      setToast(t("package.deviceSaved", { name: fileName(out), boards: project.boards.length, n: r.files }));
+    } catch (e) {
+      setToast(t("package.failed", { message: String(e) }));
+    }
+  };
   /** Where a pin of this board continues through a connector: the board, pin and (when that board is open) its net. */
   const crossBoard = (pinIndex: number) => {
     if (!model || !projectHere) return [];
@@ -3215,6 +3247,7 @@ export function App() {
               return shown.source?.path ? [{ path: shown.source.path, name: shown.source.name, parts: shown.model?.parts.map((p) => p.name) }] : [];
             })}
             onChange={saveProjects}
+            onExport={(p) => void exportDevice(p)}
             onOpenBoard={(path) => {
               setDialog(null);
               const tab = tabsRef.current.find((tb) => (tb.id === live.current.id ? live.current : tb).source?.path === path);
