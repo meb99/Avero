@@ -422,9 +422,9 @@ pub fn attach_readings(board: &mut crate::model::Board, found: FileReadings) {
     }
     if missing > 0 {
         let why = if board.parts.is_empty() { " (the parts are locked)" } else { "" };
-        board
-            .warnings
-            .push(format!("{missing} readings name a missing or ambiguous part/pin{why}; left out."));
+        board.warnings.push(format!(
+            "{missing} readings of the file name a missing or ambiguous part/pin{why}; left out."
+        ));
     }
     if found.unreadable > 0 {
         board

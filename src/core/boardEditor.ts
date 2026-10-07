@@ -1,4 +1,4 @@
-import type { Board, Bounds, Part, Pin, Point, Side } from "./types";
+import type { Board, Bounds, FileReading, Part, Pin, Point, Side } from "./types";
 import { partCenter } from "./board";
 
 const valid = (n:number) => Number.isFinite(n) && Math.abs(n)<1e9;
@@ -12,6 +12,20 @@ const bounds = (points:Iterable<Point>, fallback:Bounds={minX:0,minY:0,maxX:0,ma
   return out.minX===Infinity?fallback:out;
 };
 const rect = (x:number,y:number,w=60,h=40):Point[] => [{x:x-w/2,y:y-h/2},{x:x+w/2,y:y-h/2},{x:x+w/2,y:y+h/2},{x:x-w/2,y:y+h/2},{x:x-w/2,y:y-h/2}];
+const readingKey=(part:string,pin:string)=>`${part.toUpperCase()}\0${pin.toUpperCase()}`;
+/** Source readings refer to names; resolve their unique owner before editing names/indices. */
+function changeReadings(board:Board,change:(reading:FileReading,owner:number|undefined)=>FileReading|null):Pick<Board,"readings"|"warnings"> {
+  if(!board.readings?.length)return {readings:board.readings,warnings:board.warnings};
+  const owners=new Map<string,number|null>();
+  board.pins.forEach((pin)=>{const key=readingKey(board.parts[pin.part].name,pin.number);owners.set(key,owners.has(key)?null:pin.part);});
+  let omitted=0;
+  const readings=board.readings.flatMap((r)=>{
+    const owner=owners.get(readingKey(r.part,r.pin));
+    if(owner===null){omitted++;return [];}
+    const next=change(r,owner);return next?[next]:[];
+  });
+  return {readings,warnings:omitted?[...board.warnings,`${omitted} ambiguous file readings omitted during geometry editing.`]:board.warnings};
+}
 
 export function emptyBoard():Board {
   const outline=rect(500,350,1000,700);
@@ -40,8 +54,7 @@ export function editPin(board:Board,index:number,change:Partial<Pin>):Board {
   if (![p.x,p.y,p.radius].every(valid)||p.radius<=0||!p.number.trim()||!board.nets[p.net]) throw Error("Invalid pad data");
   if (p.pad && (![p.pad.w,p.pad.h,p.pad.angle].every(valid)||p.pad.w<=0||p.pad.h<=0)) throw Error("Invalid pad shape");
   if (board.pins.some((other,i)=>i!==index && other.part===p.part && other.number.toUpperCase()===p.number.toUpperCase())) throw Error("Pin number already exists");
-  const owner=board.parts[p.part].name;
-  return rebuildBoard({...board,pins:board.pins.map((old,i)=>i===index?p:old),readings:board.readings?.map((r)=>r.part===owner&&r.pin===old.number?{...r,pin:p.number}:r)});
+  return rebuildBoard({...board,pins:board.pins.map((old,i)=>i===index?p:old),...changeReadings(board,(r,owner)=>owner===p.part&&r.pin.toUpperCase()===old.number.toUpperCase()?{...r,pin:p.number}:r)});
 }
 export function ensureNet(board:Board,name:string):[Board,number] {
   name=name.trim();if(!name)name="UNCONNECTED";
@@ -68,16 +81,16 @@ export function removePart(board:Board,part:number):Board {
   const p=board.parts[part];if(!p)return board;
   const pins=board.pins.filter((pin)=>pin.part!==part).map((pin)=>({...pin,part:pin.part>part?pin.part-1:pin.part}));
   const parts=board.parts.filter((_,i)=>i!==part).map((other)=>({...other,firstPin:other.firstPin>p.firstPin?other.firstPin-p.pinCount:other.firstPin}));
-  return rebuildBoard({...board,parts,pins,readings:board.readings?.filter((r)=>r.part!==p.name)});
+  return rebuildBoard({...board,parts,pins,...changeReadings(board,(r,owner)=>owner===part?null:r)});
 }
 export function removePin(board:Board,index:number):Board {
   const pin=board.pins[index];if(!pin)return board;
   const parts=board.parts.map((p,i)=>({...p,pinCount:p.pinCount-(i===pin.part?1:0),firstPin:p.firstPin-(i>pin.part?1:0)}));
-  return rebuildBoard({...board,parts,pins:board.pins.filter((_,i)=>i!==index),readings:board.readings?.filter((r)=>r.part!==board.parts[pin.part].name||r.pin!==pin.number)});
+  return rebuildBoard({...board,parts,pins:board.pins.filter((_,i)=>i!==index),...changeReadings(board,(r,owner)=>owner===pin.part&&r.pin.toUpperCase()===pin.number.toUpperCase()?null:r)});
 }
 export function renamePart(board:Board,index:number,name:string,device:string):Board {
-  name=name.trim();if(!name||board.parts.some((p,i)=>i!==index&&p.name.toUpperCase()===name.toUpperCase()))throw Error("Component name already exists or is empty");
   const old=board.parts[index].name;
-  return {...board,parts:board.parts.map((p,i)=>i===index?{...p,name,device:device||undefined}:p),readings:board.readings?.map((r)=>r.part===old?{...r,part:name}:r)};
+  name=name.trim();if(!name||(name!==old&&board.parts.some((p,i)=>i!==index&&p.name.toUpperCase()===name.toUpperCase())))throw Error("Component name already exists or is empty");
+  return {...board,parts:board.parts.map((p,i)=>i===index?{...p,name,device:device||undefined}:p),...changeReadings(board,(r,owner)=>owner===index?{...r,part:name}:r)};
 }
 export const boardDocument=(board:Board)=>JSON.stringify({averoBoard:1,board:{...board,readings:board.readings?.map((r)=>({...r,sourceFormat:r.sourceFormat??(board.format==="xzz"?"XZZ":board.formatName)}))}},null,2);
