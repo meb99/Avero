@@ -67,6 +67,15 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - **Foto des echten Boards** unter der Boardview (Darstellung → „Foto dieser Seite hinzufügen…"): zwei markante Punkte im Foto anklicken, dann dieselben Punkte auf dem Board (Pins rasten ein) – das Foto liegt danach deckungsgleich darunter, mit einstellbarer Deckkraft, getrennt für Ober- und Unterseite. Liegt neben dem Board ein PDF mit einem Bild der Platine (wie bei manchen Boardview-Paketen), übernimmt Avero die angezeigte Seite mit einem Klick als Foto und legt es selbst auf den Board-Umriss – ohne Datei auswählen, ohne Punkte klicken. Mit „Daneben“ steht das Foto unverändert neben dem Board: ein Klick auf ein Bauteil im Foto wählt es auf dem Board aus und springt hin, das Bauteil unter dem Mauszeiger wird mit Namen angezeigt, und was auf dem Board ausgewählt ist (Bauteil, Pin, alle Pins eines Netzes), wird im Foto markiert.
 - **Inhaltssuche über die ganze Bibliothek** (Bibliothek → „Inhalt“): Schaltpläne werden nach Text durchsucht, Boardviews nach Bauteilen und Netzen. Alles wird einmal indiziert; ein Klick auf einen Treffer öffnet Board und Schaltplan und springt zur Fundstelle.
 
+**Neu in 0.9.31**
+- **Gerätepakete:** Ein Geräteprojekt mit mehreren Platinen (Ablage › Geräteprojekt › „Gerät als Paket speichern“) wird eine Datei: das Projekt mit den Steckverbindungen und jede Platine mit Notizen, Messwerten, Fotos und Kamera-Ausrichtung – auf Wunsch mit Boarddateien und PDFs, auch von Platinen, die gerade nicht offen sind. Auf einem anderen Mac geöffnet, landen alle Platinen in einem Ordner des Geräts, das Projekt entsteht mit den neuen Pfaden, vorhandene Notizen werden zusammengeführt.
+
+**Neu in 0.9.30**
+- **Lokale Importe:** binäres Allegro (16.0–17.4), Teboview TVW, binäres Altium PcbDoc, ODB++, HyperLynx und EasyEDA Pro, bei Projekten mit mehreren Boards mit Auswahl; experimenteller ATE-BV-Leser. Grenzen und geprüfte Varianten stehen in `docs/FORMATS_AND_EDITOR.md`.
+- **Boardeditor:** Bauteile und Pads anlegen, bearbeiten, verschieben und löschen, Netze bearbeiten, Rückgängig/Wiederholen; als `.averoboard` speichern und in die Bibliothek übernehmen.
+- **Räumliche PDF-Suche:** mehrere Begriffe in einstellbarer Nähe, bibliotheksweit, mit Sprung zur Fundstelle.
+- **XZZ-Messwerte:** auch ausdrücklich bezeichnete Spannungs- und Widerstandslisten, Einheiten und Herkunft bleiben erhalten.
+
 **Neu in 0.9.29**
 - **Werkbankmodus:** Ein Wert wird unter den Bedingungen bewertet, mit denen er gespeichert wird. Vertauschte Messspitzen oder ein anderer Betriebszustand ergeben „nicht vergleichbar“ statt „OK“ – in der Anzeige und in der Sprachausgabe.
 - **Spannungsbaum:** Werte an Pins und Testpunkten zählen über ihr Netz mit. Jeder Wert behält seinen Betriebszustand; bewertet wird ein Zustand (an, sonst Standby), bei ausgeschaltetem Board gemessene 0 V gelten nie als fehlende Versorgung. Widersprüchliche Messorte einer Versorgung werden mit ihren Werten genannt. Eine Abbruchstelle wird nur gemeldet, wenn alles, was die fehlende Versorgung braucht, gemessen vorhanden ist – sonst der erste Fehlwert mit dem, was noch ungeprüft ist.
