@@ -12,7 +12,7 @@ import type { BoardModel, ViewSide } from "../core/board";
 import type { Net, NetKind, Selection } from "../core/types";
 import { partRole, type PartRole } from "../core/partRole";
 import { useI18n } from "../i18n";
-import type { Settings } from "../settings";
+import { showsExtra, type Settings } from "../settings";
 import type { BoardNotes, Bookmark } from "../workbench/notes";
 import { Workbench } from "./Workbench";
 import { Details } from "./Details";
@@ -236,9 +236,17 @@ export function Sidebar({
   const selectedPart = model.selectedPart(selection);
   const selectedNet = model.selectedNet(selection);
 
-  const tabs = (["details", "parts", "nets", "layers", "knowledge", "measure", "diagnose"] as const).filter(
-    (id) => id !== "layers" || model.layers.length > 0,
-  );
+  // What is on screen: the boardviewer tabs always; workshop tabs at the workshop level, or
+  // where they have something (knowledge about the board, readings or a case), or are in use.
+  const hasReadings = !!notes && (Object.keys(notes.reference).length > 0 || notes.cases.length > 0 || Object.keys(notes.referencePoints ?? {}).length > 0);
+  const tabs = (["details", "parts", "nets", "layers", "knowledge", "measure", "diagnose"] as const).filter((id) => {
+    if (id === "layers") return model.layers.length > 0;
+    if (id === tab) return true;
+    if (id === "knowledge") return showsExtra(settings, "knowledge") || knowledgeCount > 0;
+    if (id === "measure") return showsExtra(settings, "measure") || hasReadings;
+    if (id === "diagnose") return showsExtra(settings, "diagnose");
+    return true;
+  });
 
   // Folded: a narrow strip of upright tab names; a click opens that tab.
   if (collapsed)

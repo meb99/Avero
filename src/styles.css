@@ -5084,3 +5084,23 @@ p.pt-conflict,
 @media(max-width:700px) { .board-editor-grid { grid-template-columns:1fr; } .board-editor-properties { max-height:30vh; } }
 .project-board-choices { display:flex; flex-direction:column; gap:8px; max-height:60vh; overflow:auto; }
 .project-board-choices button { text-align:left; display:flex; flex-direction:column; padding:12px; }
+
+/* Interface level switch (view / workshop): quieter than the side switch. */
+.segmented.ui-level button {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+/* Part details, view level: the empty editors wait behind "More". */
+.details-more > summary {
+  cursor: pointer;
+  color: var(--text-muted, inherit);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+}
+.details-more[open] > summary {
+  margin-bottom: 6px;
+}

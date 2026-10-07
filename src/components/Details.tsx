@@ -516,6 +516,100 @@ export function Details({
       const pinCheck = chip?.pinout ? checkPinout(model, selection.part, chip.pinout) : null;
       const obdValues = obdata ? partValues(obdata, part.name) : [];
       const b = part.bounds;
+      // Workshop: everything in its usual order. View: the pins come first; what the board,
+      // the schematic or the user says about the part follows, and the empty editors wait
+      // under "More".
+      const schFacts = (() => {
+            const f = schematicFacts?.parts.get(part.name.toUpperCase());
+            if (!f) return null;
+            const rows: [MessageKey, string | undefined][] = [
+              ["sch.value", f.value],
+              ["sch.partNumber", f.partNumber],
+              ["sch.rating", f.rating],
+              ["sch.tolerance", f.tolerance],
+              ["sch.dielectric", f.dielectric],
+              ["sch.package", f.package],
+            ];
+            const notFitted = f.flags.some((x) => /STUFF|DNP|NOPOP|^NI$|DNI/.test(x));
+            return (
+              <section className="details-section sch-facts">
+                <h3>
+                  {t("sch.title")} <span className="muted">{t("sch.page", { n: f.page + 1 })}</span>
+                </h3>
+                <dl className="props">
+                  {rows.filter(([, v]) => v).map(([label, v]) => (
+                    <Row key={label} label={t(label)}>
+                      {v}
+                    </Row>
+                  ))}
+                </dl>
+                {f.flags.length > 0 && (
+                  <p className={notFitted ? "kb-note kb-warning" : "muted"}>
+                    {notFitted ? t("sch.notFitted") : ""} {f.flags.join(" · ")}
+                  </p>
+                )}
+              </section>
+            );
+          })();
+      const chipCard = chip && <ChipCard chip={chip} check={pinCheck} />;
+      const partSheets = datasheetsFor(datasheets ?? [], part.device ?? "");
+      const sheetSection = onAddDatasheet && part.device && partNumbers(part.device).length > 0 && (
+            <section className="details-section datasheets">
+              <h3>{t("sheet.section")}</h3>
+              {datasheetsFor(datasheets ?? [], part.device).map((s) => (
+                <div key={s.id} className="sheet-row">
+                  <button className="link" onClick={() => onOpenDatasheet?.(s)}>
+                    {s.title}
+                  </button>
+                  {s.pages.map((p) => (
+                    <button key={`${p.label}${p.page}`} className="small" onClick={() => onOpenDatasheet?.(s, p.page)}>
+                      {p.label}
+                    </button>
+                  ))}
+                  <button
+                    className="tool icon-only"
+                    title={t("sheet.remove")}
+                    aria-label={t("sheet.remove")}
+                    onClick={async () => (await askConfirm(t("sheet.removeAsk", { title: s.title }), { danger: true, ok: t("sheet.remove") })) && onRemoveDatasheet?.(s)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <button className="small" onClick={() => onAddDatasheet(selection.part)}>
+                + {t("sheet.add")}
+              </button>
+            </section>
+          );
+      const ownInfo = notes?.ownParts?.[part.name.toUpperCase()];
+      const ownSection = notes && (
+            <OwnPartInfo info={notes.ownParts?.[part.name.toUpperCase()]} onSave={(info) => updateNotes((n) => setOwnPart(n, part.name, info))} />
+          );
+      const hasBound = (notes?.markers ?? []).some((m) => m.target === `part:${part.name}`);
+      const notesSection = notes && (
+            <BoundNotes
+              notes={notes}
+              update={updateNotes}
+              target={`part:${part.name}`}
+              at={{ x: (b.minX + b.maxX) / 2, y: b.maxY, side: part.side === "bottom" ? "bottom" : part.side === "top" ? "top" : side === "bottom" ? "bottom" : "top" }}
+            />
+          );
+      const obdSection = obdValues.length > 0 && (
+            <section className="details-section obd">
+              <h3>
+                OpenBoardData <span className="muted">{obdata!.id}</span>
+              </h3>
+              <dl className="props">
+                {obdValues.map((v) => (
+                  <Row key={`${v.kind}${v.value}`} label={t(OBD_PART_KINDS[v.kind] ?? "obd.misc")}>
+                    {v.value}
+                  </Row>
+                ))}
+              </dl>
+            </section>
+          );
+      const lean = settings.uiLevel === "view";
+      const later = [partSheets.length === 0 && sheetSection, !ownInfo && ownSection, !hasBound && notesSection].filter(Boolean);
       return (
         <div className="details">
           <header className="details-head">
@@ -553,92 +647,8 @@ export function Details({
                 );
               })()}
           </div>
-          {(() => {
-            const f = schematicFacts?.parts.get(part.name.toUpperCase());
-            if (!f) return null;
-            const rows: [MessageKey, string | undefined][] = [
-              ["sch.value", f.value],
-              ["sch.partNumber", f.partNumber],
-              ["sch.rating", f.rating],
-              ["sch.tolerance", f.tolerance],
-              ["sch.dielectric", f.dielectric],
-              ["sch.package", f.package],
-            ];
-            const notFitted = f.flags.some((x) => /STUFF|DNP|NOPOP|^NI$|DNI/.test(x));
-            return (
-              <section className="details-section sch-facts">
-                <h3>
-                  {t("sch.title")} <span className="muted">{t("sch.page", { n: f.page + 1 })}</span>
-                </h3>
-                <dl className="props">
-                  {rows.filter(([, v]) => v).map(([label, v]) => (
-                    <Row key={label} label={t(label)}>
-                      {v}
-                    </Row>
-                  ))}
-                </dl>
-                {f.flags.length > 0 && (
-                  <p className={notFitted ? "kb-note kb-warning" : "muted"}>
-                    {notFitted ? t("sch.notFitted") : ""} {f.flags.join(" · ")}
-                  </p>
-                )}
-              </section>
-            );
-          })()}
-          {chip && <ChipCard chip={chip} check={pinCheck} />}
-          {onAddDatasheet && part.device && partNumbers(part.device).length > 0 && (
-            <section className="details-section datasheets">
-              <h3>{t("sheet.section")}</h3>
-              {datasheetsFor(datasheets ?? [], part.device).map((s) => (
-                <div key={s.id} className="sheet-row">
-                  <button className="link" onClick={() => onOpenDatasheet?.(s)}>
-                    {s.title}
-                  </button>
-                  {s.pages.map((p) => (
-                    <button key={`${p.label}${p.page}`} className="small" onClick={() => onOpenDatasheet?.(s, p.page)}>
-                      {p.label}
-                    </button>
-                  ))}
-                  <button
-                    className="tool icon-only"
-                    title={t("sheet.remove")}
-                    aria-label={t("sheet.remove")}
-                    onClick={async () => (await askConfirm(t("sheet.removeAsk", { title: s.title }), { danger: true, ok: t("sheet.remove") })) && onRemoveDatasheet?.(s)}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              <button className="small" onClick={() => onAddDatasheet(selection.part)}>
-                + {t("sheet.add")}
-              </button>
-            </section>
-          )}
-          {notes && (
-            <OwnPartInfo info={notes.ownParts?.[part.name.toUpperCase()]} onSave={(info) => updateNotes((n) => setOwnPart(n, part.name, info))} />
-          )}
-          {notes && (
-            <BoundNotes
-              notes={notes}
-              update={updateNotes}
-              target={`part:${part.name}`}
-              at={{ x: (b.minX + b.maxX) / 2, y: b.maxY, side: part.side === "bottom" ? "bottom" : part.side === "top" ? "top" : side === "bottom" ? "bottom" : "top" }}
-            />
-          )}
-          {obdValues.length > 0 && (
-            <section className="details-section obd">
-              <h3>
-                OpenBoardData <span className="muted">{obdata!.id}</span>
-              </h3>
-              <dl className="props">
-                {obdValues.map((v) => (
-                  <Row key={`${v.kind}${v.value}`} label={t(OBD_PART_KINDS[v.kind] ?? "obd.misc")}>
-                    {v.value}
-                  </Row>
-                ))}
-              </dl>
-            </section>
-          )}
+          {lean ? (
+            <>
           <dl className="props">
             {part.package && <Row label={t("details.package")}>{t(`package.${part.package}`)}</Row>}
             <Row label={t("details.side")}>{t(sideKey[part.side])}</Row>
@@ -687,6 +697,79 @@ export function Details({
               </tbody>
             </table>
           </section>
+              {schFacts}
+              {chipCard}
+              {partSheets.length > 0 && sheetSection}
+              {ownInfo && ownSection}
+              {hasBound && notesSection}
+              {obdSection}
+              {later.length > 0 && (
+                <details className="details-section details-more">
+                  <summary>{t("details.more")}</summary>
+                  {partSheets.length === 0 && sheetSection}
+                  {!ownInfo && ownSection}
+                  {!hasBound && notesSection}
+                </details>
+              )}
+            </>
+          ) : (
+            <>
+              {schFacts}
+              {chipCard}
+              {sheetSection}
+              {ownSection}
+              {notesSection}
+              {obdSection}
+          <dl className="props">
+            {part.package && <Row label={t("details.package")}>{t(`package.${part.package}`)}</Row>}
+            <Row label={t("details.side")}>{t(sideKey[part.side])}</Row>
+            <Row label={t("details.mount")}>{t(part.mount === "th" ? "mount.th" : "mount.smd")}</Row>
+            <Row label={t("details.pins")}>{part.pinCount}</Row>
+            <Row label={t("details.position")}>
+              {formatLength((b.minX + b.maxX) / 2, u)}, {formatLength((b.minY + b.maxY) / 2, u)}
+            </Row>
+            <Row label={t("details.size")}>{formatSize(b.maxX - b.minX, b.maxY - b.minY, u)}</Row>
+          </dl>
+          {hits([part.name], mapping(part.name))}
+          <section className="details-section">
+            <h3>{t("details.pins")}</h3>
+            <table className="pin-table">
+              <tbody>
+                {model.pins.slice(part.firstPin, part.firstPin + Math.min(part.pinCount, 1000)).map((pin, k) => {
+                  const index = part.firstPin + k;
+                  const net = model.nets[pin.net];
+                  return (
+                    <tr key={index} onClick={() => onSelect({ kind: "pin", pin: index }, false)}>
+                      <td className="mono">{pin.number}</td>
+                      <td>
+                        <span className={`net-chip kind-${net.kind}`}>{net.name}</span>
+                      </td>
+                      <td className="muted">
+                        {notes?.ownPins?.[pinKey(model, index)]?.label ? (
+                          <span className="own-pin-label" title={t("own.tag")}>
+                            {notes.ownPins[pinKey(model, index)].label}
+                          </span>
+                        ) : (
+                          (pin.name ?? "")
+                        )}
+                      </td>
+                      {pinCheck && pinCheck.byPin.size > 0 && <PinFunction pin={pinCheck.byPin.get(index)} />}
+                      {(() => {
+                        const d = diodeAtPin(index);
+                        return (
+                          <td className="mono pin-diode" title={d ? `${t("measure.diode")} · ${d.source}` : undefined}>
+                            {d?.text ?? ""}
+                          </td>
+                        );
+                      })()}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </section>
+            </>
+          )}
         </div>
       );
     }

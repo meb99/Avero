@@ -22,7 +22,28 @@ export interface SavedLayout {
   bothSides?: "together" | "separate" | "synced" | null;
 }
 
+/**
+ * How much of Avero is on screen. "view": a lean boardviewer – open, look,
+ * find parts and nets. "workshop": everything for repair work besides –
+ * measuring, diagnosis, drawing, editor. Nothing is removed in "view": the
+ * menus and the command palette (⌘K) reach every function.
+ */
+export type UiLevel = "view" | "workshop";
+
+/** Parts of the workshop that can be shown in "view" as well. */
+export type UiExtra = "draw" | "editor" | "knowledge" | "measure" | "diagnose";
+export const UI_EXTRAS: readonly UiExtra[] = ["draw", "editor", "knowledge", "measure", "diagnose"];
+
+/** Whether a workshop part is shown at the chosen level. */
+export function showsExtra(s: Pick<Settings, "uiLevel" | "uiShow">, extra: UiExtra): boolean {
+  return s.uiLevel === "workshop" || s.uiShow?.[extra] === true;
+}
+
 export interface Settings {
+  /** The level last chosen (see UiLevel). */
+  uiLevel: UiLevel;
+  /** Workshop parts shown in "view" too. */
+  uiShow?: Partial<Record<UiExtra, boolean>>;
   /** Bumped when a default changes for everyone, see loadSettings. */
   revision?: number;
   language: Language | "auto";
@@ -94,6 +115,7 @@ const REVISION = 2;
 
 export const DEFAULT_SETTINGS: Settings = {
   revision: REVISION,
+  uiLevel: "view",
   language: "auto",
   theme: "system",
   units: "mm",

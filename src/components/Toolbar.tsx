@@ -19,6 +19,7 @@ import {
   ZoomOutIcon,
 } from "./Icons";
 import { SearchBox } from "./SearchBox";
+import { showsExtra, type Settings, type UiLevel } from "../settings";
 
 interface Props {
   model: BoardModel | null;
@@ -51,6 +52,9 @@ interface Props {
   /** Drawing tool in use, and starting or stopping one. */
   drawing: DrawingKind | "ruler" | null;
   onDraw(kind: DrawingKind | "ruler" | null): void;
+  /** View or workshop, and the workshop parts shown in view as well. */
+  ui: Pick<Settings, "uiLevel" | "uiShow">;
+  onUiLevel(level: UiLevel): void;
 }
 
 export function Toolbar(p: Props) {
@@ -68,7 +72,11 @@ export function Toolbar(p: Props) {
           <OpenIcon />
           <span className="tool-label">{t("toolbar.open")}</span>
         </button>
-        {p.onEditor && <button className="tool" onClick={p.onEditor} title="Boardeditor">Editor</button>}
+        {p.onEditor && showsExtra(p.ui, "editor") && (
+          <button className="tool" onClick={p.onEditor} title={t("toolbar.editorHint")}>
+            {t("toolbar.editor")}
+          </button>
+        )}
         {board && (
           <button className="tool icon-only" onClick={p.onClose} title={t("toolbar.close")} aria-label={t("toolbar.close")}>
             <CloseIcon />
@@ -117,32 +125,36 @@ export function Toolbar(p: Props) {
             <button className="tool icon-only" onClick={() => p.onZoom(1.5)} title={t("toolbar.zoomIn")} aria-label={t("toolbar.zoomIn")}>
               <ZoomInIcon />
             </button>
-            <button
-              className={`tool icon-only${p.placingMarker ? " active" : ""}`}
-              onClick={p.onMarker}
-              title={`${t("marker.place")} (M)`}
-              aria-label={t("marker.place")}
-              aria-pressed={p.placingMarker}
-            >
-              <FlagIcon />
-            </button>
-            <select
-              className={`tool draw-select${p.drawing ? " active" : ""}`}
-              value={p.drawing ?? ""}
-              title={t("draw.title")}
-              aria-label={t("draw.title")}
-              onChange={(e) => p.onDraw((e.target.value || null) as DrawingKind | "ruler" | null)}
-            >
-              <option value="">✎ {t("draw.title")}</option>
-              <option value="line">{t("draw.line")}</option>
-              <option value="arrow">{t("draw.arrow")}</option>
-              <option value="rect">{t("draw.rect")}</option>
-              <option value="circle">{t("draw.circle")}</option>
-              <option value="area">{t("draw.area")}</option>
-              <option value="text">{t("draw.textTool")}</option>
-              <option value="jumper">{t("draw.jumper")}</option>
-              <option value="ruler">{t("ruler.title")} (L)</option>
-            </select>
+            {(showsExtra(p.ui, "draw") || p.placingMarker || p.drawing) && (
+              <>
+                <button
+                  className={`tool icon-only${p.placingMarker ? " active" : ""}`}
+                  onClick={p.onMarker}
+                  title={`${t("marker.place")} (M)`}
+                  aria-label={t("marker.place")}
+                  aria-pressed={p.placingMarker}
+                >
+                  <FlagIcon />
+                </button>
+                <select
+                  className={`tool draw-select${p.drawing ? " active" : ""}`}
+                  value={p.drawing ?? ""}
+                  title={t("draw.title")}
+                  aria-label={t("draw.title")}
+                  onChange={(e) => p.onDraw((e.target.value || null) as DrawingKind | "ruler" | null)}
+                >
+                  <option value="">✎ {t("draw.title")}</option>
+                  <option value="line">{t("draw.line")}</option>
+                  <option value="arrow">{t("draw.arrow")}</option>
+                  <option value="rect">{t("draw.rect")}</option>
+                  <option value="circle">{t("draw.circle")}</option>
+                  <option value="area">{t("draw.area")}</option>
+                  <option value="text">{t("draw.textTool")}</option>
+                  <option value="jumper">{t("draw.jumper")}</option>
+                  <option value="ruler">{t("ruler.title")} (L)</option>
+                </select>
+              </>
+            )}
           </div>
           <div className="toolbar-search">
             <SearchBox model={p.model!} onPick={p.onPick} inputRef={p.searchRef} />
@@ -152,6 +164,13 @@ export function Toolbar(p: Props) {
 
       <div className="toolbar-spacer" data-tauri-drag-region />
       <div className="toolbar-group">
+        <div className="segmented ui-level" role="group" aria-label={t("ui.level")} title={t("ui.levelHint")}>
+          {(["view", "workshop"] as const).map((level) => (
+            <button key={level} aria-pressed={p.ui.uiLevel === level} className={p.ui.uiLevel === level ? "on" : ""} onClick={() => p.onUiLevel(level)}>
+              {t(`ui.${level}`)}
+            </button>
+          ))}
+        </div>
         <button className="tool icon-only" onClick={p.onLibrary} title={t("library.toggle")} aria-label={t("library.toggle")}>
           <LibraryIcon />
         </button>

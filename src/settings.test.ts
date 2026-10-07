@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS, fromStored, migrate } from "./settings";
+import { DEFAULT_SETTINGS, fromStored, migrate, showsExtra, UI_EXTRAS } from "./settings";
 
 describe("settings migration", () => {
   it("turns ghosting of the other side off once for older settings", () => {
@@ -16,5 +16,24 @@ describe("settings migration", () => {
 
   it("keeps a choice made after the change", () => {
     expect(migrate({ ...DEFAULT_SETTINGS, ghostOtherSide: true }).ghostOtherSide).toBe(true);
+  });
+});
+
+describe("interface level", () => {
+  it("starts lean and keeps the level last chosen", () => {
+    expect(DEFAULT_SETTINGS.uiLevel).toBe("view");
+    expect(fromStored({ revision: 2 }).uiLevel).toBe("view");
+    expect(fromStored({ revision: 2, uiLevel: "workshop" }).uiLevel).toBe("workshop");
+  });
+
+  it("shows workshop parts at the workshop level, or one by one in view", () => {
+    for (const extra of UI_EXTRAS) {
+      expect(showsExtra({ uiLevel: "workshop" }, extra)).toBe(true);
+      expect(showsExtra({ uiLevel: "view" }, extra)).toBe(false);
+    }
+    const ui = { uiLevel: "view" as const, uiShow: { measure: true, draw: false } };
+    expect(showsExtra(ui, "measure")).toBe(true);
+    expect(showsExtra(ui, "draw")).toBe(false);
+    expect(showsExtra(ui, "diagnose")).toBe(false);
   });
 });

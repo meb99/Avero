@@ -2269,6 +2269,11 @@ export function App() {
       { id: "schematic-search", label: t("menu.findSchematic"), shortcut: "⌥⌘F", enabled: schematic !== null, run: a.searchSchematic },
       { id: "schematic-window", label: t("menu.popOut"), enabled: schematic !== null && !detached, run: a.popOutSchematic },
       { id: "sidebar", label: t("menu.sidebar"), shortcut: "⌘I", enabled: board, run: a.toggleSidebar },
+      {
+        id: "ui-level",
+        label: t(settings.uiLevel === "view" ? "ui.toWorkshop" : "ui.toView"),
+        run: () => setSettings((s) => ({ ...s, uiLevel: s.uiLevel === "view" ? "workshop" : "view" })),
+      },
       { id: "export", label: t("menu.exportImage"), shortcut: "⇧⌘E", enabled: board, run: a.exportImage },
       { id: "export-pdf", label: t("menu.exportPdf"), shortcut: "⌥⌘E", enabled: board, run: a.exportPdf },
       { id: "marker", label: t("marker.place"), shortcut: "M", enabled: board && notes !== null, run: () => setPlacingMarker(true) },
@@ -2666,6 +2671,8 @@ export function App() {
             if (kind && kind !== "ruler") startDrawing(kind);
             else setDrawing(null);
           }}
+          ui={settings}
+          onUiLevel={(level) => setSettings((old) => ({ ...old, uiLevel: level }))}
         />
 
         {tabs.length > 1 && <TabBar tabs={tabInfos} active={activeTab} onSwitch={switchTab} onClose={closeTab} onNew={newTab} />}

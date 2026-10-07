@@ -2,7 +2,7 @@ import { createBackup, formatBytes, pickAndRestoreBackup } from "../workbench/ba
 import { bindings, isModifierOnly, keyLabel, keyName, rebind, SHORTCUT_ACTIONS, type ShortcutAction, type Shortcuts } from "../shortcuts";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "../i18n";
-import type { Settings } from "../settings";
+import { UI_EXTRAS, type Settings, type UiLevel } from "../settings";
 import { CloseIcon } from "./Icons";
 import { MeterSettings } from "./MeterSettings";
 import { ColorEditor } from "./ColorEditor";
@@ -108,6 +108,30 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
           <option value="zoom">{t("settings.scroll.zoom")}</option>
         </select>
       </div>
+      <h3>{t("ui.level")}</h3>
+      <div className="form-grid">
+        <label htmlFor="set-ui-level">{t("ui.levelLabel")}</label>
+        <select id="set-ui-level" value={settings.uiLevel} onChange={(e) => set("uiLevel", e.target.value as UiLevel)}>
+          <option value="view">{t("ui.view")}</option>
+          <option value="workshop">{t("ui.workshop")}</option>
+        </select>
+      </div>
+      <p className="hint">{t("ui.levelHint")}</p>
+      {settings.uiLevel === "view" && (
+        <div className="checks">
+          <p className="hint">{t("ui.alsoShow")}</p>
+          {UI_EXTRAS.map((extra) => (
+            <label className="check" key={extra}>
+              <input
+                type="checkbox"
+                checked={settings.uiShow?.[extra] === true}
+                onChange={(e) => set("uiShow", { ...settings.uiShow, [extra]: e.target.checked })}
+              />
+              {t(`ui.extra.${extra}`)}
+            </label>
+          ))}
+        </div>
+      )}
       <h3>{t("settings.display")}</h3>
       <div className="checks">
         {check("partNames", t("settings.partNames"))}
