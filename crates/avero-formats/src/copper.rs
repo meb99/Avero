@@ -116,6 +116,9 @@ pub fn add_copper_from(target: &mut Board, source: &Board) -> Result<(usize, usi
         copy.x = x;
         copy.y = y;
         copy.radius = tp.radius * fx.a.abs();
+        if let Some(via) = &mut copy.via {
+            via.drill *= fx.a.abs();
+        }
         copy.net = net;
         target.nets[net as usize].test_points.push(target.test_points.len() as u32);
         target.test_points.push(copy);

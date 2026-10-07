@@ -1,11 +1,30 @@
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
+
+export interface XzzConversionReport {
+  parts: number; pins: number; traces: number; arcs: number; vias: number;
+  contours: number; texts: number; readings: number; assignedReadings: number;
+  outlineLines: number; outlineArcs: number; unreadableReadings: number;
+  layers: number[]; warnings: string[];
+  preservedBlocks: { scope: string; kind: number; offset: number; bytes: number }[];
+  images: { name: string; width: number; height: number }[];
+  sections: { name: string; text: string }[];
+  boardTexts: { text: string; x: number; y: number; layer: number }[];
+}
 
 export interface ConvertedFile {
   path: string;
   duplicate: boolean;
   parts: number;
   pins: number;
+  report?: XzzConversionReport;
+}
+
+/** Save the exact source retained by the converter through a native save panel. */
+export async function saveOriginalXzz(path: string, title: string): Promise<void> {
+  const name = (path.split(/[\\/]/).pop() ?? "board.cad").replace(/\.[^.]+$/, "-original.pcb");
+  const output = await save({ title, defaultPath: name, filters: [{ name: "XinZhiZao PCB", extensions: ["pcb"] }] });
+  if (output) await invoke("restore_xzz_source", { path, output });
 }
 
 export interface ConversionResult {

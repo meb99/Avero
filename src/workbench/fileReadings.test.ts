@@ -16,6 +16,31 @@ const board = () => new BoardModel({
 });
 
 describe("readings from the board file", () => {
+  it("does not attach references to an arbitrary one of duplicate component/pin names",()=>{
+    const original=board().board;
+    const part=original.parts.find((p)=>p.name==="U10")!;
+    const duplicate={...part,firstPin:original.pins.length};
+    const extra=original.pins.slice(part.firstPin,part.firstPin+part.pinCount).map((p)=>({...p,part:original.parts.length}));
+    const readings=fileReadingsOf(new BoardModel({...original,parts:[...original.parts,duplicate],pins:[...original.pins,...extra]}));
+    expect(readings.get("XZZ 阻值")?.map((r)=>r.point)).toEqual(["R1.2"]);
+  });
+  it("keeps quantities separate and updates conditions when a source number stays the same",()=>{
+    const file:FilePointReading[]=[{point:"U10.1",net:"VCC",quantity:"voltage",value:0.44,conditions:{power:"standby"}},{point:"U10.1",net:"VCC",quantity:"resistance",value:4700,conditions:{power:"off"}}];
+    const first=takeFileReadings(emptyNotes("k","b"),file,"XZZ 电压").notes;
+    expect(first.referencePoints!["U10.1"]).toMatchObject({voltage:0.44,resistance:4700,conds:{voltage:{power:"standby"},resistance:{power:"off"}}});
+    const changed=takeFileReadings(first,[{...file[0],conditions:{power:"on"}},file[1]],"XZZ 电压");
+    expect(changed.updated).toBe(1);expect(changed.notes.referencePoints!["U10.1"].conds?.voltage?.power).toBe("on");
+  });
+  it("keeps XZZ provenance when readings are restored from a GenCAD file", () => {
+    const b = board().board;
+    b.format = "gencad";
+    b.formatName = "GenCAD 1.4";
+    b.readings = b.readings!.map((r) => ({ ...r, sourceFormat: "XZZ" }));
+    const result = takeAllFileReadings(emptyNotes("k", "b"), new BoardModel(b));
+    expect(result.sources).toEqual(["XZZ 阻值"]);
+    expect(result.notes.referencePoints!["U10.1"].origin?.diode).toBe("XZZ 阻值");
+    expect(result.notes.referencePoints!["U10.1"].conds).toBeUndefined();
+  });
   it("finds each reading's pin, with its net and source; unknown parts are left out", () => {
     const m = fileReadingsOf(board());
     expect([...m.keys()]).toEqual(["XZZ 阻值"]);

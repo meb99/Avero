@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Avero",
-  "version": "0.9.29",
+  "version": "0.9.30",
   "identifier": "dev.meb99.avero",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -65,13 +65,26 @@
           "kicad_pcb",
           "pcbdoc",
           "fab",
-          "gr"
+          "gr",
+          "averoboard",
+          "tvw",
+          "hyp",
+          "bv",
+          "epro",
+          "epcb",
+          "odb"
         ],
         "name": "Boardview",
         "description": "Boardview file",
         "role": "Viewer",
         "rank": "Alternate"
       }
-    ]
+    ],
+    "resources": {
+      "../NOTICE": "licenses/NOTICE",
+      "../licenses/eagleview-MIT.txt": "licenses/eagleview-MIT.txt",
+      "../licenses/tscircuit-altium-MIT.txt": "licenses/tscircuit-altium-MIT.txt",
+      "../tools/allegro-reader/LICENSE": "licenses/allegro-reader-GPL-3.0.txt"
+    }
   }
 }

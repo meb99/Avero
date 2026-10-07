@@ -68,6 +68,22 @@ fn collect(path: &Path, depth: usize, out: &mut Vec<Found>, result: &mut ImportR
         return;
     }
     if path.is_dir() {
+        if path.join("matrix/matrix").is_file()
+            || path.join("project.json").is_file() && path.join("PCB").is_dir()
+        {
+            match pack_project(path) {
+                Ok(bytes) => {
+                    let extension = if path.join("project.json").is_file() { "epro" } else { "odb.zip" };
+                    let name = format!("{name}.{extension}");
+                    out.push((
+                        Source { name, context: dir_name(path), data: Data::Bytes(bytes) },
+                        path.to_string_lossy().into_owned(),
+                    ));
+                }
+                Err(e) => result.errors.push(format!("{name}: {e}")),
+            }
+            return;
+        }
         if depth >= MAX_DEPTH {
             return;
         }
@@ -80,12 +96,42 @@ fn collect(path: &Path, depth: usize, out: &mut Vec<Found>, result: &mut ImportR
             Err(e) => result.errors.push(format!("{}: {e}", path.display())),
         }
     } else if name.to_ascii_lowercase().ends_with(".zip") {
+        if is_project_zip(path) {
+            out.push((
+                Source { context: dir_name(path), name, data: Data::File(path.to_path_buf()) },
+                path.to_string_lossy().into_owned(),
+            ));
+            return;
+        }
         if let Err(e) = expand_zip(path, out, result) {
             result.errors.push(format!("{name}: {e}"));
         }
     } else if [".7z", ".rar"].iter().any(|ext| name.to_ascii_lowercase().ends_with(ext)) {
         if let Err(e) = expand_with_bsdtar(path, out, result) {
             result.errors.push(format!("{name}: {e}"));
+        }
+    } else if path.extension().is_some_and(|s| s.eq_ignore_ascii_case("epcb")) {
+        let parent = path.parent().unwrap_or(Path::new("."));
+        let root = if parent.file_name().is_some_and(|s| s.eq_ignore_ascii_case("PCB")) {
+            parent.parent().unwrap_or(parent)
+        } else {
+            parent
+        };
+        if root.join("project.json").is_file() {
+            match pack_project(root) {
+                Ok(bytes) => {
+                    let name = format!("{}.epro", root.file_name().unwrap_or_default().to_string_lossy());
+                    out.push((
+                        Source { name, context: dir_name(root), data: Data::Bytes(bytes) },
+                        root.to_string_lossy().into_owned(),
+                    ));
+                }
+                Err(e) => result.errors.push(e),
+            }
+        } else {
+            result.errors.push(format!(
+                "{name}: import the complete EasyEDA .epro project so footprints remain available"
+            ));
         }
     } else if is_importable(&name, || head_of(path)) {
         // Files picked one by one stand alone; files inside a picked folder share it.
@@ -98,6 +144,36 @@ fn collect(path: &Path, depth: usize, out: &mut Vec<Found>, result: &mut ImportR
     } else {
         result.skipped += 1;
     }
+}
+
+pub(crate) fn is_project_zip(path: &Path) -> bool {
+    let Ok(file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let Ok(zip) = zip::ZipArchive::new(file) else {
+        return false;
+    };
+    let found = zip.file_names().any(|name| {
+        name.to_ascii_lowercase().ends_with(".epcb")
+            || name.ends_with("/eda/data")
+            || name.ends_with("/eda/data.gz")
+    });
+    found
+}
+fn pack_project(path: &Path) -> Result<Vec<u8>, String> {
+    use std::io::{Cursor, Write};
+    let files = crate::projects::files(path).map_err(|e| e.message)?;
+    if avero_formats::project::members(&files).is_empty() {
+        return Err("No PCB assembly members found in this project".into());
+    }
+    let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    for (name, bytes) in files {
+        writer.start_file(name, options).map_err(|e| e.to_string())?;
+        writer.write_all(&bytes).map_err(|e| e.to_string())?;
+    }
+    Ok(writer.finish().map_err(|e| e.to_string())?.into_inner())
 }
 
 fn expand_zip(path: &Path, out: &mut Vec<Found>, result: &mut ImportResult) -> Result<(), String> {
@@ -525,6 +601,32 @@ pub(crate) fn import_generated(
 mod tests {
     use super::*;
     use std::io::Write;
+    #[test]
+    fn complete_projects_keep_footprints_when_imported_and_reimported() {
+        let source = temp("easyeda-project");
+        let library = temp("easyeda-library");
+        std::fs::create_dir_all(source.join("PCB")).unwrap();
+        std::fs::create_dir_all(source.join("FOOTPRINT")).unwrap();
+        std::fs::write(source.join("project.json"), b"{\"pcbs\":{\"main\":\"Main board\"}}").unwrap();
+        std::fs::write(source.join("PCB/main.epcb"), b"PCB data").unwrap();
+        std::fs::write(source.join("FOOTPRINT/pad.efoo"), b"footprint data").unwrap();
+        let imported = import(&library, std::slice::from_ref(&source), None);
+        assert!(imported.errors.is_empty(), "{:?}", imported.errors);
+        assert_eq!(imported.imported.len(), 1);
+        let path = PathBuf::from(&imported.imported[0]);
+        let files = crate::projects::files(&path).unwrap();
+        assert_eq!(files["FOOTPRINT/pad.efoo"], b"footprint data");
+        assert_eq!(avero_formats::project::members(&files)[0].name, "Main board");
+        let zip_path = source.join("copy.zip");
+        std::fs::copy(&path, &zip_path).unwrap();
+        assert!(is_project_zip(&zip_path));
+        let copied = import(&library, &[zip_path], None);
+        assert!(copied.errors.is_empty());
+        let data = crate::projects::files(Path::new(&copied.imported[0])).unwrap();
+        assert_eq!(data["FOOTPRINT/pad.efoo"], b"footprint data");
+        std::fs::remove_dir_all(source).unwrap();
+        std::fs::remove_dir_all(library).unwrap();
+    }
 
     fn temp(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(

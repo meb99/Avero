@@ -6,6 +6,8 @@ import type { ViewSide } from "../core/board";
 
 export interface WorkspaceTab {
   path: string;
+  /** A particular PCB inside a project archive or folder. */
+  projectMember?:string;
   /** The document shown. */
   schematicPath?: string;
   /** All documents open for the board, in their order (the shown one among them). */
@@ -46,6 +48,7 @@ export function parseWorkspace(json: string | null): Workspace | null {
       return [
         {
           path: t.path,
+          ...(typeof t.projectMember==="string"&&t.projectMember&&{projectMember:t.projectMember}),
           ...(typeof t.schematicPath === "string" && t.schematicPath && { schematicPath: t.schematicPath }),
           ...(Array.isArray(t.schematicPaths) && {
             schematicPaths: t.schematicPaths.filter((x): x is string => typeof x === "string" && x.length > 0).slice(0, 24),

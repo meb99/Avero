@@ -2,7 +2,9 @@
 
 pub(crate) mod allegro_ascii;
 pub(crate) mod altium;
+pub(crate) mod altium_binary;
 pub(crate) mod asc;
+pub(crate) mod avero;
 pub(crate) mod brd;
 pub(crate) mod brd2;
 pub(crate) mod bvr;
@@ -11,7 +13,9 @@ pub(crate) mod cst;
 pub(crate) mod eagle;
 pub(crate) mod fz;
 pub(crate) mod gencad;
+pub(crate) mod hyperlynx;
 pub(crate) mod kicad;
+pub(crate) mod tvw;
 pub(crate) mod xzz;
 
 /// Obfuscation used by `.bdv` files; exposed for tests and tooling.
@@ -32,6 +36,9 @@ pub use xzz::{
 use serde::Serialize;
 
 use crate::model::FormatId;
+pub(crate) mod bv;
+pub(crate) mod easyeda;
+pub(crate) mod odb;
 
 /// Result of looking at a file before parsing it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,13 +66,32 @@ pub fn detect(buf: &[u8], file_name: Option<&str>) -> Detected {
     if buf.starts_with(b"%PDF") {
         return Detected::Pdf;
     }
+    if avero::detect(buf) {
+        return Detected::Supported(FormatId::Avero);
+    }
+    if tvw::detect(buf) || ext == "tvw" {
+        return Detected::Supported(FormatId::Tvw);
+    }
+    if hyperlynx::detect(buf) {
+        return Detected::Supported(FormatId::HyperLynx);
+    }
+    if bv::detect(buf) {
+        return Detected::Supported(FormatId::Bv);
+    }
+    if easyeda::detect(buf) || matches!(ext.as_str(), "epro" | "epcb" | "epro2") {
+        return Detected::Supported(FormatId::EasyEdaPro);
+    }
+    if matches!(ext.as_str(), "odb" | "tgz" | "zip" | "tar")
+        || ext == "gz" && file_name.is_some_and(|n| n.to_ascii_lowercase().ends_with(".tar.gz"))
+    {
+        return Detected::Supported(FormatId::Odb);
+    }
     match ext.as_str() {
         "fz" => return Detected::Supported(FormatId::Fz),
         "cae" => return Detected::Supported(FormatId::Cae),
-        "tvw" => return Detected::Unsupported("Teboview TVW"),
         // Altium's binary design files (an OLE compound document).
         "pcbdoc" if buf.starts_with(&[0xD0, 0xCF, 0x11, 0xE0]) => {
-            return Detected::Unsupported("Altium PcbDoc")
+            return Detected::Supported(FormatId::AltiumBinary)
         }
         // An Allegro extract may carry any name; ASC sets are plain tables.
         "asc" | "bom" if !allegro_ascii::detect(buf) => return Detected::AscBundle,
@@ -76,6 +102,9 @@ pub fn detect(buf: &[u8], file_name: Option<&str>) -> Detected {
     }
     if altium::detect(buf) {
         return Detected::Supported(FormatId::Altium);
+    }
+    if altium_binary::detect(buf) {
+        return Detected::Supported(FormatId::AltiumBinary);
     }
     if kicad::detect(buf) {
         return Detected::Supported(FormatId::KiCad);
@@ -108,12 +137,20 @@ pub fn detect(buf: &[u8], file_name: Option<&str>) -> Detected {
         return Detected::Supported(FormatId::Bvr3);
     }
     if is_allegro(buf) {
-        return Detected::Unsupported("Cadence Allegro");
+        return Detected::Supported(FormatId::Allegro);
     }
     if xzz::detect(buf) {
         return Detected::Supported(FormatId::Xzz);
     }
-    Detected::Unknown
+    match ext.as_str() {
+        "bvre" => Detected::Unsupported("encrypted BVRE"),
+        "asr" => Detected::Unsupported("ASUS ASR"),
+        "a3p" => Detected::Unsupported("Nexus A3P"),
+        "faz" => Detected::Unsupported("FAZ"),
+        "f2b" => Detected::Unsupported("Unisoft F2B"),
+        "bv" => Detected::Unsupported("unknown BV database variant"),
+        _ => Detected::Unknown,
+    }
 }
 
 /// Allegro databases carry "all" or "vie" plus a version at offset 0xF8.
@@ -145,6 +182,14 @@ pub const SUPPORTED: &[FormatInfo] = &[
     FormatInfo { id: "kicad", name: "KiCad", extensions: &["kicad_pcb"] },
     FormatInfo { id: "allegroascii", name: "Allegro ASCII / Fabmaster", extensions: &["txt", "fab"] },
     FormatInfo { id: "altium", name: "Altium PCB ASCII", extensions: &["pcbdoc"] },
+    FormatInfo { id: "altiumbinary", name: "Altium PCB binary", extensions: &["pcbdoc"] },
+    FormatInfo { id: "avero", name: "Avero board", extensions: &["averoboard"] },
+    FormatInfo { id: "tvw", name: "Teboview TVW", extensions: &["tvw"] },
+    FormatInfo { id: "hyperlynx", name: "HyperLynx", extensions: &["hyp"] },
+    FormatInfo { id: "allegro", name: "Cadence Allegro binary 16.0–17.4 (desktop)", extensions: &["brd"] },
+    FormatInfo { id: "bv", name: "ATE BV (Jet Layout/Pin/Nail)", extensions: &["bv"] },
+    FormatInfo { id: "easyedapro", name: "EasyEDA Pro V2 project", extensions: &["epro", "epcb"] },
+    FormatInfo { id: "odb", name: "ODB++ assembly project", extensions: &["odb", "zip", "tgz", "tar", "gz"] },
     FormatInfo { id: "eagle", name: "EAGLE / Fusion 360", extensions: &["brd"] },
 ];
 

@@ -7,12 +7,15 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import type { LibraryFile } from "./library";
+import type { Word } from "../schematic/textIndex";
 
 export interface PdfTextIndex {
   v: 1;
   pages: number;
   /** Upper-case word → zero-based pages it appears on, ascending. */
   words: Record<string, number[]>;
+  /** Word boxes in PDF points (scale 1), including cached OCR words. */
+  positions?: Word[];
 }
 
 export interface FullTextHit {
@@ -64,7 +67,15 @@ export function searchText(indexes: Iterable<[string, PdfTextIndex]>, query: str
 export function parseTextIndex(json: string): PdfTextIndex | null {
   try {
     const d = JSON.parse(json) as Partial<PdfTextIndex>;
-    return d.v === 1 && typeof d.pages === "number" && d.words && typeof d.words === "object" ? (d as PdfTextIndex) : null;
+    if(d.v!==1 || !Number.isInteger(d.pages) || d.pages!<0 || !d.words || typeof d.words!=="object" || Array.isArray(d.words))return null;
+    for(const [key,pages] of Object.entries(d.words)) {
+      if(!key || !Array.isArray(pages) || pages.some((p)=>!Number.isInteger(p)||p<0||p>=d.pages!))return null;
+    }
+    if(d.positions!==undefined && (!Array.isArray(d.positions) || d.positions.length>2_000_000 || d.positions.some((w)=>
+      !w || typeof w.key!=="string" || typeof w.text!=="string" || !Number.isInteger(w.page) || w.page<0 || w.page>=d.pages! || !w.box ||
+      ![w.box.x0,w.box.y0,w.box.x1,w.box.y1].every(Number.isFinite) || w.box.x1<w.box.x0 || w.box.y1<w.box.y0
+    )))return null;
+    return d as PdfTextIndex;
   } catch {
     return null;
   }
@@ -100,18 +111,25 @@ export function withOcrWords(index: PdfTextIndex, ocr: OcrPages | null): PdfText
   if (!ocr) return index;
   const words: Record<string, number[]> = { ...index.words };
   let pages = index.pages;
+  const positions = index.positions ? [...index.positions] : undefined;
   for (const [page, list] of Object.entries(ocr.pages)) {
     const p = Number(page);
     if (!Number.isInteger(p) || p < 0) continue;
     pages = Math.max(pages, p + 1);
-    for (const [text] of list) {
+    for (const [text, x0, y0, x1, y1] of list) {
       const word = text.toUpperCase();
       const on = words[word] ? [...words[word]] : [];
       if (!on.includes(p)) on.push(p);
       words[word] = on.sort((a, b) => a - b);
+      if (positions && [x0, y0, x1, y1].every(Number.isFinite) && x1 >= x0 && y1 >= y0) {
+        const box = { x0, y0, x1, y1 };
+        if (!positions.some((w) => w.page === p && w.key === word && Math.abs(w.box.x0 - x0) < 0.1 && Math.abs(w.box.y0 - y0) < 0.1)) {
+          positions.push({ key: word, text, page: p, box });
+        }
+      }
     }
   }
-  return { ...index, pages, words };
+  return { ...index, pages, words, ...(positions && { positions }) };
 }
 
 /** Adds recognised words of an open schematic to the library's index of that file. */

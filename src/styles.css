@@ -1660,6 +1660,10 @@ button.danger {
 .conversion-file span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .conversion-results { grid-column: 1 / -1; display: grid; gap: 6px; max-height: 150px; overflow-y: auto; }
 .conversion-results:empty { display: none; }
+.conversion-report { font-size: 12px; padding: 6px 0; }
+.conversion-report > * + * { margin-top: 6px; }
+.conversion-report pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow-y: auto; }
+.conversion-report summary { cursor: pointer; }
 .conversion-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .conversion-progress { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; }
 .conversion-progress progress { flex: 1; min-width: 0; accent-color: var(--accent); }
@@ -5066,3 +5070,17 @@ p.pt-conflict,
   margin: 4px 0;
   font-size: 12px;
 }
+/* Local geometry editor */
+.board-editor-dialog { width: min(1400px, 96vw); max-width: 96vw; }
+.board-editor-tools { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:10px 0; }
+.board-editor-grid { display:grid; grid-template-columns:minmax(0,1fr) 250px; gap:14px; }
+.board-editor-preview { height:min(62vh,750px); min-height:320px; position:relative; overflow:hidden; border:1px solid var(--border); border-radius:8px; }
+.board-editor-preview .board-view { height:100%; }
+.board-editor-properties { max-height:62vh; overflow:auto; display:flex; flex-direction:column; gap:12px; }
+.board-editor-properties form,.board-editor-properties label { display:flex; flex-direction:column; gap:5px; }
+.board-editor-properties form { gap:10px; }
+.board-editor-properties input,.board-editor-properties select { width:100%; min-width:0; }
+.board-editor-pair { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+@media(max-width:700px) { .board-editor-grid { grid-template-columns:1fr; } .board-editor-properties { max-height:30vh; } }
+.project-board-choices { display:flex; flex-direction:column; gap:8px; max-height:60vh; overflow:auto; }
+.project-board-choices button { text-align:left; display:flex; flex-direction:column; padding:12px; }

@@ -13,7 +13,7 @@ export function netSides(model: BoardModel, net: number): ViewSide | "both" | un
   let top = false;
   let bottom = false;
   const n = model.nets[net];
-  for (const s of [...n.pins.map((i) => model.pins[i].side), ...n.testPoints.map((i) => model.testPoints[i].side)]) {
+  for (const s of [...n.pins.map((i) => model.pins[i].side), ...n.testPoints.filter((i) => !model.testPoints[i].via?.buried).map((i) => model.testPoints[i].side)]) {
     if (s !== "bottom") top = true;
     if (s !== "top") bottom = true;
     if (top && bottom) return "both";
@@ -476,6 +476,10 @@ export class BoardModel {
     });
     this.testPointIndex.query(probe, (i) => {
       const t = this.testPoints[i];
+      if (t.via?.buried && (!showTraces || t.via.layers.every((name) => {
+        const layer = this.layers.findIndex((l) => l.name === name);
+        return layer >= 0 && hiddenLayers.has(layer);
+      }))) return;
       if (!visibleFrom(t.side, view) || (t.kind === "via" && !showVias && !this.isolated) || this.netHidden(t.net)) return;
       const d = Math.hypot(t.x - p.x, t.y - p.y) - t.radius;
       if (d <= tolerance && d < bestDist) {

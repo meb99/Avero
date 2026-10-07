@@ -136,7 +136,7 @@ pub fn parse(buf: &[u8]) -> Result<RawBoard, ParseError> {
             let outer_bottom = layer == "BOTTOM" || layer == "END LAYER";
             s.top |= outer_top;
             s.bottom |= outer_bottom;
-            if (outer_top || (s.w == 0.0 && outer_bottom)) && s.w == 0.0 {
+            if (outer_top || outer_bottom) && s.w == 0.0 {
                 s.w = t.num(row, "PADWIDTH").map(mils).unwrap_or(0.0);
                 s.h = t.num(row, "PADHGHT").map(mils).unwrap_or(s.w);
                 let shape = t.get(row, "PADSHAPE1").unwrap_or("").to_ascii_uppercase();

@@ -3,10 +3,10 @@
 //! All coordinates are in mils (thousandths of an inch), the unit most
 //! boardview formats use natively. The Y axis points up, as in CAD tools.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Which side of the board something sits on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Side {
     Top,
@@ -22,7 +22,7 @@ impl Side {
 }
 
 /// How a part is mounted.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Mount {
     Smd,
@@ -31,7 +31,7 @@ pub enum Mount {
 }
 
 /// Rough classification of a net, used for coloring and filtering.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum NetKind {
     Signal,
@@ -42,7 +42,7 @@ pub enum NetKind {
 }
 
 /// Probe points that are not part pins.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TestPointKind {
     /// Test pad or bed-of-nails probe location.
@@ -50,7 +50,7 @@ pub enum TestPointKind {
     Via,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 pub struct Point {
     pub x: f64,
     pub y: f64,
@@ -119,7 +119,7 @@ impl Bounds {
 }
 
 /// Package family of a part, when known.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Package {
     /// Two-terminal chip: capacitor or resistor.
@@ -132,7 +132,7 @@ pub enum Package {
 }
 
 /// A pad drawn for the part's shape only; it has no pin and no net.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct PadMark {
     pub x: f64,
     pub y: f64,
@@ -169,7 +169,7 @@ pub struct Part {
 
 /// A pad's shape where the file gives one: size in mils, rotation in
 /// degrees counter-clockwise, `round` for pads with rounded ends (oblong).
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PadShape {
     pub w: f64,
@@ -213,6 +213,17 @@ pub struct TestPoint {
     pub probe: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// Actual GenCAD padstack span and hole, when the format supplies them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub via: Option<ViaDetails>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ViaDetails {
+    pub layers: Vec<String>,
+    pub drill: f64,
+    pub buried: bool,
 }
 
 /// A straight copper track segment, from formats that carry routing.
@@ -273,6 +284,14 @@ pub enum FormatId {
     KiCad,
     Eagle,
     Altium,
+    AltiumBinary,
+    Allegro,
+    Bv,
+    Tvw,
+    HyperLynx,
+    EasyEdaPro,
+    Odb,
+    Avero,
     AllegroAscii,
     Demo,
 }
@@ -295,6 +314,14 @@ impl FormatId {
             FormatId::KiCad => "KiCad",
             FormatId::Eagle => "EAGLE / Fusion 360",
             FormatId::Altium => "Altium PCB ASCII",
+            FormatId::AltiumBinary => "Altium PCB binary",
+            FormatId::Allegro => "Cadence Allegro binary",
+            FormatId::Bv => "ATE BV",
+            FormatId::Tvw => "Teboview TVW",
+            FormatId::HyperLynx => "HyperLynx",
+            FormatId::EasyEdaPro => "EasyEDA Pro",
+            FormatId::Odb => "ODB++",
+            FormatId::Avero => "Avero board",
             FormatId::AllegroAscii => "Allegro ASCII / Fabmaster",
             FormatId::Demo => "Avero demo board",
         }
@@ -351,14 +378,46 @@ pub struct Board {
 pub struct FileReading {
     pub part: String,
     pub pin: String,
-    /// `"diode"` (the only kind seen in files so far).
+    /// `"diode"`, `"voltage"` or `"resistance"`; never inferred from the net name.
     pub quantity: &'static str,
-    /// In volts; `None` is open (OL).
+    /// Volts or ohms according to quantity; `None` is OL.
     pub value: Option<f64>,
     /// As written in the file (`480`, `OL`).
     pub raw: String,
     /// The file's name for the list it stood in (`阻值`).
     pub list: String,
+    /// Origin survives conversion; the enclosing file can now be GenCAD.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_format: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conditions: Option<MeasurementConditions>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeasurementConditions {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub power: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub polarity: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub battery: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub revision: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meter: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assembly: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub removed: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modules: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub range: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub leads_nulled: Option<bool>,
 }
 
 impl Board {

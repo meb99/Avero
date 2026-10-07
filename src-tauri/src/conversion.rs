@@ -1,6 +1,10 @@
 //! File selection → native conversion → validated GenCAD → own library.
 
-use avero_formats::{convert::xzz_to_gencad, formats::parse_xzz_key, MAX_FILE_SIZE};
+use avero_formats::{
+    convert::{xzz_to_gencad, ConversionReport},
+    formats::parse_xzz_key,
+    MAX_FILE_SIZE,
+};
 use serde::Serialize;
 use std::path::Path;
 
@@ -11,6 +15,7 @@ pub struct ConvertedFile {
     pub duplicate: bool,
     pub parts: usize,
     pub pins: usize,
+    pub report: ConversionReport,
 }
 
 pub fn convert_file(
@@ -53,7 +58,22 @@ pub(crate) fn convert_bytes(
         duplicate,
         parts: converted.parts,
         pins: converted.pins,
+        report: converted.report,
     })
+}
+
+pub fn restore_source(path: &Path, output: &Path) -> Result<(), String> {
+    if std::fs::metadata(path).map_err(|e| e.to_string())?.len() > MAX_FILE_SIZE as u64 {
+        return Err("The file is too large.".into());
+    }
+    if path.canonicalize().ok() == output.canonicalize().ok() {
+        return Err("Choose a different file for the original XZZ.".into());
+    }
+    let cad = std::fs::read(path).map_err(|e| e.to_string())?;
+    let source = avero_formats::convert::original_xzz(&cad)
+        .map_err(|e| e.to_string())?
+        .ok_or("This CAD file has no embedded XZZ original.")?;
+    std::fs::write(output, source).map_err(|e| e.to_string())
 }
 
 /// Deterministic, bounded folder traversal. Symlinks are not followed.

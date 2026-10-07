@@ -18,6 +18,7 @@ pub mod fold;
 pub mod formats;
 mod infer;
 pub mod model;
+pub mod project;
 mod text;
 
 pub use builder::{classify_net, UNCONNECTED};
@@ -146,6 +147,22 @@ pub fn parse_with(buf: &[u8], file_name: Option<&str>, options: ParseOptions) ->
             FormatId::KiCad => formats::kicad::parse(buf),
             FormatId::Eagle => formats::eagle::parse(buf),
             FormatId::Altium => formats::altium::parse(buf),
+            FormatId::AltiumBinary => formats::altium_binary::parse(buf),
+            FormatId::Avero => formats::avero::parse(buf),
+            FormatId::Tvw => formats::tvw::parse(buf),
+            FormatId::HyperLynx => formats::hyperlynx::parse(buf),
+            FormatId::Bv => formats::bv::parse(buf),
+            FormatId::Allegro => {
+                Err(ParseError::Unsupported("Binary Allegro requires Avero desktop's bundled reader"))
+            }
+            FormatId::EasyEdaPro | FormatId::Odb => {
+                let files = if formats::easyeda::detect(buf) {
+                    project::Files::from([("PCB/board.epcb".into(), buf.to_vec())])
+                } else {
+                    project::archive(buf)?
+                };
+                return project::parse_member(&files, None);
+            }
             FormatId::AllegroAscii => formats::allegro_ascii::parse(buf),
             FormatId::Asc | FormatId::Demo => Err(ParseError::Unrecognized),
         },
@@ -154,7 +171,14 @@ pub fn parse_with(buf: &[u8], file_name: Option<&str>, options: ParseOptions) ->
         Detected::Pdf => Err(ParseError::Pdf),
         Detected::Unknown => Err(ParseError::Unrecognized),
     }?;
-    finish(raw)
+    let mut board = finish(raw)?;
+    if board.format == FormatId::GenCad {
+        convert::archive::restore(&mut board, buf)?;
+    }
+    if board.format == FormatId::Avero {
+        formats::avero::restore_readings(&mut board, buf)?;
+    }
+    Ok(board)
 }
 
 /// Reads an ASUS ASC board from its separate files. Only `pins.asc` is

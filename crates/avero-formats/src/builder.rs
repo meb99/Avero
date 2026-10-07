@@ -90,6 +90,7 @@ pub(crate) struct RawBoard {
     pub outline_segments: Vec<(Point, Point)>,
     pub parts: Vec<RawPart>,
     pub test_points: Vec<RawTestPoint>,
+    pub via_details: HashMap<usize, crate::model::ViaDetails>,
     pub traces: Vec<RawTrace>,
     /// Net taken for ground although its name does not say so.
     pub assumed_ground: Option<String>,
@@ -105,6 +106,7 @@ impl RawBoard {
             outline_segments: Vec::new(),
             parts: Vec::new(),
             test_points: Vec::new(),
+            via_details: HashMap::new(),
             traces: Vec::new(),
             assumed_ground: None,
             warnings: Vec::new(),
@@ -195,6 +197,7 @@ impl RawBoard {
                 net,
                 probe: tp.probe,
                 name: tp.name,
+                via: self.via_details.get(&(index as usize)).cloned(),
             });
         }
 

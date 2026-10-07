@@ -13,13 +13,20 @@ export const fileSource = (format: string, list: string) => `${format} ${list}`.
 export function fileReadingsOf(model: BoardModel): Map<string, FilePointReading[]> {
   const out = new Map<string, FilePointReading[]>();
   const format = model.board.format === "xzz" ? "XZZ" : model.board.formatName;
+  const pinsByName=new Map<string,number[]>();
+  const key=(part:string,pin:string)=>`${part.toUpperCase()}\0${pin.toUpperCase()}`;
+  model.pins.forEach((pin,i)=>{
+    const part=model.parts[pin.part];if(!part)return;
+    const id=key(part.name,pin.number),indices=pinsByName.get(id)??[];
+    indices.push(i);pinsByName.set(id,indices);
+  });
   for (const r of model.board.readings ?? []) {
-    const part = model.findPart(r.part);
-    const pin = part === undefined ? undefined : model.findPin(part, r.pin);
-    if (pin === undefined) continue;
-    const source = fileSource(format, r.list);
+    const candidates=pinsByName.get(key(r.part,r.pin))??[];
+    if(candidates.length!==1)continue;
+    const pin=candidates[0];
+    const source = fileSource(r.sourceFormat ?? format, r.list);
     const list = out.get(source) ?? [];
-    list.push({ point: pinKey(model, pin), net: model.fileNetName(model.pins[pin].net), quantity: r.quantity, value: r.value === null ? "OL" : r.value });
+    list.push({ point: pinKey(model, pin), net: model.fileNetName(model.pins[pin].net), quantity: r.quantity, value: r.value === null ? "OL" : r.value, ...(r.conditions && { conditions:r.conditions }) });
     out.set(source, list);
   }
   return out;

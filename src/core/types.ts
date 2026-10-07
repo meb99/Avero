@@ -76,6 +76,8 @@ export interface TestPoint {
   probe?: number;
   /** Label such as TP1203, when the format has one. */
   name?: string;
+  /** Actual padstack, for distinguishing blind/buried vias from surface pads. */
+  via?: { layers: string[]; drill: number; buried: boolean };
 }
 
 /** Straight copper track segment, from formats that carry routing. */
@@ -135,16 +137,20 @@ export interface Board {
 export interface FileReading {
   part: string;
   pin: string;
-  quantity: "diode";
-  /** Volts; null is open (OL). */
+  quantity: "diode" | "voltage" | "resistance";
+  /** Volts or ohms by quantity; null is OL. */
   value: number | null;
   /** As written in the file ("480", "OL"). */
   raw: string;
   /** The file's name for the list ("阻值"). */
   list: string;
+  /** Original format, preserved when the enclosing board was converted. */
+  sourceFormat?: string;
+  conditions?: import("../workbench/measure").Conditions;
 }
 
 export type LoadErrorCode =
+  | "cancelled"
   | "empty"
   | "too-large"
   | "unrecognized"

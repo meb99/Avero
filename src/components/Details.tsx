@@ -812,7 +812,9 @@ export function Details({
           </header>
           <dl className="props">
             <Row label={t("details.net")}>{netLink(tp.net)}</Row>
-            <Row label={t("details.side")}>{t(sideKey[tp.side])}</Row>
+            <Row label={t("details.side")}>{tp.via?.buried ? t("details.buriedVia") : t(sideKey[tp.side])}</Row>
+            {tp.via && <Row label={t("details.viaLayers")}>{tp.via.layers.join(" → ")}</Row>}
+            {tp.via && tp.via.drill > 0 && <Row label={t("details.drill")}>{formatLength(tp.via.drill, u)}</Row>}
             <Row label={t("details.position")}>
               {formatLength(tp.x, u)}, {formatLength(tp.y, u)}
             </Row>

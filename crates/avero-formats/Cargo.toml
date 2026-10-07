@@ -9,12 +9,22 @@ authors.workspace = true
 
 [dependencies]
 des = "0.9"
+encoding_rs = "0.8"
 quick-xml = "0.42"
 flate2 = { version = "1.1", default-features = false, features = ["zlib-rs"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+cfb = "0.14"
+jetdb = "0.3.3"
+zip = { version = "8", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+tar = "0.4"
+tempfile = "3"
 
 [[bin]]
 name = "avero-inspect"
 path = "src/bin/avero-inspect.rs"
+
+[[bin]]
+name = "xzz-to-gencad"
+path = "src/bin/xzz-to-gencad.rs"

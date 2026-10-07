@@ -42,6 +42,7 @@ interface Props {
   onSidebar(): void;
   onSettings(): void;
   onHelp(): void;
+  onEditor?(): void;
   onPick(selection: Selection): void;
   searchRef: Ref<HTMLInputElement>;
   /** Next click on the board places a note. */
@@ -67,6 +68,7 @@ export function Toolbar(p: Props) {
           <OpenIcon />
           <span className="tool-label">{t("toolbar.open")}</span>
         </button>
+        {p.onEditor && <button className="tool" onClick={p.onEditor} title="Boardeditor">Editor</button>}
         {board && (
           <button className="tool icon-only" onClick={p.onClose} title={t("toolbar.close")} aria-label={t("toolbar.close")}>
             <CloseIcon />

@@ -1048,9 +1048,9 @@ fn altium_pcbdoc_is_named_not_unknown() {
     ole.resize(512, 0);
     assert_eq!(
         avero_formats::detect(&ole, Some("Main.PcbDoc")),
-        avero_formats::Detected::Unsupported("Altium PcbDoc")
+        avero_formats::Detected::Supported(FormatId::AltiumBinary)
     );
-    assert_eq!(parse(&ole, Some("Main.PcbDoc")).unwrap_err(), ParseError::Unsupported("Altium PcbDoc"));
+    assert!(matches!(parse(&ole, Some("Main.PcbDoc")), Err(ParseError::Invalid { .. })));
 }
 
 // --- Robustness ----------------------------------------------------------------
@@ -1107,7 +1107,7 @@ fn altium_ascii_pcbdoc() {
     // The binary format stays named.
     assert!(matches!(
         parse(&[0xD0, 0xCF, 0x11, 0xE0, 1, 2, 3], Some("x.PcbDoc")),
-        Err(ParseError::Unsupported(_))
+        Err(ParseError::Invalid { .. })
     ));
 }
 

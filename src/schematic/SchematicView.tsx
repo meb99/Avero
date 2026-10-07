@@ -34,6 +34,8 @@ export interface SchematicFocus {
   pin?: { number: string; nets: string[] };
   /** The part's corrections: places confirmed or blocked, its other names. */
   links?: PartLinks;
+  /** Exact library search region; does not depend on a contiguous phrase. */
+  region?: Word;
 }
 
 export interface SchematicViewHandle {
@@ -467,7 +469,7 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
   const jumpedFor = useRef<number | string>(-1);
   const typed = query.trim();
   useEffect(() => {
-    const found = typed ? doc.index.search(typed) : focus ? mappedWords(doc.index, doc, focus.text, focus.links) : [];
+    const found = typed ? doc.index.search(typed) : focus?.region ? [focus.region] : focus ? mappedWords(doc.index, doc, focus.text, focus.links) : [];
     hitsRef.current = found;
     pinSpotRef.current = !typed && focus?.pin && found.length ? findPinSpot(doc.index, found, focus.pin.number, focus.pin.nets) : null;
     setHits(found);
