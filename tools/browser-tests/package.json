@@ -1,0 +1,9 @@
+{
+  "name": "avero-browser-tests",
+  "private": true,
+  "type": "module",
+  "description": "Browser tests of the Avero frontend against the Vite dev server, with the Tauri side mocked.",
+  "dependencies": {
+    "playwright": "^1.63.0"
+  }
+}
