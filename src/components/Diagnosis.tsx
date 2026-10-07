@@ -24,6 +24,8 @@ import {
 import { QUANTITIES, type Quantity } from "../workbench/measure";
 import { activeCase, addCase, addList, setValue, type BoardNotes } from "../workbench/notes";
 import { ValueInput } from "./MeasureBlock";
+import { NetHintCard } from "./NetHint";
+import { caseHints } from "../workbench/hints";
 
 interface Props {
   model: BoardModel;
@@ -32,6 +34,7 @@ interface Props {
   onSelect(selection: Selection, zoom: boolean): void;
   schematicFacts?: SchematicFacts | null;
   selection: Selection;
+  tolerance?: number;
 }
 
 /** A guide on offer: built in (generated for this board) or saved by the user. */
@@ -86,7 +89,7 @@ function netShare(model: BoardModel, flow: Flow): number {
 }
 
 /** The "Fault finding" tab: guides from the adapter to the CPU, console guides and own repair routes. */
-export function Diagnosis({ model, notes, update, onSelect, schematicFacts, selection }: Props) {
+export function Diagnosis({ model, notes, update, onSelect, schematicFacts, selection, tolerance = 0.1 }: Props) {
   const { t } = useI18n();
   const [flows, setFlows] = useState<Flow[]>([]);
   const [chosen, setChosen] = useState("notebook");
@@ -132,6 +135,7 @@ export function Diagnosis({ model, notes, update, onSelect, schematicFacts, sele
 
   return (
     <div className="diagnosis">
+      <CaseHints model={model} notes={notes} tolerance={tolerance} onSelect={onSelect} />
       <div className="diag-pick">
         <select
           value={guide.id}
@@ -512,5 +516,40 @@ function FlowEditor({ model, flow, selection, onChange }: { model: BoardModel; f
         + {t("flow.addStep")}
       </button>
     </div>
+  );
+}
+
+/** The nets of the active case that stand out, each with its explained hint (F37). */
+function CaseHints({ model, notes, tolerance, onSelect }: { model: BoardModel; notes: BoardNotes | null; tolerance: number; onSelect(selection: Selection, zoom: boolean): void }) {
+  const { t } = useI18n();
+  const hints = useMemo(() => (notes ? caseHints(model, notes, tolerance, t("measure.reference")) : []), [model, notes, tolerance, t]);
+  const repair = notes ? activeCase(notes) : undefined;
+  return (
+    <section className="case-hints">
+      <h3 title={t("hint.notVerdict")}>{t("hint.caseTitle")}</h3>
+      {!repair ? (
+        <p className="muted">{t("hint.noCase")}</p>
+      ) : hints.length === 0 ? (
+        <p className="muted">{t("hint.caseEmpty")}</p>
+      ) : (
+        hints.slice(0, 20).map((h, i) => {
+          const net = model.nets.findIndex((n) => n.name === h.net);
+          return (
+            <details key={h.net} className="net-hint-box" open={i === 0 || undefined}>
+              <summary>
+                <button className="link mono" onClick={(e) => {
+                    e.preventDefault();
+                    onSelect({ kind: "net", net }, true);
+                  }}>
+                  {h.net}
+                </button>{" "}
+                <span className={`hint-tag finding-${h.finding}`}>{t(`hint.finding.${h.finding}`)}</span>
+              </summary>
+              <NetHintCard model={model} hint={h} onSelect={onSelect} />
+            </details>
+          );
+        })
+      )}
+    </section>
   );
 }

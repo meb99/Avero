@@ -2,6 +2,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { askText } from "./Ask";
 import { useEffect, useMemo, useState } from "react";
 import type { BoardModel } from "../core/board";
+import { pinKey, pointOf } from "../core/points";
 import type { Selection } from "../core/types";
 import { useI18n } from "../i18n";
 import { formatValue, QUANTITIES, type Reading } from "../workbench/measure";
@@ -17,6 +18,7 @@ import {
   renameBookmark,
   setConditions,
   setDrawingFields,
+  setJumperContinuity,
   updateCase,
   updateDrawing,
   type BoardNotes,
@@ -28,6 +30,7 @@ import {
 import { formatLength } from "../format";
 import { exportNotes, importNotes } from "../workbench/store";
 import { CaseEditor, CaseHistory } from "./CaseEditor";
+import type { StepSubject } from "./Chronicle";
 import { ConditionsEditor } from "./Conditions";
 import { MeasureLists } from "./MeasureLists";
 import { Versions } from "./Versions";
@@ -56,6 +59,27 @@ function summary(r: Reading | undefined, lang: string): string {
   return QUANTITIES.filter((q) => r[q] !== undefined)
     .map((q) => `${SHORT[q]} ${formatValue(r[q], q, lang)}`)
     .join(" · ");
+}
+
+/** What a work step on the selection is about: the part or point, and the nets it touches. */
+function stepSubject(model: BoardModel, selection: Selection): StepSubject | undefined {
+  const named = (nets: number[]) =>
+    [...new Set(nets)].filter((n) => model.nets[n].kind !== "unconnected").map((n) => model.nets[n].name);
+  switch (selection.kind) {
+    case "part": {
+      const p = model.parts[selection.part];
+      return { target: p.name, nets: named(model.pins.slice(p.firstPin, p.firstPin + p.pinCount).map((pin) => pin.net)) };
+    }
+    case "pin":
+      return { target: pinKey(model, selection.pin), nets: named([model.pins[selection.pin].net]) };
+    case "testPoint":
+      // As readings at the point are keyed: "TP:TP12" or "VIA@1200,850".
+      return { target: pointOf(model, selection)?.id, nets: named([model.testPoints[selection.testPoint].net]) };
+    case "net":
+      return { nets: named([selection.net]) };
+    default:
+      return undefined;
+  }
 }
 
 /** Text area that saves when it loses focus instead of on every key. */
@@ -161,7 +185,7 @@ export function Workbench({ model, notes, update, tolerance, onTolerance, onSele
             onSave={(v) => update((n) => updateCase(n, current.id, { notes: v }))}
           />
         )}
-        {current && <CaseEditor notes={notes} repair={current} update={update} tolerance={tolerance} onMessage={setMessage} />}
+        {current && <CaseEditor notes={notes} repair={current} update={update} tolerance={tolerance} onMessage={setMessage} subject={stepSubject(model, selection)} />}
         <details className="wb-conditions">
           <summary>{t("cond.title")}</summary>
           {current && (
@@ -362,7 +386,7 @@ function DrawingList({
   units: "mm" | "mil";
   onShowDrawing(id: string): void;
 }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [kind, setKind] = useState<DrawingKind | "">("");
   const [group, setGroup] = useState("");
   const all = notes.drawings ?? [];
@@ -411,6 +435,32 @@ function DrawingList({
               )}
               <span className="muted"> · {t(d.side === "top" ? "side.top" : "side.bottom")}</span>
               {d.group && <span className="src-tag">{d.group}</span>}
+              {d.plan && (
+                <span className="jumper-check">
+                  <span className="muted">{t("jumper.plan.wireShort", { mm: d.plan.wireMm.toLocaleString(lang, { maximumFractionDigits: 1 }) })}</span>
+                  {d.plan.signal && <span className="src-tag warn">{t(d.plan.signal === "highSpeed" ? "jumper.signal.highSpeed" : "jumper.signal.clock")}</span>}
+                  <label title={t("jumper.plan.after", { a: d.from ?? "", b: d.to ?? "" })}>
+                    {t("jumper.plan.continuity")}{" "}
+                    <input
+                      className="ohms"
+                      inputMode="decimal"
+                      disabled={locked}
+                      defaultValue={d.plan.continuity ? String(d.plan.continuity.ohms).replace(".", lang === "de" ? "," : ".") : ""}
+                      placeholder="Ω"
+                      onBlur={(e) => {
+                        const raw = e.target.value.trim().replace(",", ".");
+                        const ohms = raw === "" ? null : Number(raw);
+                        if (ohms !== null && !Number.isFinite(ohms)) return;
+                        if (ohms !== (d.plan?.continuity?.ohms ?? null)) update((n) => setJumperContinuity(n, d.id, ohms));
+                      }}
+                      onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                    />
+                  </label>
+                  {d.plan.continuity && (
+                    <span className={d.plan.continuity.ohms < 1 ? "ok-tag" : "src-tag warn"}>{d.plan.continuity.ohms < 1 ? "✓" : "✗"}</span>
+                  )}
+                </span>
+              )}
               <input
                 className="drawing-text"
                 defaultValue={d.text ?? ""}

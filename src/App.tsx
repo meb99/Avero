@@ -3334,7 +3334,7 @@ export function App() {
           />
         )}
         {bgaPart !== null && model && (
-          <BgaView model={model} part={bgaPart} units={settings.units} onSelect={select} onClose={() => setBgaPart(null)} />
+          <BgaView model={model} part={bgaPart} units={settings.units} notes={notesForModel} update={updateNotes} onSelect={select} onClose={() => setBgaPart(null)} />
         )}
 
         {dialog === "settings" && (

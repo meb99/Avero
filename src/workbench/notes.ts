@@ -30,6 +30,81 @@ export interface RepairCase {
   conditions?: Conditions;
   /** A known good board: its readings count towards what is expected, like the reference. */
   good?: boolean;
+  /** Pads damaged on this board, by pin key ("U1.A1"): kept apart from pads the design leaves out. */
+  padDamage?: Record<string, PadDamage>;
+  /** What was done to the board, in order (F54): with the readings of the case it explains before and after. */
+  steps?: RepairStep[];
+}
+
+export type StepAction = "removed" | "replaced" | "reflowed" | "reballed" | "jumper" | "cleaned" | "powerTest" | "functionTest" | "other";
+export const STEP_ACTIONS: readonly StepAction[] = ["removed", "replaced", "reflowed", "reballed", "jumper", "cleaned", "powerTest", "functionTest", "other"];
+
+/** One work step of a repair: where, what, the photos of it and how it turned out. */
+export interface RepairStep {
+  id: string;
+  /** When it was done (ISO). */
+  at: string;
+  action: StepAction;
+  /** Part ("C7012") or point ("U7000.21") it was done to. */
+  target?: string;
+  /** Nets it touches: their readings before and after tell what it changed. */
+  nets?: string[];
+  note?: string;
+  photos?: string[];
+  result?: "ok" | "fail";
+  /** Left out of the report when false. */
+  report?: boolean;
+}
+
+export function addStep(notes: BoardNotes, caseId: string, step: Omit<RepairStep, "id" | "at"> & { at?: string }): BoardNotes {
+  const s: RepairStep = { ...step, id: newId(), at: step.at ?? now() };
+  return {
+    ...notes,
+    cases: notes.cases.map((c) => (c.id === caseId ? { ...c, steps: [...(c.steps ?? []), s].sort((a, b) => a.at.localeCompare(b.at)) } : c)),
+    updated: now(),
+  };
+}
+
+export function updateStep(notes: BoardNotes, caseId: string, id: string, change: Partial<Omit<RepairStep, "id">>): BoardNotes {
+  return {
+    ...notes,
+    cases: notes.cases.map((c) =>
+      c.id === caseId
+        ? { ...c, steps: (c.steps ?? []).map((s) => (s.id === id ? { ...s, ...change } : s)).sort((a, b) => a.at.localeCompare(b.at)) }
+        : c,
+    ),
+    updated: now(),
+  };
+}
+
+export function removeStep(notes: BoardNotes, caseId: string, id: string): BoardNotes {
+  return {
+    ...notes,
+    cases: notes.cases.map((c) => {
+      if (c.id !== caseId) return c;
+      const steps = (c.steps ?? []).filter((s) => s.id !== id);
+      return { ...c, steps: steps.length ? steps : undefined };
+    }),
+    updated: now(),
+  };
+}
+
+export type PadDamage = "lifted" | "torn" | "bridged" | "repaired";
+export const PAD_DAMAGE: readonly PadDamage[] = ["lifted", "torn", "bridged", "repaired"];
+
+/** Marks (or clears) a damaged pad in a case. */
+export function setPadDamage(notes: BoardNotes, caseId: string, key: string, damage: PadDamage | null): BoardNotes {
+  return {
+    ...notes,
+    cases: notes.cases.map((c) => {
+      if (c.id !== caseId) return c;
+      const next = { ...c.padDamage };
+      if (damage) next[key] = damage;
+      else delete next[key];
+      return { ...c, padDamage: Object.keys(next).length ? next : undefined };
+    }),
+    updated: now(),
+  };
 }
 
 /**
@@ -104,6 +179,19 @@ export interface Drawing {
   locked?: boolean;
   /** Drawings of one group move and lock together. */
   group?: string;
+  /** A planned jumper repair (F43). The wire is the user's: it never joins the board's nets. */
+  plan?: JumperPlanNote;
+}
+
+/** What a jumper plan keeps: both ends as the board file names them, the wire, the test. */
+export interface JumperPlanNote {
+  net: string;
+  /** Approximate wire to cut, mm. */
+  wireMm: number;
+  /** A high-speed or clock net: the wire is a stub, only fit on the same stretch of trace. */
+  signal?: "highSpeed" | "clock";
+  /** Continuity end to end after soldering. */
+  continuity?: { ohms: number; at: string };
 }
 
 /** A saved place on the board: the view, the side, and what was selected. */
@@ -775,6 +863,29 @@ export function setMarkerPhotos(notes: BoardNotes, id: string, photos: string[])
   return { ...notes, markers: (notes.markers ?? []).map((m) => (m.id === id ? { ...m, photos: photos.length ? photos : undefined } : m)), updated: now() };
 }
 
+function parsePlan(value: unknown): JumperPlanNote | undefined {
+  const v = value as Partial<JumperPlanNote> | null | undefined;
+  if (!v || typeof v.net !== "string" || !Number.isFinite(v.wireMm)) return undefined;
+  const c = v.continuity;
+  return {
+    net: v.net,
+    wireMm: v.wireMm as number,
+    ...((v.signal === "highSpeed" || v.signal === "clock") && { signal: v.signal }),
+    ...(c && Number.isFinite(c.ohms) && typeof c.at === "string" && { continuity: { ohms: c.ohms, at: c.at } }),
+  };
+}
+
+/** Records the continuity measured over a soldered jumper. */
+export function setJumperContinuity(notes: BoardNotes, id: string, ohms: number | null): BoardNotes {
+  return {
+    ...notes,
+    drawings: (notes.drawings ?? []).map((d) =>
+      d.id === id && d.plan ? { ...d, plan: { ...d.plan, continuity: ohms === null ? undefined : { ohms, at: now() } } } : d,
+    ),
+    updated: now(),
+  };
+}
+
 function parseDrawings(value: unknown): Drawing[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const out = value.flatMap((d): Drawing[] => {
@@ -794,6 +905,7 @@ function parseDrawings(value: unknown): Drawing[] | undefined {
         ...([1, 2, 3].includes(d.width) && { width: d.width }),
         ...(d.locked === true && { locked: true }),
         ...(typeof d.group === "string" && d.group && { group: d.group }),
+        ...(parsePlan(d.plan) && { plan: parsePlan(d.plan) }),
         created: typeof d.created === "string" ? d.created : new Date(0).toISOString(),
       },
     ];
@@ -1055,7 +1167,39 @@ function parseCase(value: unknown): RepairCase | null {
     photos: Array.isArray(c.photos) ? c.photos.filter((p) => typeof p === "string") : undefined,
     conditions: parseConditions(c.conditions),
     ...(c.good === true && { good: true }),
+    padDamage: parsePadDamage(value.padDamage),
+    steps: parseSteps(value.steps),
   };
+}
+
+function parseSteps(value: unknown): RepairStep[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out = value.flatMap((v): RepairStep[] => {
+    if (!isRecord(v) || !str(v.id) || !str(v.at) || !STEP_ACTIONS.includes(v.action as StepAction)) return [];
+    const strings = (x: unknown) => (Array.isArray(x) ? x.filter((y): y is string => typeof y === "string" && y !== "") : []);
+    const nets = strings(v.nets);
+    const photos = strings(v.photos);
+    return [
+      {
+        id: v.id as string,
+        at: v.at as string,
+        action: v.action as StepAction,
+        ...(str(v.target) && { target: v.target as string }),
+        ...(nets.length && { nets }),
+        ...(str(v.note) && { note: v.note as string }),
+        ...(photos.length && { photos }),
+        ...((v.result === "ok" || v.result === "fail") && { result: v.result }),
+        ...(v.report === false && { report: false }),
+      },
+    ];
+  });
+  return out.length ? out.sort((a, b) => a.at.localeCompare(b.at)) : undefined;
+}
+
+function parsePadDamage(value: unknown): Record<string, PadDamage> | undefined {
+  if (!isRecord(value)) return undefined;
+  const out = Object.fromEntries(Object.entries(value).filter(([, v]) => PAD_DAMAGE.includes(v as PadDamage))) as Record<string, PadDamage>;
+  return Object.keys(out).length ? out : undefined;
 }
 
 function parseConditions(value: unknown): Conditions | undefined {

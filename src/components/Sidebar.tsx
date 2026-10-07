@@ -391,7 +391,7 @@ export function Sidebar({
         <div className="panel scroll">
           <PowerTree model={model} notes={notes} schematicFacts={schematicFacts} onSelect={onSelect} update={notes ? updateNotes : undefined} />
           <Interfaces model={model} notes={notes} update={notes ? updateNotes : undefined} onSelect={onSelect} marked={marked} onMarkParts={onMarkParts} multiParts={multiParts} />
-          <Diagnosis model={model} notes={notes} update={updateNotes} onSelect={onSelect} schematicFacts={schematicFacts} selection={selection} />
+          <Diagnosis model={model} notes={notes} update={updateNotes} onSelect={onSelect} schematicFacts={schematicFacts} selection={selection} tolerance={settings.tolerance} />
         </div>
       )}
 

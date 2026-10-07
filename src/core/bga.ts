@@ -75,3 +75,106 @@ export function probePoints(model: BoardModel, net: number, part: number, limit 
   }
   return out.sort((a, b) => (a.kind === b.kind ? a.distance - b.distance : a.kind === "testPoint" ? -1 : 1)).slice(0, limit);
 }
+
+/** Ball pitch as the board file places the balls, and whether it is the same all over. */
+export interface BallPitch {
+  /** Mils between neighbouring columns and rows (median). */
+  col: number;
+  row: number;
+  /** All neighbour distances within 10 % of the median: the file's dimensions can be trusted. */
+  consistent: boolean;
+  samples: number;
+}
+
+const median = (v: number[]) => {
+  const s = [...v].sort((a, b) => a - b);
+  return s.length ? s[Math.floor(s.length / 2)] : 0;
+};
+
+export function ballPitch(model: BoardModel, grid: BallGrid): BallPitch | null {
+  const cols: number[] = [];
+  const rows: number[] = [];
+  grid.rows.forEach((row, r) => {
+    for (let c = 1; c <= grid.cols; c++) {
+      const here = grid.balls.get(`${row}|${c}`);
+      if (here === undefined) continue;
+      const a = model.pins[here];
+      const right = grid.balls.get(`${row}|${c + 1}`);
+      if (right !== undefined) cols.push(Math.hypot(model.pins[right].x - a.x, model.pins[right].y - a.y));
+      const next = r + 1 < grid.rows.length ? grid.balls.get(`${grid.rows[r + 1]}|${c}`) : undefined;
+      if (next !== undefined) rows.push(Math.hypot(model.pins[next].x - a.x, model.pins[next].y - a.y));
+    }
+  });
+  if (cols.length === 0 && rows.length === 0) return null;
+  const col = median(cols.length ? cols : rows);
+  const row = median(rows.length ? rows : cols);
+  const all = [...cols.map((d) => d / col), ...rows.map((d) => d / row)];
+  return { col, row, consistent: col > 0 && row > 0 && all.every((f) => f > 0.9 && f < 1.1), samples: all.length };
+}
+
+/** Grid places with no ball: left out by the design, not damaged. */
+export function missingBalls(grid: BallGrid): string[] {
+  const out: string[] = [];
+  for (const row of grid.rows) for (let c = 1; c <= grid.cols; c++) if (!grid.balls.has(`${row}|${c}`)) out.push(`${row}${c}`);
+  return out;
+}
+
+/** Ball A1, or the ball nearest to that corner when the design leaves A1 out. */
+export function cornerBall(grid: BallGrid): number | undefined {
+  for (const row of grid.rows)
+    for (let c = 1; c <= grid.cols; c++) {
+      const pin = grid.balls.get(`${row}|${c}`);
+      if (pin !== undefined) return pin;
+    }
+  return undefined;
+}
+
+/**
+ * How the balls are looked at: as datasheets draw them from the top (through the package,
+ * like the pads on the board from above) or from below (the balls of the chip); or where
+ * they lie on this board, seen from the side the part is on.
+ */
+export type BallView = "top" | "bottom" | "board";
+
+export interface BallPlace {
+  /** -1 where the design has no ball (datasheet views only). */
+  pin: number;
+  row: string;
+  col: number;
+  /** Place in the drawing: x to the right, y down; in mils for "board", in grid steps otherwise. */
+  x: number;
+  y: number;
+}
+
+/** Ball places for a view, turned by quarter turns (clockwise); the design's gaps too, except on the board. */
+export function ballPlaces(model: BoardModel, grid: BallGrid, view: BallView, quarterTurns = 0): BallPlace[] {
+  const part = model.parts[model.pins[grid.balls.values().next().value as number].part];
+  const centre = partCenter(part);
+  const out: BallPlace[] = [];
+  grid.rows.forEach((row, r) => {
+    for (let c = 1; c <= grid.cols; c++) {
+      const pin = grid.balls.get(`${row}|${c}`) ?? -1;
+      if (pin < 0 && view === "board") continue;
+      let x: number;
+      let y: number;
+      if (view === "board") {
+        const p = model.pins[pin];
+        // Board y runs up; a part on the bottom is seen from below, so mirrored.
+        x = (p.x - centre.x) * (part.side === "bottom" ? -1 : 1);
+        y = -(p.y - centre.y);
+      } else {
+        x = view === "top" ? c - 1 : grid.cols - c;
+        y = r;
+      }
+      out.push({ pin, row, col: c, x, y });
+    }
+  });
+  const turns = ((quarterTurns % 4) + 4) % 4;
+  for (const b of out)
+    for (let k = 0; k < turns; k++) {
+      const { x, y } = b;
+      b.x = -y;
+      b.y = x;
+    }
+  return out;
+}

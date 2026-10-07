@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { ShortFinder } from "./ShortFinder";
 import { traceNet } from "../core/trace";
 import { askConfirm } from "./Ask";
@@ -16,10 +16,13 @@ import type { NetKind, Selection, Side } from "../core/types";
 import { formatLength, formatSize } from "../format";
 import { useI18n, type MessageKey } from "../i18n";
 import type { Settings } from "../settings";
-import { activeCase, addDrawing, pointReadingsFor, readingsFor, setOwnPart, setOwnPin, updateDocLinks, type BoardNotes } from "../workbench/notes";
+import { activeCase, pointReadingsFor, readingsFor, setOwnPart, setOwnPin, updateDocLinks, type BoardNotes } from "../workbench/notes";
 import { OwnPartInfo, OwnPinInfo } from "./OwnInfo";
 import { BoundNotes } from "./BoundNotes";
-import { jumperTargets } from "../core/jumper";
+import { jumperTargets, signalClass } from "../core/jumper";
+import { JumperPlanCard } from "./JumperPlan";
+import { NetHintCard } from "./NetHint";
+import { netHint } from "../workbench/hints";
 import { datasheetsFor, partNumbers, type Datasheet } from "../workbench/datasheets";
 import { formatValue } from "../workbench/measure";
 import { MeasureBlock, NetPoints, PointMeasureBlock } from "./MeasureBlock";
@@ -260,6 +263,8 @@ export function Details({
 }: Props) {
   const { t, lang } = useI18n();
   const u = settings.units;
+  // The jumper target whose plan is open: "pin:target".
+  const [jumperOpen, setJumperOpen] = useState<string | null>(null);
 
   /**
    * Diode reading of a net for the pin table, as FlexBV shows it: from the
@@ -465,6 +470,19 @@ export function Details({
             </div>
           </>
         )}
+        {notes &&
+          n.kind !== "ground" &&
+          (() => {
+            const hint = netHint(model, notes, net, settings.tolerance, t("measure.reference"));
+            if (!hint || (hint.finding === "noValue" && hint.contradictions.length === 0)) return null;
+            const serious = hint.finding === "short" || hint.finding === "low" || hint.finding === "open" || hint.contradictions.length > 0;
+            return (
+              <details className="details-section net-hint-box" open={serious || undefined}>
+                <summary>{t("hint.title")}</summary>
+                <NetHintCard model={model} hint={hint} onSelect={onSelect} />
+              </details>
+            );
+          })()}
         {onMarkParts && n.kind !== "ground" && <ShortFinder model={model} net={net} notes={notes} marked={marked ?? null} onMarkParts={onMarkParts} onSelect={onSelect} />}
         {series.length > 0 && (
           <>
@@ -812,52 +830,58 @@ export function Details({
           </dl>
           {measure(pin.net)}
           {(() => {
-            const targets = jumperTargets(model, selection.pin, 5);
+            const targets = jumperTargets(model, selection.pin, 6);
             if (targets.length === 0) return null;
             const pinSide = pin.side === "both" ? side : pin.side;
+            const signal = signalClass(model.nets[pin.net].name);
             return (
               <section className="details-section jumpers">
                 <h3 title={t("jumper.hint")}>{t("jumper.title")}</h3>
+                {signal !== "plain" && <p className="kb-note kb-warning">{t(signal === "highSpeed" ? "jumper.plan.highSpeed" : "jumper.plan.clock")}</p>}
                 <table className="wb-table">
                   <tbody>
                     {targets.map((target) => {
-                      const at = target.kind === "pin" ? model.pins[target.index] : model.testPoints[target.index];
+                      const key = `${target.kind}${target.index}`;
+                      const open = jumperOpen === `${selection.pin}:${key}`;
                       return (
-                        <tr key={`${target.kind}${target.index}`}>
-                          <td>
-                            <button
-                              className="link mono"
-                              onClick={() => onSelect(target.kind === "pin" ? { kind: "pin", pin: target.index } : { kind: "testPoint", testPoint: target.index }, true)}
-                            >
-                              {target.label}
-                            </button>
-                            {!target.sameSide && <span className="muted"> · {t("jumper.otherSide")}</span>}
-                          </td>
-                          <td className="muted">{formatLength(target.distance, u)}</td>
-                          <td>
-                            {notes && target.sameSide && (
+                        <Fragment key={key}>
+                          <tr className={target.hidden ? "muted" : undefined}>
+                            <td>
                               <button
-                                className="small"
-                                onClick={() =>
-                                  updateNotes((n) =>
-                                    addDrawing(n, {
-                                      kind: "jumper",
-                                      side: pinSide,
-                                      points: [
-                                        { x: pin.x, y: pin.y },
-                                        { x: at.x, y: at.y },
-                                      ],
-                                      from: `${model.pinLabel(selection.pin)} · ${model.nets[pin.net].name}`,
-                                      to: target.label,
-                                    }),
-                                  )
-                                }
+                                className="link mono"
+                                onClick={() => onSelect(target.kind === "pin" ? { kind: "pin", pin: target.index } : { kind: "testPoint", testPoint: target.index }, true)}
                               >
-                                {t("jumper.draw")}
+                                {target.label}
                               </button>
-                            )}
-                          </td>
-                        </tr>
+                              {!target.sameSide && <span className="muted"> · {t("jumper.otherSide")}</span>}
+                              {target.hidden && <span className="muted"> · {t("jumper.hidden")}</span>}
+                            </td>
+                            <td className="muted">{formatLength(target.distance, u)}</td>
+                            <td>
+                              {target.sameSide && !target.hidden && (
+                                <button className={`small${open ? " on" : ""}`} onClick={() => setJumperOpen(open ? null : `${selection.pin}:${key}`)}>
+                                  {t("jumper.plan.open")}
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                          {open && (
+                            <tr>
+                              <td colSpan={3}>
+                                <JumperPlanCard
+                                  model={model}
+                                  pin={selection.pin}
+                                  target={target}
+                                  side={pinSide}
+                                  units={u}
+                                  notes={notes}
+                                  update={updateNotes}
+                                  onSelect={onSelect}
+                                />
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       );
                     })}
                   </tbody>

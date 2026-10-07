@@ -13,14 +13,17 @@ import { loadNotes } from "./store";
 
 export const PACKAGE_EXTENSION = "averopkg";
 
-/** Every photo file the notes use: board photos, case photos, photos of notes. */
+/** Every photo file the notes use: board photos, case photos and those of its work steps, photos of notes. */
 export function photosOf(notes: BoardNotes): string[] {
   const out = new Set<string>();
   for (const side of ["top", "bottom"] as const) {
     const f = notes.photos?.[side]?.file;
     if (f) out.add(f);
   }
-  for (const c of notes.cases) for (const p of c.photos ?? []) out.add(p);
+  for (const c of notes.cases) {
+    for (const p of c.photos ?? []) out.add(p);
+    for (const s of c.steps ?? []) for (const p of s.photos ?? []) out.add(p);
+  }
   for (const m of notes.markers ?? []) for (const p of m.photos ?? []) out.add(p);
   return [...out];
 }

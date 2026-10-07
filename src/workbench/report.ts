@@ -1,6 +1,7 @@
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
-import { compareReadings, formatValue, QUANTITIES, type Reading } from "./measure";
-import type { BoardNotes, RepairCase } from "./notes";
+import { compareReadings, formatValue, QUANTITIES, type Quantity, type Reading } from "./measure";
+import { stepEvidence } from "./chronicle";
+import type { BoardNotes, RepairCase, RepairStep } from "./notes";
 
 /** Texts of the report in the user's language. */
 export interface ReportTexts {
@@ -22,6 +23,9 @@ export interface ReportTexts {
   deviation: string;
   photos: string;
   footer: string;
+  chronicle?: string;
+  before?: string;
+  after?: string;
 }
 
 export interface ReportInput {
@@ -34,6 +38,10 @@ export interface ReportInput {
   tolerance: number;
   /** Decoded photos (canvas), in the case's order; missing ones are skipped. */
   photos: HTMLCanvasElement[];
+  /** Work steps chosen for the report (F54), with their words and decoded photos. */
+  steps?: { step: RepairStep; title: string; result?: string; photos: HTMLCanvasElement[] }[];
+  /** Name of a quantity ("Diode"). */
+  quantityText?(q: Quantity): string;
 }
 
 const PAGE = { width: 595.28, height: 841.89 };
@@ -242,6 +250,35 @@ export async function caseReport(input: ReportInput): Promise<Uint8Array> {
       }
       w.y -= 14;
       w.page.drawLine({ start: { x: MARGIN, y: w.y + 1 }, end: { x: PAGE.width - MARGIN, y: w.y + 1 }, thickness: 0.3, color: RULE });
+    }
+  }
+
+  if (input.steps?.length) {
+    w.heading(texts.chronicle ?? "");
+    const when = (iso: string) => new Intl.DateTimeFormat(lang, { dateStyle: "short", timeStyle: "short" }).format(new Date(iso));
+    for (const { step, title, result, photos } of input.steps) {
+      w.need(30);
+      w.text([when(step.at), title, step.target, result].filter(Boolean).join(" · "), { size: 10, bold: true });
+      if (step.note) w.text(step.note, { size: 9 });
+      for (const e of stepEvidence(repair, step)) {
+        const value = (x?: { value: number | "OL"; q: Quantity }) => (x ? formatValue(x.value, x.q, lang) : "–");
+        w.text(`${e.subject} · ${input.quantityText?.(e.q) ?? e.q}: ${texts.before ?? ""} ${value(e.before)} → ${texts.after ?? ""} ${value(e.after)}`, {
+          size: 9,
+          color: MUTED,
+          x: MARGIN + 12,
+        });
+      }
+      const width = (PAGE.width - 2 * MARGIN) / 2;
+      for (const canvas of photos) {
+        const jpeg = await jpegOf(canvas, 1200);
+        const image = await pdf.embedJpg(jpeg.bytes);
+        const scale = Math.min(width / jpeg.width, 220 / jpeg.height);
+        const h = jpeg.height * scale;
+        w.need(h + 8);
+        w.page.drawImage(image, { x: MARGIN + 12, y: w.y - h, width: jpeg.width * scale, height: h });
+        w.y -= h + 8;
+      }
+      w.y -= 6;
     }
   }
 

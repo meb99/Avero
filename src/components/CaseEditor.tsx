@@ -6,6 +6,7 @@ import { useI18n } from "../i18n";
 import { CASE_STATUSES, caseToReference, setCaseGood, updateCase, type BoardNotes, type CaseStatus, type RepairCase } from "../workbench/notes";
 import { loadPhotoImage } from "../workbench/photoImage";
 import type { ReportTexts } from "../workbench/report";
+import { Chronicle, type StepSubject } from "./Chronicle";
 
 interface Props {
   notes: BoardNotes;
@@ -13,6 +14,8 @@ interface Props {
   update(change: (n: BoardNotes) => BoardNotes): void;
   tolerance: number;
   onMessage(message: string | null): void;
+  /** What a new work step would be about: the selection on the board. */
+  subject?: StepSubject;
 }
 
 /** Text input that saves when it loses focus. */
@@ -57,7 +60,7 @@ export function Thumb({ file, onRemove, label }: { file: string; onRemove(): voi
 }
 
 /** Device data, status, photos and actions of one repair case. */
-export function CaseEditor({ notes, repair, update, tolerance, onMessage }: Props) {
+export function CaseEditor({ notes, repair, update, tolerance, onMessage, subject }: Props) {
   const { t, lang } = useI18n();
   const [busy, setBusy] = useState(false);
   const set = (change: Parameters<typeof updateCase>[2]) => update((n) => updateCase(n, repair.id, change));
@@ -128,6 +131,9 @@ export function CaseEditor({ notes, repair, update, tolerance, onMessage }: Prop
         deviation: t("report.deviation"),
         photos: t("case.photos"),
         footer: t("report.footer"),
+        chronicle: t("report.chronicle"),
+        before: t("report.before"),
+        after: t("report.after"),
       };
       const photos = [];
       for (const file of repair.photos ?? []) {
@@ -137,7 +143,27 @@ export function CaseEditor({ notes, repair, update, tolerance, onMessage }: Prop
           // A photo that cannot be read is left out of the report.
         }
       }
+      // Only the steps chosen for the report, each with its photos.
+      const steps = [];
+      for (const step of (repair.steps ?? []).filter((x) => x.report !== false)) {
+        const stepPhotos = [];
+        for (const file of step.photos ?? []) {
+          try {
+            stepPhotos.push(await loadPhotoImage(file));
+          } catch {
+            // Left out like the case photos.
+          }
+        }
+        steps.push({
+          step,
+          title: t(`chron.action.${step.action}`),
+          ...(step.result && { result: t(`chron.result.${step.result}`) }),
+          photos: stepPhotos,
+        });
+      }
       const bytes = await caseReport({
+        steps,
+        quantityText: (q) => t(`measure.${q}`),
         notes,
         repair,
         texts,
@@ -182,6 +208,8 @@ export function CaseEditor({ notes, repair, update, tolerance, onMessage }: Prop
           + {t("case.addPhotos")}
         </button>
       </div>
+
+      <Chronicle notes={notes} repair={repair} update={update} subject={subject} onMessage={onMessage} />
 
       <label className="case-good" title={t("case.goodHint")}>
         <input type="checkbox" checked={!!repair.good} onChange={(e) => update((n) => setCaseGood(n, repair.id, e.target.checked))} />{" "}

@@ -1,6 +1,6 @@
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
-import { addCase, setValue, updateCase, emptyNotes } from "./notes";
+import { addCase, addStep, setValue, updateCase, emptyNotes } from "./notes";
 import { caseReport, wrap, type ReportTexts } from "./report";
 
 const texts: ReportTexts = {
@@ -56,4 +56,30 @@ describe("caseReport", () => {
     expect(pdf.getPageCount()).toBeGreaterThan(1);
     expect(pdf.getTitle()).toBe("Reparaturbericht – Kein Bild");
   });
+
+  it("takes only the work steps chosen for the report, with before and after", async () => {
+    let n = emptyNotes("B", "B.brd");
+    n = addCase(n, "Kurzschluss");
+    const id = n.activeCase!;
+    n = setValue(n, { caseId: id }, "PP3V3", "resistance", 0.4);
+    const removedAt = new Date(Date.now() + 1000).toISOString();
+    n = addStep(n, id, { at: removedAt, action: "removed", target: "C7012", nets: ["PP3V3"], note: "C7012 entfernt" });
+    n = addStep(n, id, { at: removedAt, action: "cleaned", report: false });
+    const repair = n.cases[0];
+    const chosen = (repair.steps ?? []).filter((s) => s.report !== false).map((step) => ({ step, title: step.action, photos: [] }));
+    expect(chosen.map((c) => c.step.action)).toEqual(["removed"]);
+    const bytes = await caseReport({
+      notes: n,
+      repair,
+      texts: { ...texts, chronicle: "Arbeitsschritte", before: "vorher", after: "nachher" },
+      statusText: "Offen",
+      lang: "de",
+      tolerance: 0.1,
+      photos: [],
+      steps: chosen,
+      quantityText: (q) => q,
+    });
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1);
+  });
 });
+
