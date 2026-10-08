@@ -21,6 +21,27 @@ await step("workshop", async () => {
   await page.waitForTimeout(500);
   await look("workshop");
 });
+await step("lean net", async () => {
+  // "Ansehen" shows no empty measuring fields or note buttons for a net without readings.
+  await page.locator(".ui-level button", { hasText: "Ansehen" }).click();
+  await find(board.model.nets.find((n) => n.kind === "power")?.name ?? board.model.nets[0].name);
+  if ((await page.locator(".details .bound-notes, .details .measure-table").count()) > 0) throw new Error("workshop fields in Ansehen");
+  await shot("ui-view-net");
+});
+await step("history", async () => {
+  // ⌘← / ⌘→ go back and forth between the last selections.
+  const net = board.model.nets.find((n) => n.kind === "power")?.name ?? board.model.nets[0].name;
+  await find(part);
+  await find(net);
+  const title = () => page.locator(".details h2").first().innerText();
+  await page.keyboard.press("Meta+ArrowLeft");
+  await page.waitForTimeout(300);
+  if ((await title()) !== part) throw new Error(`back: ${await title()}`);
+  await page.keyboard.press("Meta+ArrowRight");
+  await page.waitForTimeout(300);
+  if ((await title()) !== net) throw new Error(`forward: ${await title()}`);
+  console.log("history: back and forward ok");
+});
 await step("kept", async () => {
   await page.locator(".ui-level button", { hasText: "Ansehen" }).click();
   await page.waitForTimeout(300);

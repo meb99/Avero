@@ -1644,6 +1644,8 @@ export const en = {
   "local.mcpOff": "In local mode the AI connection is off – even when switched on here.",
   "help.palette": "⌘K",
   "help.paletteLabel": "Command palette: commands, parts and nets",
+  "help.history": "⌘← / ⌘→",
+  "help.historyLabel": "Back / forward to the previous selection, as in a browser",
   "help.ratsnest": "⌘⇧R",
   "help.ratsnestLabel": "Connection lines on or off",
   "details.through": "via",

@@ -1301,8 +1301,21 @@ export function App() {
     });
   };
 
+  // Where the selection was before, to go back and forth as in a browser (⌘[ / ⌘]).
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
+  const history = useRef<{ back: Selection[]; forward: Selection[] }>({ back: [], forward: [] });
+  useEffect(() => {
+    history.current = { back: [], forward: [] };
+  }, [model]);
+
   const select = useCallback(
     (sel: Selection, zoom: boolean) => {
+      const before = selectionRef.current;
+      if (before.kind !== "none" && JSON.stringify(before) !== JSON.stringify(sel)) {
+        history.current.back = [...history.current.back.slice(-49), before];
+        history.current.forward = [];
+      }
       setSelection(sel);
       setTextQuery(null);
       if (!model) return;
@@ -2397,6 +2410,22 @@ export function App() {
       if (mod && key === "k") {
         e.preventDefault();
         actionsRef.current.palette();
+        return;
+      }
+      // ⌘[ / ⌘] as in Safari; ⌘← / ⌘→ as well, since "[" needs ⌥ on a German keyboard.
+      const step = e.key === "[" || e.key === "ArrowLeft" ? -1 : e.key === "]" || e.key === "ArrowRight" ? 1 : 0;
+      if (mod && step && !e.shiftKey && !isTyping(e.target) && model) {
+        e.preventDefault();
+        const h = history.current;
+        const [from, to] = step < 0 ? [h.back, h.forward] : [h.forward, h.back];
+        const target = from.pop();
+        if (!target) return;
+        const back = h.back;
+        const forward = h.forward;
+        select(target, true);
+        // select() records the step as new; going through the history keeps both lists instead.
+        history.current = { back, forward };
+        if (selectionRef.current.kind !== "none") to.push(selectionRef.current);
         return;
       }
       if (mod && key === "z" && !editingText()) {

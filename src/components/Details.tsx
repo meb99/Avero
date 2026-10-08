@@ -24,7 +24,7 @@ import { JumperPlanCard } from "./JumperPlan";
 import { NetHintCard } from "./NetHint";
 import { netHint } from "../workbench/hints";
 import { datasheetsFor, partNumbers, type Datasheet } from "../workbench/datasheets";
-import { formatValue } from "../workbench/measure";
+import { formatValue, hasValues } from "../workbench/measure";
 import { MeasureBlock, NetPoints, PointMeasureBlock } from "./MeasureBlock";
 import { findPoint, pinKey, pointLabel, pointOf } from "../core/points";
 
@@ -263,6 +263,14 @@ export function Details({
 }: Props) {
   const { t, lang } = useI18n();
   const u = settings.units;
+  // "Ansehen": workshop sections only where there is something in them already.
+  const lean = settings.uiLevel === "view";
+  const hasNotesFor = (target: string) => (notes?.markers ?? []).some((m) => m.target === target);
+  const hasReadings = (name: string, point?: string) =>
+    !!notes &&
+    (point
+      ? hasValues(notes.referencePoints?.[point]) || notes.cases.some((c) => hasValues(c.points?.[point]))
+      : hasValues(notes.reference[name]) || notes.cases.some((c) => hasValues(c.readings[name])));
   // The jumper target whose plan is open: "pin:target".
   const [jumperOpen, setJumperOpen] = useState<string | null>(null);
 
@@ -379,7 +387,8 @@ export function Details({
 
   const measure = (net: number) => {
     const point = selection.kind === "pin" || selection.kind === "testPoint" ? pointOf(model, selection) : undefined;
-    const usable = notes && model.nets[net].kind !== "unconnected";
+    const name = model.nets[net].name;
+    const usable = notes && model.nets[net].kind !== "unconnected" && (!lean || hasReadings(name) || (point && hasReadings(name, point.id)));
     return (
       <>
         {obdNet(net)}
@@ -604,7 +613,7 @@ export function Details({
             <OwnPartInfo info={notes.ownParts?.[part.name.toUpperCase()]} onSave={(info) => updateNotes((n) => setOwnPart(n, part.name, info))} />
           );
       const hasBound = (notes?.markers ?? []).some((m) => m.target === `part:${part.name}`);
-      const notesSection = notes && (
+      const notesSection = notes && (!lean || hasBound) && (
             <BoundNotes
               notes={notes}
               update={updateNotes}
@@ -626,7 +635,6 @@ export function Details({
               </dl>
             </section>
           );
-      const lean = settings.uiLevel === "view";
       const later = [partSheets.length === 0 && sheetSection, !ownInfo && ownSection, !hasBound && notesSection].filter(Boolean);
       return (
         <div className="details">
@@ -830,7 +838,7 @@ export function Details({
           </dl>
           {measure(pin.net)}
           {(() => {
-            const targets = jumperTargets(model, selection.pin, 6);
+            const targets = lean ? [] : jumperTargets(model, selection.pin, 6);
             if (targets.length === 0) return null;
             const pinSide = pin.side === "both" ? side : pin.side;
             const signal = signalClass(model.nets[pin.net].name);
@@ -889,10 +897,10 @@ export function Details({
               </section>
             );
           })()}
-          {notes && (
+          {notes && (!lean || notes.ownPins?.[pinKey(model, selection.pin)]) && (
             <OwnPinInfo info={notes.ownPins?.[pinKey(model, selection.pin)]} onSave={(info) => updateNotes((n) => setOwnPin(n, pinKey(model, selection.pin), info))} />
           )}
-          {notes && (
+          {notes && (!lean || hasNotesFor(pinKey(model, selection.pin))) && (
             <BoundNotes
               notes={notes}
               update={updateNotes}
@@ -994,7 +1002,7 @@ export function Details({
             <CrossBoard rows={net.pins.flatMap((p) => crossBoard(p).map((hit) => ({ from: model.pinLabel(p), hit })))} onGo={onCrossBoard} />
           )}
           {hits([net.name, model.fileNetName(selection.net)])}
-          {notes && net.pins.length > 0 && (
+          {notes && net.pins.length > 0 && (!lean || hasNotesFor(`net:${net.name}`)) && (
             <BoundNotes
               notes={notes}
               update={updateNotes}

@@ -5397,3 +5397,9 @@ p.pt-conflict,
 .hint-tag.finding-deviation {
   color: #ffa726;
 }
+
+/* Nothing to report about copper is a fact, not a link to follow. */
+.status-scope.scope-state-none,
+.status-scope.scope-state-hidden {
+  color: var(--text-muted);
+}
