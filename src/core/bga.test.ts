@@ -76,6 +76,9 @@ describe("ball map views (F42)", () => {
     expect(pitch.consistent).toBe(true);
     expect(missingBalls(g)).toContain("B2");
     expect(model.pins[cornerBall(g)!].number).toBe("A1");
+    // Without A1 the mark goes to the ball nearest that corner, not the first one in row A.
+    const sparse = { rows: ["A", "B"], cols: 6, balls: new Map([["A|6", 10], ["B|1", 11], ["B|6", 12]]) };
+    expect(cornerBall(sparse)).toBe(11);
   });
 
   it("keeps A1 in the right corner when mirrored, turned or on the bottom", () => {

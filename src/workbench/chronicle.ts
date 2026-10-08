@@ -73,8 +73,9 @@ export function stepEvidence(c: RepairCase, step: RepairStep, events = measureEv
   for (const list of groups.values()) {
     const first = list[0];
     const nextStep = steps.find((s) => s.at > step.at && s.id !== step.id && touches(s, first));
-    const before = [...list].reverse().find((e) => e.at <= step.at);
-    const after = list.find((e) => e.at > step.at && (!nextStep || e.at < nextStep.at));
+    // A value taken at the very moment of the step follows from it, as the chronicle lists it.
+    const before = [...list].reverse().find((e) => e.at < step.at);
+    const after = list.find((e) => e.at >= step.at && (!nextStep || e.at < nextStep.at));
     if (before || after) out.push({ subject: first.subject, point: first.point, q: first.q, before, after });
   }
   return out.sort((a, b) => a.subject.localeCompare(b.subject, undefined, { numeric: true }) || QUANTITIES.indexOf(a.q) - QUANTITIES.indexOf(b.q));

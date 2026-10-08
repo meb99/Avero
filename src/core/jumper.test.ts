@@ -45,6 +45,30 @@ describe("jumperTargets", () => {
     ]);
   });
 
+  it("keeps the pins of a two-row connector reachable", () => {
+    // A 20-pin connector whose body reaches past both rows; pin 3 in the top row is on SIG.
+    const pins = Array.from({ length: 20 }, (_, k) => ({ part: 1, number: String(k + 1), x: 100 + Math.floor(k / 2) * 50, y: k % 2 ? 60 : 140, radius: 8, side: "top" as const, net: k === 2 ? 0 : 1 }));
+    const board: Board = {
+      format: "brd",
+      formatName: "test",
+      unit: "mil",
+      outline: [],
+      bounds: { minX: -100, minY: -100, maxX: 700, maxY: 300 },
+      parts: [
+        { name: "A", side: "top", mount: "smd", firstPin: 0, pinCount: 1, outline: [], bounds: { minX: -10, minY: -10, maxX: 10, maxY: 10 } },
+        { name: "J1", side: "top", mount: "smd", firstPin: 1, pinCount: 20, outline: [], bounds: { minX: 50, minY: 0, maxX: 600, maxY: 200 } },
+      ],
+      pins: [{ part: 0, number: "1", x: 0, y: 0, radius: 8, side: "top", net: 0 }, ...pins],
+      testPoints: [],
+      nets: [
+        { name: "SIG", kind: "signal", pins: [0, 3], testPoints: [] },
+        { name: "GND", kind: "ground", pins: pins.map((_, k) => k + 1).filter((i) => i !== 3), testPoints: [] },
+      ],
+      warnings: [],
+    };
+    expect(jumperTargets(new BoardModel(board), 0).map((t) => [t.label, t.hidden])).toEqual([["J1.3", false]]);
+  });
+
   it("has nothing for ground", () => {
     const ground = model.nets.findIndex((n) => n.kind === "ground");
     expect(jumperTargets(model, model.nets[ground].pins[0])).toEqual([]);

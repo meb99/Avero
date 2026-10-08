@@ -66,6 +66,12 @@ describe("repair chronicle (F54)", () => {
     expect(first.before?.value).toBe(300);
     expect(first.after).toBeUndefined();
     expect(stepEvidence(twice, twice.steps![1])[0].after?.value).toBe(310);
+
+    // A value taken at the very moment of a step counts after it, as the chronicle lists it.
+    const sameTime: RepairCase = { ...twice, steps: [{ id: "c", at: "2026-10-01T08:20:00.000Z", action: "reflowed", nets: ["PP1V8"] }] };
+    const atOnce = stepEvidence(sameTime, sameTime.steps![0])[0];
+    expect(atOnce.before).toBeUndefined();
+    expect(atOnce.after?.value).toBe(300);
   });
 
   it("puts steps and readings in the order they happened", () => {

@@ -67,6 +67,11 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - **Foto des echten Boards** unter der Boardview (Darstellung → „Foto dieser Seite hinzufügen…"): zwei markante Punkte im Foto anklicken, dann dieselben Punkte auf dem Board (Pins rasten ein) – das Foto liegt danach deckungsgleich darunter, mit einstellbarer Deckkraft, getrennt für Ober- und Unterseite. Liegt neben dem Board ein PDF mit einem Bild der Platine (wie bei manchen Boardview-Paketen), übernimmt Avero die angezeigte Seite mit einem Klick als Foto und legt es selbst auf den Board-Umriss – ohne Datei auswählen, ohne Punkte klicken. Mit „Daneben“ steht das Foto unverändert neben dem Board: ein Klick auf ein Bauteil im Foto wählt es auf dem Board aus und springt hin, das Bauteil unter dem Mauszeiger wird mit Namen angezeigt, und was auf dem Board ausgewählt ist (Bauteil, Pin, alle Pins eines Netzes), wird im Foto markiert.
 - **Inhaltssuche über die ganze Bibliothek** (Bibliothek → „Inhalt“): Schaltpläne werden nach Text durchsucht, Boardviews nach Bauteilen und Netzen. Alles wird einmal indiziert; ein Klick auf einen Treffer öffnet Board und Schaltplan und springt zur Fundstelle.
 
+**Neu in 0.9.35**
+- **BGA-Ansicht:** Fehlt A1 im Design, sitzt die Markierung am Ball, der dieser Ecke am nächsten liegt, nicht mehr am ersten Ball der Zeile A.
+- **Reparaturchronik:** Ein Messwert mit genau derselben Zeit wie ein Arbeitsschritt zählt als Wert danach, so wie die Chronik ihn auch zeigt.
+- **Jumper-Plan:** Als unerreichbar gelten nur noch Pins, die auf allen Seiten von Pins desselben Bauteils umgeben sind. Die Reihen eines Steckers bleiben erreichbar.
+
 **Neu in 0.9.34**
 - **Jumper-Plan:** Aktiv-low-Steuerleitungen (`_N`, `_L`, `#`) und Seitenbandsignale schneller Busse wie Reset, Wake oder CLKREQ gelten nicht mehr fälschlich als Hochgeschwindigkeits- oder Taktleitungen.
 - Mehr Tests für Reparaturchronik, Hinweise und die Reihenfolge der Jumper-Ziele.

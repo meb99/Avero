@@ -121,12 +121,16 @@ export function missingBalls(grid: BallGrid): string[] {
 
 /** Ball A1, or the ball nearest to that corner when the design leaves A1 out. */
 export function cornerBall(grid: BallGrid): number | undefined {
-  for (const row of grid.rows)
+  let best: number | undefined;
+  let bestDistance = Infinity;
+  grid.rows.forEach((row, r) => {
     for (let c = 1; c <= grid.cols; c++) {
       const pin = grid.balls.get(`${row}|${c}`);
-      if (pin !== undefined) return pin;
+      const d = r * r + (c - 1) * (c - 1);
+      if (pin !== undefined && d < bestDistance) [best, bestDistance] = [pin, d];
     }
-  return undefined;
+  });
+  return best;
 }
 
 /**

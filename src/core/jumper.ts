@@ -45,14 +45,29 @@ export interface JumperTarget {
   hidden: boolean;
 }
 
-/** Pins under a package: a ball grid or the pins inside the outline of a large part. */
+/**
+ * Pins under a package: a ball grid or the pins inside the outline of a large part, with
+ * pins of the part on all four sides of them – the rows of a connector stay reachable.
+ */
 function hiddenPin(model: BoardModel, pin: number): boolean {
   const p = model.pins[pin];
   const part = model.parts[p.part];
   if (part.pinCount < 16) return false;
   const b = part.bounds;
   const inset = Math.min(b.maxX - b.minX, b.maxY - b.minY) * 0.12;
-  return p.x > b.minX + inset && p.x < b.maxX - inset && p.y > b.minY + inset && p.y < b.maxY - inset;
+  if (!(p.x > b.minX + inset && p.x < b.maxX - inset && p.y > b.minY + inset && p.y < b.maxY - inset)) return false;
+  let left = false;
+  let right = false;
+  let below = false;
+  let above = false;
+  for (let i = part.firstPin; i < part.firstPin + part.pinCount; i++) {
+    const q = model.pins[i];
+    left ||= q.x < p.x - 1;
+    right ||= q.x > p.x + 1;
+    below ||= q.y < p.y - 1;
+    above ||= q.y > p.y + 1;
+  }
+  return left && right && below && above;
 }
 
 export function jumperTargets(model: BoardModel, pin: number, limit = 6): JumperTarget[] {
