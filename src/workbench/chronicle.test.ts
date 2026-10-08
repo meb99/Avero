@@ -52,6 +52,20 @@ describe("repair chronicle (F54)", () => {
     const replaced = stepEvidence(repair, repair.steps![1]).find((e) => e.subject === "PP3V3")!;
     expect(replaced.before?.value).toBe(12000);
     expect(replaced.after?.value).toBe(12500);
+
+    // No reading between two changes to the same net: the one after the second says nothing about the first.
+    const twice: RepairCase = {
+      ...repair,
+      steps: [
+        { id: "a", at: "2026-10-01T08:30:00.000Z", action: "reflowed", nets: ["PP1V8"] },
+        { id: "b", at: "2026-10-01T08:40:00.000Z", action: "replaced", nets: ["PP1V8"] },
+      ],
+      readings: { PP1V8: { resistance: 310, at: { resistance: "2026-10-01T09:00:00.000Z" }, history: [{ at: "2026-10-01T08:20:00.000Z", resistance: 300 }] } },
+    };
+    const first = stepEvidence(twice, twice.steps![0])[0];
+    expect(first.before?.value).toBe(300);
+    expect(first.after).toBeUndefined();
+    expect(stepEvidence(twice, twice.steps![1])[0].after?.value).toBe(310);
   });
 
   it("puts steps and readings in the order they happened", () => {

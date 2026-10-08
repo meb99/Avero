@@ -12,20 +12,23 @@ const HIGH_SPEED = [
   /USB.*(D[PNM+-]|_[PN]$)/i,
   /(^|_)D[PM+-]$/i,
   /USB3|USB_SS|SS(TX|RX)/i,
-  /PCIE|PCI_E|PEG_|CLKREQ/i,
+  /PCIE|PCI_E|PEG_/i,
   /HDMI|TMDS/i,
   /(^|_)E?DP\d*_?(TX|AUX|ML|LANE)/i,
   /LVDS|MIPI|(^|_)(CSI|DSI)\d*_/i,
   /SATA/i,
-  /(^|_)M?DDR|(^|_)DQS?\d*|(^|_)DM\d+$/i,
+  /(^|_)M?DDR|(^|_)DQS?\d*(_?[PNTC])?$|(^|_)DM\d+$/i,
   /THUNDERBOLT|TBT_|(^|_)TB\d?_/i,
   /(^|_)(ETH|MDI)\d*_/i,
   /(TX|RX)\d*_?[PN]$/i,
-  /_(P|N)\d*$/,
+  /(^|_)D\d+_?[PN]$/i,
 ];
-const CLOCK = [/CLK|XTAL|(^|_)X(IN|OUT)$|OSC|32K/i];
+const CLOCK = [/CLK(?!REQ)|XTAL|(^|_)X(IN|OUT)$|OSC|32K/i];
+/** Slow side signals of a fast bus, and active-low controls ("_N", "_L", "#"): plain wires. */
+const SIDEBAND = /(^|_)(RST|RESET|PERST|WAKE|CLKREQ|EN|PG|PWRGD|PWROK|INT|IRQ|ALERT|PRSNT|DET|SEL|OE|CS)\d*(_?[LN]|#)?$/i;
 
 export function signalClass(netName: string): SignalClass {
+  if (SIDEBAND.test(netName)) return "plain";
   if (HIGH_SPEED.some((re) => re.test(netName))) return "highSpeed";
   if (CLOCK.some((re) => re.test(netName))) return "clock";
   return "plain";

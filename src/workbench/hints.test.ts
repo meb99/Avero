@@ -3,7 +3,7 @@ import { BoardModel } from "../core/board";
 import { testBoard } from "../core/testBoard";
 import type { Board } from "../core/types";
 import { caseHints, netHint } from "./hints";
-import { addCase, addStep, emptyNotes, setConditions, setValue, updateCase, type BoardNotes } from "./notes";
+import { addCase, addStep, emptyNotes, setCaseGood, setConditions, setValue, updateCase, type BoardNotes } from "./notes";
 
 // The test board with a 22 µF capacitor C7 from PP3V3 to ground: PP3V3 has C7 and the chip U10 on it.
 function model(): BoardModel {
@@ -56,6 +56,9 @@ describe("explained hints (F37)", () => {
     const h = netHint(m, n, PP3V3, 0.1, "Referenz")!;
     expect(m.parts[h.candidates[0].part].name).toBe("U10");
     expect(h.candidates[0].confirmed).toEqual({ caseTitle: "Altfall", action: "replaced" });
+    // A case not yet repaired confirms nothing.
+    n = updateCase(n, old, { status: "open" });
+    expect(netHint(m, n, PP3V3, 0.1, "Referenz")!.candidates.every((c) => !c.confirmed)).toBe(true);
   });
 
   it("names what is missing instead of guessing", () => {
@@ -87,6 +90,24 @@ describe("explained hints (F37)", () => {
     expect(other.contradictions).toContain("conditions");
     expect(other.needed).toContain("sameConditions");
     expect(other.values[0].cond).toEqual({ power: "standby" });
+    // The same reading moved a lot between two takes.
+    let moved = withCase({ resistance: 450 }, { resistance: 4500 });
+    moved = setValue(moved, { caseId: moved.activeCase! }, "PP3V3", "resistance", 40);
+    const unstable = netHint(m, moved, PP3V3, 0.1, "Referenz")!;
+    expect(unstable.contradictions).toContain("unstable");
+    expect(unstable.needed).toContain("settle");
+    expect(netHint(m, withCase({ resistance: 450 }, { resistance: 4500 }), PP3V3, 0.1, "Referenz")!.contradictions).not.toContain("unstable");
+    // Two good boards, measured under different conditions, both fit a case without any: they disagree.
+    let good = emptyNotes("B", "B.brd");
+    good = setConditions(good, "reference", { power: "off" });
+    good = setValue(good, "reference", "PP3V3", "resistance", 4500);
+    good = addCase(good, "Gut");
+    good = setCaseGood(good, good.activeCase!, true);
+    good = setConditions(good, { caseId: good.activeCase! }, { power: "standby" });
+    good = setValue(good, { caseId: good.activeCase! }, "PP3V3", "resistance", 300);
+    good = addCase(good, "Fall");
+    good = setValue(good, { caseId: good.activeCase! }, "PP3V3", "resistance", 4500);
+    expect(netHint(m, good, PP3V3, 0.1, "Referenz")!.contradictions).toContain("goodBoardsDisagree");
   });
 
   it("lists the nets of the case worth a look, worst first", () => {
