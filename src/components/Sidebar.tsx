@@ -1,6 +1,6 @@
 import type { CrossHit } from "./Details";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChevronLeftIcon, ChevronRightIcon } from "./Icons";
+import { BookIcon, ChevronLeftIcon, ChevronRightIcon, ChipIcon, DiagnoseIcon, InfoIcon, LayersIcon, MeterIcon, NetIcon } from "./Icons";
 import { Diagnosis } from "./Diagnosis";
 import { Interfaces } from "./Interfaces";
 import { PowerTree } from "./PowerTree";
@@ -24,6 +24,16 @@ import type { SchematicFacts } from "../schematic/partInfo";
 import type { Datasheet } from "../workbench/datasheets";
 import { NOT_A_RAIL } from "../workbench/consoleGuides";
 import { railVolts } from "../workbench/diagnosis";
+
+const TAB_ICONS: Record<string, ReactNode> = {
+  details: <InfoIcon />,
+  parts: <ChipIcon />,
+  nets: <NetIcon />,
+  layers: <LayersIcon />,
+  knowledge: <BookIcon />,
+  measure: <MeterIcon />,
+  diagnose: <DiagnoseIcon />,
+};
 
 const PART_FILTER_ROLES: PartRole[] = ["capacitor", "resistor", "inductor", "ferrite", "fuse", "jumper", "diode", "transistor", "ic", "connector", "crystal", "testpoint", "other"];
 
@@ -320,15 +330,18 @@ export function Sidebar({
             if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY;
           }}
         >
-          {tabs.map((id) => (
-            <button key={id} role="tab" data-tab={id} aria-selected={tab === id} className={tab === id ? "on" : ""} onClick={() => setTab(id)}>
-              {t(`tab.${id}`)}
-              {id === "parts" && <span className="count">{model.parts.length}</span>}
-              {id === "nets" && <span className="count">{model.nets.length}</span>}
-              {id === "layers" && <span className="count">{model.layers.length}</span>}
-              {id === "knowledge" && knowledgeCount > 0 && <span className="count">{knowledgeCount}</span>}
-            </button>
-          ))}
+          {tabs.map((id) => {
+            // An icon each, the name with the chosen tab: all tabs fit, even in the workshop.
+            const count = id === "parts" ? model.parts.length : id === "nets" ? model.nets.length : id === "layers" ? model.layers.length : id === "knowledge" && knowledgeCount > 0 ? knowledgeCount : undefined;
+            const on = tab === id;
+            return (
+              <button key={id} role="tab" data-tab={id} aria-selected={on} className={on ? "on" : ""} onClick={() => setTab(id)} title={count === undefined ? t(`tab.${id}`) : `${t(`tab.${id}`)} (${count})`}>
+                {TAB_ICONS[id]}
+                <span className={on ? "tab-name" : "tab-name sr-only"}>{t(`tab.${id}`)}</span>
+                {on && count !== undefined && <span className="count">{count}</span>}
+              </button>
+            );
+          })}
         </nav>
         {scroll.right && (
           <button className="tool icon-only tabs-arrow" onClick={() => scrollTabs(1)} title={t("sidebar.moreTabs")} aria-label={t("sidebar.moreTabs")}>

@@ -110,6 +110,7 @@ export function Toolbar(p: Props) {
                 <option value="synced">{t("sides.synced")}</option>
               </select>
             )}
+            <div className="tool-cluster" role="group" aria-label={t("toolbar.viewTools")}>
             <button className="tool icon-only" onClick={p.onFlip} title={t("toolbar.flip")} aria-label={t("toolbar.flip")}>
               <FlipIcon />
             </button>
@@ -119,14 +120,20 @@ export function Toolbar(p: Props) {
             <button className="tool icon-only" onClick={p.onFit} title={t("toolbar.fit")} aria-label={t("toolbar.fit")}>
               <FitIcon />
             </button>
-            <button className="tool icon-only" onClick={() => p.onZoom(1 / 1.5)} title={t("toolbar.zoomOut")} aria-label={t("toolbar.zoomOut")}>
-              <ZoomOutIcon />
-            </button>
-            <button className="tool icon-only" onClick={() => p.onZoom(1.5)} title={t("toolbar.zoomIn")} aria-label={t("toolbar.zoomIn")}>
-              <ZoomInIcon />
-            </button>
-            {(showsExtra(p.ui, "draw") || p.placingMarker || p.drawing) && (
+            {/* "Ansehen" zooms with trackpad, wheel and ⌘+/⌘−; the buttons belong to the workshop. */}
+            {p.ui.uiLevel === "workshop" && (
               <>
+                <button className="tool icon-only" onClick={() => p.onZoom(1 / 1.5)} title={`${t("toolbar.zoomOut")} (⌘−)`} aria-label={t("toolbar.zoomOut")}>
+                  <ZoomOutIcon />
+                </button>
+                <button className="tool icon-only" onClick={() => p.onZoom(1.5)} title={`${t("toolbar.zoomIn")} (⌘+)`} aria-label={t("toolbar.zoomIn")}>
+                  <ZoomInIcon />
+                </button>
+              </>
+            )}
+            </div>
+            {(showsExtra(p.ui, "draw") || p.placingMarker || p.drawing) && (
+              <div className="tool-cluster" role="group" aria-label={t("draw.title")}>
                 <button
                   className={`tool icon-only${p.placingMarker ? " active" : ""}`}
                   onClick={p.onMarker}
@@ -153,7 +160,7 @@ export function Toolbar(p: Props) {
                   <option value="jumper">{t("draw.jumper")}</option>
                   <option value="ruler">{t("ruler.title")} (L)</option>
                 </select>
-              </>
+              </div>
             )}
           </div>
           <div className="toolbar-search">

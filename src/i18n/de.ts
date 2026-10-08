@@ -1646,6 +1646,7 @@ export const de: Record<MessageKey, string> = {
   "local.mcpOff": "Im lokalen Modus ist die KI-Anbindung aus – auch wenn sie hier eingeschaltet ist.",
   "help.palette": "⌘K",
   "help.paletteLabel": "Befehlspalette: Befehle, Bauteile und Netze",
+  "toolbar.viewTools": "Ansicht",
   "help.history": "⌘← / ⌘→",
   "help.historyLabel": "Zur vorigen / nächsten Auswahl, wie im Browser",
   "help.ratsnest": "⌘⇧R",

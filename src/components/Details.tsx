@@ -740,12 +740,6 @@ export function Details({
             </>
           ) : (
             <>
-              {schFacts}
-              {chipCard}
-              {sheetSection}
-              {ownSection}
-              {notesSection}
-              {obdSection}
           <dl className="props">
             {part.package && <Row label={t("details.package")}>{t(`package.${part.package}`)}</Row>}
             <Row label={t("details.side")}>{t(sideKey[part.side])}</Row>
@@ -756,6 +750,12 @@ export function Details({
             </Row>
             <Row label={t("details.size")}>{formatSize(b.maxX - b.minX, b.maxY - b.minY, u)}</Row>
           </dl>
+              {schFacts}
+              {chipCard}
+              {sheetSection}
+              {ownSection}
+              {notesSection}
+              {obdSection}
           {hits([part.name], mapping(part.name))}
           <section className="details-section">
             <h3>{t("details.pins")}</h3>
@@ -948,6 +948,7 @@ export function Details({
             <span className="details-type">{t("details.net")}</span>
             <h2 className={`kind-text-${net.kind}`}>{net.name}</h2>
             {net.assumedGround && <p className="details-device">{t("details.assumedGround")}</p>}
+            <div className="details-actions">
             {onTogglePin && (
               <button
                 className={`small pin-toggle${pinnedNets?.has(selection.net) ? " on" : ""}`}
@@ -970,6 +971,7 @@ export function Details({
                 onSave={(name) => onRenameNet(selection.net, name)}
               />
             )}
+            </div>
           </header>
           <dl className="props">
             <Row label={t("details.kind")}>

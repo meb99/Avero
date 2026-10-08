@@ -50,7 +50,7 @@ export interface Palette {
 /**
  * Dark, after FlexBV: a near-black board, light grey part outlines on solid
  * grey bodies, grey-green pins, red power pins, the highlighted net in
- * bright yellow with white connection lines, part names in lavender.
+ * warm yellow with white connection lines, part names in lavender.
  */
 export const DARK: Palette = {
   background: [6, 7, 9, 255],
@@ -60,13 +60,13 @@ export const DARK: Palette = {
   partOutline: [150, 155, 164, 255],
   partSelectedFill: [190, 90, 255, 70],
   partSelectedOutline: [214, 120, 255, 255],
-  partOnNetOutline: [255, 235, 30, 255],
+  partOnNetOutline: [255, 212, 64, 255],
   pinSignal: [140, 162, 142, 255],
   pinPower: [236, 64, 64, 255],
   pinGround: [92, 100, 96, 255],
   pinUnconnected: [58, 62, 64, 255],
   pinOfSelectedPart: [214, 120, 255, 255],
-  pinHighlight: [255, 235, 30, 255],
+  pinHighlight: [255, 212, 64, 255],
   pinSelected: [255, 255, 255, 255],
   ratsnest: [255, 255, 255, 190],
   nail: [255, 160, 30, 255],
@@ -99,7 +99,7 @@ export const DARK: Palette = {
   labelChip: "#c9b8ff",
   labelHalo: "rgba(0, 0, 0, 0.9)",
   labelPin: "#0a0b0d",
-  labelNetBg: "#ffeb1e",
+  labelNetBg: "#ffd440",
   labelNetText: "#111111",
   selectionRing: "#ffffff",
 };

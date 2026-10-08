@@ -204,6 +204,9 @@ export function drawLabels(
         while (value.length > 3 && ctx.measureText(value).width > w * 0.92) value = value.slice(0, -2);
         if (value !== valueText) value = `${value}…`;
         const vy = y + size * 0.62 + small * 0.6;
+        // The value takes room too, so smaller names next to it give way instead of overlapping.
+        const vw = ctx.measureText(value).width;
+        if (!occupied.tryPlace({ x0: c.x - vw / 2 - 2, y0: vy - small / 2 - 1, x1: c.x + vw / 2 + 2, y1: vy + small / 2 + 1 })) continue;
         ctx.strokeText(value, c.x, vy);
         ctx.fillStyle = palette.label;
         ctx.globalAlpha = 0.75;

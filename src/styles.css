@@ -252,6 +252,16 @@ kbd {
   gap: 4px;
 }
 
+/* Tools that belong together sit on one quiet pill, as in Apple's own toolbars. */
+.tool-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  border-radius: calc(var(--radius) + 2px);
+  background: var(--surface-2);
+}
+
 .toolbar-spacer {
   flex: 1;
   align-self: stretch;
@@ -5402,4 +5412,42 @@ p.pt-conflict,
 .status-scope.scope-state-none,
 .status-scope.scope-state-hidden {
   color: var(--text-muted);
+}
+
+/* Sidebar tabs: an icon each, the chosen one with its name. */
+.tabs-row .tabs [role="tab"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.tabs-row .tabs .count {
+  margin-left: 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Actions on what is selected: one row of small buttons under the name. */
+.details-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.details-actions .net-rename {
+  display: contents;
+}
+
+.details-actions .pin-toggle {
+  margin-top: 0;
 }

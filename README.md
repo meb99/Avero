@@ -67,6 +67,13 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - **Foto des echten Boards** unter der Boardview (Darstellung → „Foto dieser Seite hinzufügen…"): zwei markante Punkte im Foto anklicken, dann dieselben Punkte auf dem Board (Pins rasten ein) – das Foto liegt danach deckungsgleich darunter, mit einstellbarer Deckkraft, getrennt für Ober- und Unterseite. Liegt neben dem Board ein PDF mit einem Bild der Platine (wie bei manchen Boardview-Paketen), übernimmt Avero die angezeigte Seite mit einem Klick als Foto und legt es selbst auf den Board-Umriss – ohne Datei auswählen, ohne Punkte klicken. Mit „Daneben“ steht das Foto unverändert neben dem Board: ein Klick auf ein Bauteil im Foto wählt es auf dem Board aus und springt hin, das Bauteil unter dem Mauszeiger wird mit Namen angezeigt, und was auf dem Board ausgewählt ist (Bauteil, Pin, alle Pins eines Netzes), wird im Foto markiert.
 - **Inhaltssuche über die ganze Bibliothek** (Bibliothek → „Inhalt“): Schaltpläne werden nach Text durchsucht, Boardviews nach Bauteilen und Netzen. Alles wird einmal indiziert; ein Klick auf einen Treffer öffnet Board und Schaltplan und springt zur Fundstelle.
 
+**Neu in 0.9.37**
+- **Aufgeräumte Werkzeugleiste:** Spiegeln, Drehen und Einpassen liegen zusammen auf einer ruhigen Fläche, die Zeichenwerkzeuge auf einer zweiten. In „Ansehen“ fallen die Zoom-Knöpfe weg (Trackpad, Mausrad und `⌘+` / `⌘−` zoomen weiter), in der Werkstatt bleiben sie.
+- **Reiter der Seitenleiste als Symbole:** Jeder Reiter hat ein Symbol, der gewählte zeigt zusätzlich seinen Namen. Name und Anzahl stehen beim Überfahren. Alle Reiter der Werkstatt passen jetzt ohne seitliches Blättern in die Leiste.
+- **Detailpanel:** „Anpinnen“ und „Netz umbenennen“ stehen in einer Zeile. In der Werkstatt stehen die Bauteildaten (Seite, Pins, Position, Größe) jetzt oben, wie in „Ansehen“.
+- **Beschriftungen überlappen nicht mehr:** Der Wert unter einem Bauteilnamen nimmt jetzt selbst Platz ein, kleinere Namen daneben weichen aus.
+- **Wärmeres Netz-Gelb** im dunklen Design. Wer das knallige Gelb möchte, wählt in den Einstellungen die Farbvorlage „Hoher Kontrast“.
+
 **Neu in 0.9.36**
 - **Schlankeres „Ansehen“:** Messfelder, „Notizen hier“, eigene Pin-Angaben und Jumper-Ziele erscheinen in der Stufe „Ansehen“ nur noch, wenn es dazu schon Werte oder Notizen gibt. Ein Klick auf ein Netz zeigt dann direkt Art, Pins und die verbundenen Bauteile.
 - **Auswahlverlauf:** Mit `⌘←` / `⌘→` (oder `⌘[` / `⌘]`) springt Avero zur vorigen oder nächsten Auswahl zurück, samt Zoom, wie im Browser.

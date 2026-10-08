@@ -189,3 +189,39 @@ export const DarkPageIcon = () => (
     <path d="M10 3.5a6.5 6.5 0 0 1 0 13z" fill="currentColor" />
   </Icon>
 );
+
+export const InfoIcon = () => (
+  <Icon>
+    <circle cx="10" cy="10" r="7.5" />
+    <path d="M10 9v5M10 6.2v.1" />
+  </Icon>
+);
+
+export const LayersIcon = () => (
+  <Icon>
+    <path d="M10 3 2.5 7 10 11l7.5-4z" />
+    <path d="m2.5 10.5 7.5 4 7.5-4" />
+    <path d="m2.5 14 7.5 4 7.5-4" />
+  </Icon>
+);
+
+export const BookIcon = () => (
+  <Icon>
+    <path d="M3 4.5c2.5-1 5-1 7 .5 2-1.5 4.5-1.5 7-.5v11c-2.5-1-5-1-7 .5-2-1.5-4.5-1.5-7-.5z" />
+    <path d="M10 5v11" />
+  </Icon>
+);
+
+export const MeterIcon = () => (
+  <Icon>
+    <rect x="4.5" y="2.5" width="11" height="15" rx="1.5" />
+    <rect x="6.5" y="4.5" width="7" height="4" rx="0.5" />
+    <circle cx="10" cy="13" r="2" />
+  </Icon>
+);
+
+export const DiagnoseIcon = () => (
+  <Icon>
+    <path d="M2.5 10h3l2-5 3 10 2-5h5" />
+  </Icon>
+);
