@@ -120,10 +120,12 @@ export class BoardModel {
 
   /**
    * Hides parts by name (a shield over the pads, parts only on ground …);
-   * the net list stays as it is. True when anything changed.
+   * the net list stays as it is. The parts in `bodies` (indices) lose their
+   * body only, whatever the mode (see mechanicalParts). True when anything changed.
    */
-  setHiddenParts(names: readonly string[], mode: "body" | "all"): boolean {
+  setHiddenParts(names: readonly string[], mode: "body" | "all", bodies: readonly number[] = []): boolean {
     const next = new Uint8Array(this.parts.length);
+    for (const i of bodies) next[i] = 1;
     for (const name of names) {
       const i = this.findPart(name);
       if (i !== undefined) next[i] = mode === "all" ? 2 : 1;

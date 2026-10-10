@@ -97,6 +97,10 @@ interface Props {
   onSelect(selection: Selection, zoom: boolean): void;
   /** ⌘- or Shift-click: adds the part (or the part of the pin) to a multiple selection. */
   onAddPart?(part: number): void;
+  /** A right-click: show this in the schematic (see schematicTarget). */
+  onSchematicPick?(selection: Selection): void;
+  /** A middle-click: the other side, as in FlexBV. */
+  onFlip?(): void;
   /** Parts selected together with the selection (multiple selection). */
   extraParts?: ReadonlySet<number>;
   ref?: Ref<BoardViewHandle>;
@@ -134,6 +138,21 @@ function hitToSelection(hit: Hit | undefined): Selection {
   }
 }
 
+/**
+ * What a right-click looks up in the schematic, as in FlexBV: on a part's body the part,
+ * on a pin, pad or track its net.
+ */
+function schematicTarget(model: BoardModel, hit: Hit | undefined): Selection {
+  switch (hit?.kind) {
+    case "pin":
+      return { kind: "net", net: model.pins[hit.pin].net };
+    case "testPoint":
+      return { kind: "net", net: model.testPoints[hit.testPoint].net };
+    default:
+      return hitToSelection(hit);
+  }
+}
+
 export function BoardView({
   model,
   side,
@@ -162,6 +181,8 @@ export function BoardView({
   onPointPick,
   onSelect,
   onAddPart,
+  onSchematicPick,
+  onFlip,
   extraParts,
   ref,
 }: Props) {
@@ -836,6 +857,7 @@ export function BoardView({
     if (pointers.current.size < 2) pinch.current = null;
     const d = drag.current;
     drag.current = null;
+    if (d && !d.moved && e.button === 1) onFlip?.();
     if (d && !d.moved && e.button === 0) {
       const p = local(e);
       if (onPointPick) {
@@ -949,7 +971,13 @@ export function BoardView({
       }}
       onDoubleClick={onDoubleClick}
       onWheel={onWheel}
-      onContextMenu={(e) => e.preventDefault()}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        // ⌃-click on a Mac arrives as a context menu too; it adds a part to the selection instead.
+        if (e.ctrlKey || !onSchematicPick || onPointPick) return;
+        const sel = schematicTarget(stateRef.current.model, hitAt(local(e)));
+        if (sel.kind !== "none") onSchematicPick(sel);
+      }}
     >
       <canvas ref={glRef} className="board-canvas" />
       <canvas ref={labelRef} className="board-labels" />

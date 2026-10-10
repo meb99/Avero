@@ -68,6 +68,7 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
     | "netNames"
     | "ratsnest"
     | "overview"
+    | "hideMechanical"
     | "autoSchematic"
     | "restoreWorkspace"
     | "updateCheck"
@@ -143,6 +144,7 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
         {check("showTraces", t("settings.traces"))}
         {check("ratsnest", t("settings.ratsnest"))}
         {check("overview", t("settings.overview"))}
+        {check("hideMechanical", t("settings.hideMechanical"))}
       </div>
       <h3>{t("settings.formats")}</h3>
       <div className="form-grid">
@@ -332,6 +334,8 @@ export function HelpDialog({ onClose }: { onClose(): void }) {
     ["help.zoom", "help.zoomLabel"],
     ["help.select", "help.selectLabel"],
     ["help.zoomTo", "help.zoomToLabel"],
+    ["help.rightClick", "help.rightClickLabel"],
+    ["help.middleClick", "help.middleClickLabel"],
     ["help.flip", "help.flipLabel"],
     ["help.rotate", "help.rotateLabel"],
     ["help.fit", "help.fitLabel"],

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { BoardModel } from "./board";
-import { partsInGroup } from "./hideGroups";
+import { mechanicalParts, partsInGroup } from "./hideGroups";
 import { testBoard } from "./testBoard";
+import type { Board, Part } from "./types";
 
 describe("hidden parts", () => {
   it("hides bodies or pads too, without touching the net list", () => {
@@ -29,6 +30,49 @@ describe("hidden parts", () => {
       const p = model.parts[i];
       for (let k = p.firstPin; k < p.firstPin + p.pinCount; k++) expect(model.nets[model.pins[k].net].kind).toBe("ground");
     }
+  });
+});
+
+describe("mechanical parts", () => {
+  /** The test board with one more part of the given size (mil) on the given nets. */
+  function withPart(name: string, size: number, nets: number[]): BoardModel {
+    const board: Board = testBoard();
+    const part = board.parts.length;
+    const firstPin = board.pins.length;
+    const bounds = { minX: 0, minY: 0, maxX: size, maxY: size / 2 };
+    board.parts.push({ name, side: "top", mount: "smd", firstPin, pinCount: nets.length, outline: [], bounds } satisfies Part);
+    nets.forEach((net, k) => {
+      board.pins.push({ part, number: String(k + 1), x: k * 10, y: 0, radius: 5, side: "top", net });
+      board.nets[net].pins.push(firstPin + k);
+    });
+    return new BoardModel(board);
+  }
+  const GND = 1;
+  const NC = 3;
+  const isMechanical = (model: BoardModel) => mechanicalParts(model).includes(model.parts.length - 1);
+
+  it("are big parts on ground or no net only, and parts named as shields", () => {
+    expect(isMechanical(withPart("FRAME1", 1200, [GND, GND, GND]))).toBe(true);
+    expect(isMechanical(withPart("X1", 1500, [NC, NC]))).toBe(true);
+    expect(isMechanical(withPart("X2", 1500, []))).toBe(true);
+    expect(isMechanical(withPart("SHLD3", 80, [GND]))).toBe(true);
+  });
+
+  it("leave small ground parts, and big parts with a signal", () => {
+    // A USB-C shell is ground only but under 25.4 mm.
+    expect(isMechanical(withPart("J4001", 360, [GND, GND, GND, GND]))).toBe(false);
+    expect(isMechanical(withPart("U1", 1200, [GND, 0]))).toBe(false);
+    expect(mechanicalParts(new BoardModel(testBoard()))).toEqual([]);
+  });
+
+  it("hide only the body, whatever the mode of the parts hidden by hand", () => {
+    const model = withPart("FRAME1", 1200, [GND, GND]);
+    const frame = model.parts.length - 1;
+    const pin = model.parts[frame].firstPin;
+    model.setHiddenParts([model.parts[0].name], "all", [frame]);
+    expect(model.partHidden(frame)).toBe(true);
+    expect(model.pinHidden(pin)).toBe(false);
+    expect(model.pinHidden(model.parts[0].firstPin)).toBe(true);
   });
 });
 

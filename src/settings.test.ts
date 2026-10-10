@@ -5,7 +5,7 @@ describe("settings migration", () => {
   it("turns ghosting of the other side off once for older settings", () => {
     const old = { ...DEFAULT_SETTINGS, revision: undefined, ghostOtherSide: true };
     expect(migrate(old).ghostOtherSide).toBe(false);
-    expect(migrate(old).revision).toBe(2);
+    expect(migrate(old).revision).toBe(3);
   });
 
   it("migrates settings stored by older versions, which have no revision", () => {
@@ -16,6 +16,17 @@ describe("settings migration", () => {
 
   it("keeps a choice made after the change", () => {
     expect(migrate({ ...DEFAULT_SETTINGS, ghostOtherSide: true }).ghostOtherSide).toBe(true);
+  });
+
+  it("gives the board 60 % beside the schematic, unless the split was dragged", () => {
+    expect(DEFAULT_SETTINGS.schematicShare).toBe(0.4);
+    expect(fromStored({ revision: 2, schematicShare: 0.5 }).schematicShare).toBe(0.4);
+    expect(fromStored({ revision: 2, schematicShare: 0.62 }).schematicShare).toBe(0.62);
+    expect(fromStored({ revision: 3, schematicShare: 0.5 }).schematicShare).toBe(0.5);
+  });
+
+  it("hides shields and frames from the start", () => {
+    expect(fromStored({ revision: 2 }).hideMechanical).toBe(true);
   });
 });
 

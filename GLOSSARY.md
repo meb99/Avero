@@ -39,3 +39,10 @@ _Vermeiden_: History, Navigation
 Was der nächste Klick aufs Board bedeutet: Zeichnen, Zeichnung verschieben, Lineal,
 Markierung setzen oder Foto ausrichten. Es ist immer höchstens ein Werkzeug aktiv.
 _Vermeiden_: Modus, Tool
+
+## Board
+
+**Abschirmungen und Rahmen** (Code: `mechanicalParts`, Einstellung `hideMechanical`):
+Teile, die als Abschirmung oder Rahmen benannt sind, und Teile ab 25,4 mm nur an Masse oder an
+keinem Netz. Ihr Körper ist von Anfang an ausgeblendet, ihre Pads bleiben.
+_Vermeiden_: Mechanik, Shields

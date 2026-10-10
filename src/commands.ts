@@ -37,6 +37,8 @@ export interface CommandState {
   isolated: boolean;
   bench: boolean;
   grid: boolean;
+  /** Shields and frames are kept out of sight (Settings.hideMechanical). */
+  mechanical: boolean;
   uiLevel: UiLevel;
 }
 
@@ -81,6 +83,7 @@ export interface CommandActions {
   toggleUiLevel(): void;
   toggleRatsnest(): void;
   toggleGrid(): void;
+  toggleMechanical(): void;
   addPhoto(): void;
   togglePhoto(): void;
   photoPane(): void;
@@ -219,6 +222,13 @@ export const COMMANDS: readonly CommandSpec[] = [
     keys: [{ key: "g", board: true }],
     enabled: (s) => s.board,
     run: (a) => a.toggleGrid(),
+  },
+  {
+    id: "mechanical",
+    label: (t, s) => t(s.mechanical ? "mechanical.show" : "mechanical.hide"),
+    menuLabel: (t) => t("menu.mechanical"),
+    enabled: (s) => s.board,
+    run: (a) => a.toggleMechanical(),
   },
   { id: "origin-selection", label: (t) => t("origin.atSelection"), enabled: (s) => s.board && s.boardNotes && s.selected, run: (a) => a.originAtSelection() },
   { id: "origin-clear", label: (t) => t("origin.clear"), key: "⇧O", keys: [{ key: "O", board: true }], enabled: (s) => s.origin, run: (a) => a.clearOrigin() },

@@ -67,6 +67,13 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - **Foto des echten Boards** unter der Boardview (Darstellung → „Foto dieser Seite hinzufügen…"): zwei markante Punkte im Foto anklicken, dann dieselben Punkte auf dem Board (Pins rasten ein) – das Foto liegt danach deckungsgleich darunter, mit einstellbarer Deckkraft, getrennt für Ober- und Unterseite. Liegt neben dem Board ein PDF mit einem Bild der Platine (wie bei manchen Boardview-Paketen), übernimmt Avero die angezeigte Seite mit einem Klick als Foto und legt es selbst auf den Board-Umriss – ohne Datei auswählen, ohne Punkte klicken. Mit „Daneben“ steht das Foto unverändert neben dem Board: ein Klick auf ein Bauteil im Foto wählt es auf dem Board aus und springt hin, das Bauteil unter dem Mauszeiger wird mit Namen angezeigt, und was auf dem Board ausgewählt ist (Bauteil, Pin, alle Pins eines Netzes), wird im Foto markiert.
 - **Inhaltssuche über die ganze Bibliothek** (Bibliothek → „Inhalt“): Schaltpläne werden nach Text durchsucht, Boardviews nach Bauteilen und Netzen. Alles wird einmal indiziert; ein Klick auf einen Treffer öffnet Board und Schaltplan und springt zur Fundstelle.
 
+**Neu in 0.9.44**
+- **Ruhiger Start wie bei FlexBV:** Nach dem Öffnen hat das Board das Fenster. Die Seitenleiste bleibt eingeklappt, bis du etwas auswählst, und ein gefundener Schaltplan nimmt 40 % der Breite statt der Hälfte (eine von Hand gezogene Breite bleibt).
+- **Abschirmungen und Rahmen ausgeblendet:** Teile, die als Abschirmung oder Rahmen benannt sind, und Teile ab 25,4 mm, die nur an Masse oder an keinem Netz hängen, verlieren von Anfang an ihren Körper; ihre Pads bleiben. Wieder einblenden über Darstellung → „Abschirmungen und Rahmen“, die Befehlspalette oder die Einstellungen.
+- **Rechtsklick zeigt im Schaltplan:** auf einem Bauteil das Bauteil, auf einem Pin sein Netz. Ein ausgeblendeter Schaltplan kommt dabei zurück.
+- **Mittelklick** dreht das Board auf die andere Seite.
+- Der Vergleich mit FlexBV und NexusBV – was übernommen ist und was noch fehlt – steht in [`docs/VERGLEICH.md`](docs/VERGLEICH.md).
+
 **Neu in 0.9.43**
 - **Ein Auswahlverlauf für alle Wege:** ⌘← / ⌘→, ⌘[ / ⌘], das Menü „Zurück“/„Vor“, die Befehlspalette und die Seitentasten der Maus gehen jetzt durch dieselbe Liste. Bisher führten ⌘← / ⌘→ eine eigene: Wer mit ⌘← zurückging und dann im Menü „Vor“ wählte, bekam „Keine spätere Auswahl“. Der Verlauf gilt je Board und bleibt beim Reiterwechsel erhalten.
 - Intern: Der Verlauf ist ein Modul (`src/selectionHistory.ts`) mit Tests; der Browser-Test `history.mjs` prüft Tasten und Palette gemeinsam.

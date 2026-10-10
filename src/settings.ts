@@ -71,6 +71,8 @@ export interface Settings {
   ratsnest: boolean;
   /** Small map of the whole board in a corner while zoomed in. */
   overview: boolean;
+  /** Shields and frames without their bodies, as in FlexBV (see mechanicalParts). */
+  hideMechanical: boolean;
   /** Look for a new release on GitHub once a day. */
   updateCheck: boolean;
   /**
@@ -110,8 +112,11 @@ export interface Settings {
   fzKey: string;
 }
 
-/** Current settings revision. 2: sides are kept apart (no ghosting) by default. */
-const REVISION = 2;
+/**
+ * Current settings revision. 2: sides are kept apart (no ghosting) by default.
+ * 3: the schematic takes 40 % beside the board instead of half, as in FlexBV.
+ */
+const REVISION = 3;
 
 export const DEFAULT_SETTINGS: Settings = {
   revision: REVISION,
@@ -132,6 +137,7 @@ export const DEFAULT_SETTINGS: Settings = {
   netNames: true,
   ratsnest: true,
   overview: true,
+  hideMechanical: true,
   updateCheck: true,
   localMode: false,
   autoSchematic: true,
@@ -141,7 +147,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showSidebar: true,
   sidebarWidth: 340,
   sidebarCollapsed: false,
-  schematicShare: 0.5,
+  schematicShare: 0.4,
   tolerance: 0.1,
   xzzKey: "",
   fzKey: "",
@@ -175,6 +181,8 @@ export function fromStored(stored: Partial<Settings>): Settings {
 export function migrate(s: Settings): Settings {
   const out = { ...s };
   if ((out.revision ?? 1) < 2) out.ghostOtherSide = false;
+  // The old default only; a split dragged to another width stays.
+  if ((out.revision ?? 1) < 3 && out.schematicShare === 0.5) out.schematicShare = 0.4;
   out.revision = REVISION;
   return out;
 }

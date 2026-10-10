@@ -167,6 +167,7 @@ export async function installMenu(
         SEP,
         cmd("ratsnest"),
         cmd("grid"),
+        cmd("mechanical"),
         cmd("schematic"),
         cmd("schematic-window"),
         cmd("sidebar"),

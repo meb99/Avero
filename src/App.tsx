@@ -59,6 +59,7 @@ import { commandForKey, paletteCommands as registerPalette, type CommandActions,
 import { mapSelection } from "./core/compare";
 import { alignedToA, alignedToB, alignOnParts, matchNets } from "./core/diff";
 import { search } from "./core/search";
+import { mechanicalParts } from "./core/hideGroups";
 import { EMPTY_HISTORY, recordSelection, stepSelection, type SelectionHistory } from "./selectionHistory";
 import {
   BOARD_EXTENSIONS,
@@ -211,6 +212,9 @@ function focusText(model: BoardModel, sel: Selection): string | undefined {
 
 export function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
+  // A board just opened: the sidebar stays folded until something is selected, so the board
+  // has the window (as in FlexBV). Not stored: a sidebar folded by hand stays folded.
+  const [sidebarFolded, setSidebarFolded] = useState(false);
   // Every open tab, the active one included (src/tabs.ts). The active tab's fields read
   // like states, and their setters change the active tab in the collection.
   const [tabState, dispatchTabs] = useReducer(tabsReducer, undefined, initialTabs);
@@ -367,10 +371,12 @@ export function App() {
   useEffect(() => {
     if (!model || !notesForModel) return;
     const kinds = model.applyNetKinds(netKinds ?? {});
-    const hidden = model.setHiddenParts(hiddenParts?.parts ?? [], hiddenParts?.mode ?? "body");
+    // Shields and frames lose their bodies from the start, as in FlexBV; after the net kinds, which decide them.
+    const mechanical = settings.hideMechanical ? mechanicalParts(model) : [];
+    const hidden = model.setHiddenParts(hiddenParts?.parts ?? [], hiddenParts?.mode ?? "body", mechanical);
     if (model.applyNetNames(netNames ?? {}) || kinds || hidden) setNamesRevision((r) => r + 1);
     // notesForModel only matters as "the notes of this board have loaded".
-  }, [model, netNames, netKinds, hiddenParts, notesForModel !== null]);
+  }, [model, netNames, netKinds, hiddenParts, notesForModel !== null, settings.hideMechanical]);
   // Readings the board file carries (XZZ: diode values per pin) go into the reference once per
   // file content, each at its pin with its source; values of one's own stay.
   const fileReadingsTaken = useRef<string | null>(null);
@@ -1028,6 +1034,7 @@ export function App() {
     setSide(restore?.side ?? "top");
     setRotation(restore?.rotation ?? 0);
     setInitialView(restore?.view);
+    setSidebarFolded(true);
     if (source.path) setRecent(rememberRecent(source.path));
     return true;
   }, []);
@@ -1416,6 +1423,8 @@ export function App() {
     if (hit) select(hit.selection, true);
   }, [model, select]);
 
+  // A right-click asks the schematic again, also for what is selected already.
+  const [schematicAsk, setSchematicAsk] = useState(0);
   // Board selection -> schematic.
   useEffect(() => {
     const jump = !pickedInSchematic.current;
@@ -1438,7 +1447,22 @@ export function App() {
     // A part's corrections: blocked places left out, its other names searched.
     const links = model && (selection.kind === "part" || selection.kind === "pin") && text ? docLinks?.[text.toUpperCase()] : undefined;
     setFocus(text ? { text, jump, nonce: ++focusNonce.current, ...(pin && { pin }), ...(links && { links }) } : null);
-  }, [model, selection, textQuery, docLinks]);
+  }, [model, selection, textQuery, docLinks, schematicAsk]);
+
+  /** A right-click on the board: select it and show it in the schematic, as in FlexBV. */
+  const showInSchematic = (sel: Selection) => {
+    setMultiParts([]);
+    select(sel, false);
+    setSchematicAsk((n) => n + 1);
+    if (detached) return;
+    if (!schematic) return setToast(t("schematic.noneToShow"));
+    setSchematicVisible(true);
+  };
+
+  // The first selection unfolds the sidebar folded by opening the board.
+  useEffect(() => {
+    if (selection.kind !== "none") setSidebarFolded(false);
+  }, [selection]);
 
   // Schematic -> board.
   const classifyWord = useCallback(
@@ -1557,6 +1581,7 @@ export function App() {
     if (at) select(at, true);
     const n = Date.now();
     setTabRequest({ tab: "measure", n });
+    setSidebarFolded(false);
     setSettings((s) => (s.showSidebar && !s.sidebarCollapsed ? s : { ...s, showSidebar: true, sidebarCollapsed: false }));
     setListFocus({ listId: list.id, index: i, n });
   };
@@ -1569,6 +1594,7 @@ export function App() {
     if (!model || selection.kind === "none" || selection.kind === "part") return setToast(t("enter.nothing"));
     const n = Date.now();
     setTabRequest({ tab: "details", n });
+    setSidebarFolded(false);
     setSettings((s) => (s.showSidebar && !s.sidebarCollapsed ? s : { ...s, showSidebar: true, sidebarCollapsed: false }));
     const q = padQuantity !== "off" ? padQuantity : "diode";
     window.setTimeout(() => {
@@ -2191,6 +2217,7 @@ export function App() {
     togglePhoto: () => setShowPhoto((v) => !v),
     compare: toggleCompare,
     toggleGrid: () => setSettings((s) => ({ ...s, grid: !s.grid })),
+    toggleMechanical: () => setSettings((s) => ({ ...s, hideMechanical: !s.hideMechanical })),
     project: () => setDialog("project"),
     exportPackage: () => void exportBoardPackage(),
     layout: (id: string) => {
@@ -2252,6 +2279,7 @@ export function App() {
     isolated: !!isolationFor,
     bench,
     grid: settings.grid,
+    mechanical: settings.hideMechanical,
     uiLevel: settings.uiLevel,
   });
 
@@ -2455,6 +2483,7 @@ export function App() {
   // The layout last chosen, named in the status bar.
   const [layoutName, setLayoutName] = useState<string | null>(null);
   const applyLayout = (layout: SavedLayout & { compare?: boolean }) => {
+    setSidebarFolded(false);
     setShare(layout.share);
     setDockWeights(layout.weights);
     const width = sidebarPixels(layout, window.innerWidth, settings.sidebarWidth);
@@ -2616,6 +2645,8 @@ export function App() {
                       select(sel, zoom);
                     }}
                     onAddPart={addPartToSelection}
+                    onSchematicPick={showInSchematic}
+                    onFlip={flipSide}
                     extraParts={multiSet}
                   >
                     {placingMarker && <div className="placing-hint">{t("marker.placing")}</div>}
@@ -2744,6 +2775,8 @@ export function App() {
                         select(sel, zoom);
                       }}
                       onAddPart={addPartToSelection}
+                      onSchematicPick={showInSchematic}
+                      onFlip={flipSide}
                       extraParts={multiSet}
                       onViewChange={settings.bothSidesMode === "synced" ? (v) => viewRef.current?.setViewState(v) : undefined}
                       onCursor={(p) => viewRef.current?.showGhost(p)}
@@ -2989,8 +3022,11 @@ export function App() {
                       setSidebarWidth(w);
                       if (done) setSettings((old) => ({ ...old, sidebarWidth: w }));
                     }}
-                    collapsed={settings.sidebarCollapsed}
-                    onCollapsed={(c) => setSettings((old) => ({ ...old, sidebarCollapsed: c }))}
+                    collapsed={settings.sidebarCollapsed || sidebarFolded}
+                    onCollapsed={(c) => {
+                      setSidebarFolded(false);
+                      setSettings((old) => ({ ...old, sidebarCollapsed: c }));
+                    }}
                     knowledge={
                       <KnowledgePanel
                         model={model}

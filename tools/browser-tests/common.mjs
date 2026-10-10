@@ -59,6 +59,7 @@ export async function openApp(boardJson, { level = "workshop", notes = null, vie
           if (cmd.startsWith("plugin:menu|")) throw new Error("no menu");
           switch (cmd) {
             case "open_board":
+            case "open_demo":
               // Like the real bridge: the answer comes in a later task, so React renders in between.
               await new Promise((r) => setTimeout(r, 30));
               return JSON.parse(boardJson);
