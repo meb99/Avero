@@ -94,9 +94,8 @@ export interface CommandActions {
   bookmark(): void;
   /** Ruler on or off. */
   ruler(): void;
-  /** A fresh ruler. */
-  startRuler(): void;
-  placeMarker(): void;
+  /** Placing a marker on or off. */
+  marker(): void;
   padValues(): void;
   hideSelected(): void;
   showAllParts(): void;
@@ -153,8 +152,6 @@ export interface CommandSpec {
   keys?: KeyMatch[];
   enabled?(s: CommandState): boolean;
   run(a: CommandActions): void;
-  /** What the menu item and the key do where it differs from the palette. */
-  menuRun?(a: CommandActions): void;
   /** Only in the menu bar. */
   menuOnly?: true;
 }
@@ -195,7 +192,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   { id: "ui-level", label: (t, s) => t(s.uiLevel === "view" ? "ui.toWorkshop" : "ui.toView"), run: (a) => a.toggleUiLevel() },
   { id: "export", menuId: "export-image", label: (t) => t("menu.exportImage"), key: "⇧⌘E", accelerator: "CmdOrCtrl+Shift+E", enabled: (s) => s.board, run: (a) => a.exportImage() },
   { id: "export-pdf", label: (t) => t("menu.exportPdf"), key: "⌥⌘E", accelerator: "CmdOrCtrl+Alt+E", enabled: (s) => s.board, run: (a) => a.exportPdf() },
-  { id: "marker", label: (t) => t("marker.place"), bench: "marker", enabled: (s) => s.board && s.notes, run: (a) => a.placeMarker() },
+  { id: "marker", label: (t) => t("marker.place"), bench: "marker", enabled: (s) => s.board && s.notes, run: (a) => a.marker() },
   {
     id: "ruler",
     label: (t) => t("ruler.title"),
@@ -203,8 +200,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     menuKey: true,
     keys: [{ key: "l", board: true }, { key: "L", board: true }],
     enabled: (s) => s.board,
-    run: (a) => a.startRuler(),
-    menuRun: (a) => a.ruler(),
+    run: (a) => a.ruler(),
   },
   { id: "pad-values", label: (t) => t("pad.command"), key: "V", keys: [{ key: "v", board: true }, { key: "V", board: true }], enabled: (s) => s.board, run: (a) => a.padValues() },
   { id: "hide-selected", label: (t) => t("hide.command"), key: "H", keys: [{ key: "h", board: true }], enabled: (s) => s.board && s.boardNotes, run: (a) => a.hideSelected() },

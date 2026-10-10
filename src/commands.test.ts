@@ -84,9 +84,11 @@ describe("command register", () => {
     const list = paletteCommands(t, state({ board: false, schematic: false }), () => actions, undefined);
     expect(list.find((c) => c.id === "flip")?.enabled).toBe(false);
     expect(list.find((c) => c.id === "open")?.enabled).toBeUndefined();
+    // Ruler and marker switch on and off from the palette as from the menu and their keys.
     list.find((c) => c.id === "ruler")!.run();
+    list.find((c) => c.id === "marker")!.run();
     list.find((c) => c.id === "draw-jumper")!.run();
-    expect(ran).toEqual(["startRuler", "draw"]);
+    expect(ran).toEqual(["ruler", "marker", "draw"]);
   });
 
   it("finds the command a key runs", () => {

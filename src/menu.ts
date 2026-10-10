@@ -72,7 +72,7 @@ export async function installMenu(
     const c = command(id);
     const label = c.menuLabel?.(t) ?? c.label(t, { lang } as Parameters<typeof c.label>[1]);
     const key = c.menuKey ? shortcutOf(c, shortcuts, lang) : undefined;
-    return item(c.menuId ?? c.id, key ? `${label}  ${key}` : label, (a) => (c.menuRun ?? c.run)(a), c.accelerator);
+    return item(c.menuId ?? c.id, key ? `${label}  ${key}` : label, (a) => c.run(a), c.accelerator);
   };
 
   const recentItems: Item[] = recent.length

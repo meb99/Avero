@@ -31,7 +31,6 @@ import {
   changeAlignment,
   drawPoint,
   drawTool,
-  MARKER_TOOL,
   moveTool,
   NO_TOOL,
   openArea,
@@ -2160,8 +2159,7 @@ export function App() {
     realignPhoto: () => storedPhoto && void startAlignment(storedPhoto.file, false),
     removePhoto,
     stopCompare: () => setCompareTab(null),
-    startRuler: () => switchTool(rulerTool(side)),
-    placeMarker: () => switchTool(MARKER_TOOL),
+    marker: () => model && switchTool(toggleMarker(toolRef.current)),
     padValues: cyclePadValues,
     hideSelected,
     showAllParts: () => updateNotes((n) => showParts(n)),
@@ -2356,7 +2354,7 @@ export function App() {
       const modCommand = mod ? commandForKey(e, !!model, "mod") : undefined;
       if (modCommand) {
         e.preventDefault();
-        (modCommand.menuRun ?? modCommand.run)(actionsRef.current);
+        modCommand.run(actionsRef.current);
         return;
       }
       // ⌘[ / ⌘] as in Safari; ⌘← / ⌘→ as well, since "[" needs ⌥ on a German keyboard.
@@ -2395,7 +2393,7 @@ export function App() {
       // Single keys of the command register (?, L, ⇧R, V, H, I, ⇧O, G); with no board, those that need one do nothing.
       const keyCommand = commandForKey(e, true, "plain");
       if (keyCommand) {
-        if (commandForKey(e, !!model, "plain")) (keyCommand.menuRun ?? keyCommand.run)(actionsRef.current);
+        if (commandForKey(e, !!model, "plain")) keyCommand.run(actionsRef.current);
         return;
       }
       const view = viewRef.current;

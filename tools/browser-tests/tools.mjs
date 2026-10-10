@@ -1,5 +1,6 @@
 // The board tool: only one tool is in use at a time (ruler, marker, drawing), clicks go to
-// it, Enter finishes an area and Escape ends the tool before it clears the selection.
+// it, Enter finishes an area and Escape ends the tool before it clears the selection. The
+// palette switches ruler and marker on and off like their keys.
 // Usage: node tools.mjs [board.json]
 import { boardArg, openApp } from "./common.mjs";
 
@@ -100,6 +101,26 @@ await step("Escape ends the tool first", async () => {
   const s = await shown();
   if (s.placing || s.ruler || s.drawing) throw new Error(`Escape kept a tool ${JSON.stringify(s)}`);
   console.log("Escape: marker off");
+});
+
+await step("palette switches ruler and marker", async () => {
+  const palette = async (query) => {
+    await page.keyboard.press("Meta+k");
+    await page.waitForTimeout(300);
+    await page.keyboard.type(query);
+    await page.waitForTimeout(300);
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(300);
+  };
+  await palette("Lineal");
+  if (!(await shown()).ruler) throw new Error("palette: no ruler");
+  await palette("Lineal");
+  if ((await shown()).ruler) throw new Error("palette: ruler stayed on");
+  await palette("Markierung setzen");
+  if (!(await shown()).placing) throw new Error("palette: no marker");
+  await palette("Markierung setzen");
+  if ((await shown()).placing) throw new Error("palette: marker stayed on");
+  console.log("palette: ruler and marker on, then off");
 });
 
 await finish(`tools on ${board.name}`);
