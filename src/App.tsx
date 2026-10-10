@@ -25,6 +25,24 @@ import { LibraryDialog, type LibraryDrop } from "./components/Library";
 import type { SpatialHit } from "./workbench/spatialSearch";
 import { BoardEditor } from "./components/BoardEditor";
 import { CloseIcon } from "./components/Icons";
+import {
+  abandonedPhoto,
+  alignTool,
+  changeAlignment,
+  drawPoint,
+  drawTool,
+  MARKER_TOOL,
+  moveTool,
+  NO_TOOL,
+  openArea,
+  rulerPoint,
+  rulerTool,
+  takesClicks,
+  toggleMarker,
+  toggleRuler,
+  type BoardTool,
+  type Draft,
+} from "./boardTool";
 import { BoardSessionProvider } from "./components/BoardSession";
 import { Sidebar, SIDEBAR_TABS, type SidebarTab } from "./components/Sidebar";
 import { Splitter, StackSplitter } from "./components/Splitter";
@@ -140,19 +158,6 @@ const TOAST_MS = 4000;
 function editingText(): boolean {
   const el = document.activeElement as HTMLElement | null;
   return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
-}
-
-/** A photo being aligned: two points on the photo, then the same two on the board. */
-interface PhotoAlignment {
-  side: ViewSide;
-  file: string;
-  image: HTMLCanvasElement;
-  /** True for a photo imported for this alignment (deleted when cancelled). */
-  fresh: boolean;
-  /** Points to pick: 2 (straight photo), 3 (slightly squashed), 4 (taken at an angle). */
-  count: 2 | 3 | 4;
-  photoPoints: Point[];
-  boardPoints: Point[];
 }
 
 /** The same file, or the same content under another name. */
@@ -534,9 +539,23 @@ export function App() {
 
   // --- board photos ----------------------------------------------------------
 
-  const [aligning, setAligning] = useState<PhotoAlignment | null>(null);
-  const aligningRef = useRef(aligning);
-  aligningRef.current = aligning;
+  // The board tool: marker, drawing, moving a drawing, ruler or photo alignment – one at a time.
+  const [tool, setTool] = useState<BoardTool>(NO_TOOL);
+  const toolRef = useRef(tool);
+  toolRef.current = tool;
+  /** Another tool (or none): the one in use ends, a photo imported for it is deleted. */
+  const switchTool = useCallback((next: BoardTool) => {
+    const abandoned = abandonedPhoto(toolRef.current, next);
+    if (abandoned) void invoke("remove_photo", { path: abandoned }).catch(() => {});
+    toolRef.current = next;
+    setTool(next);
+  }, []);
+  /** The tool has done its work (placed, drawn, aligned): nothing to clean up. */
+  const endTool = useCallback(() => {
+    toolRef.current = NO_TOOL;
+    setTool(NO_TOOL);
+  }, []);
+  const aligning = tool.kind === "align" ? tool.alignment : null;
   const [showPhoto, setShowPhoto] = useState(true);
   const storedPhoto = notes?.photos?.[side];
   // Something next to the board that can have the whole width.
@@ -567,7 +586,7 @@ export function App() {
   const startAlignment = async (file: string, fresh: boolean) => {
     try {
       const image = await loadPhotoImage(file);
-      setAligning({ side, file, image, fresh, count: settings.photoPoints ?? 2, photoPoints: [], boardPoints: [] });
+      switchTool(alignTool({ side, file, image, fresh, count: settings.photoPoints ?? 2, photoPoints: [], boardPoints: [] }));
     } catch (e) {
       setToast(t("photo.failed", { message: e instanceof Error ? e.message : String(e) }));
       if (fresh) void invoke("remove_photo", { path: file }).catch(() => {});
@@ -633,30 +652,25 @@ export function App() {
     }
   };
 
-  const cancelAlignment = () => {
-    const a = aligningRef.current;
-    if (a?.fresh) void invoke("remove_photo", { path: a.file }).catch(() => {});
-    setAligning(null);
-  };
-
   const pickBoardPoint = (p: Point) => {
-    const a = aligningRef.current;
+    const current = toolRef.current;
+    const a = current.kind === "align" ? current.alignment : null;
     if (!a || a.photoPoints.length < a.count) return;
     const boardPoints = [...a.boardPoints, p];
     if (boardPoints.length < a.count) {
-      setAligning({ ...a, boardPoints });
+      switchTool(alignTool({ ...a, boardPoints }));
       return;
     }
     const alignment = alignFromPoints(a.side, a.photoPoints, boardPoints);
     if (!alignment) {
       setToast(t("photo.samePoints"));
-      setAligning({ ...a, boardPoints: [] });
+      switchTool(alignTool({ ...a, boardPoints: [] }));
       return;
     }
     const previous = notes?.photos?.[a.side];
     updateNotes((n) => setPhoto(n, a.side, { file: a.file, ...alignment, opacity: previous?.opacity ?? 0.8 }));
     // The replaced picture file stays: undo and saved versions may bring it back.
-    setAligning(null);
+    endTool();
     setShowPhoto(true);
   };
 
@@ -706,7 +720,7 @@ export function App() {
   );
 
   // Notes pinned to spots on the board.
-  const [placingMarker, setPlacingMarker] = useState(false);
+  const placingMarker = tool.kind === "marker";
   const [editingMarker, setEditingMarker] = useState<{ id: string; at: Point } | null>(null);
   const boardMarkers = notesForModel?.markers;
   // Notes bound to a part or pin sit where that object is; notes of a net are listed with the net.
@@ -737,20 +751,18 @@ export function App() {
   }, [boardMarkers]);
   const placeMarker = useCallback(
     (point: Point, clicked: ViewSide = side) => {
-      setPlacingMarker(false);
+      endTool();
       if (!notesForModel) return;
       const id = newMarkerId();
       updateNotes((n) => addMarker(n, { id, x: point.x, y: point.y, side: clicked, text: "" }));
       const at = viewRef.current?.toScreen(point, clicked);
       if (at) setEditingMarker({ id, at });
     },
-    [notesForModel, updateNotes, side],
+    [notesForModel, updateNotes, side, endTool],
   );
 
   // --- drawings: lines, areas, jumpers ---------------------------------------
-  const [drawing, setDrawing] = useState<{ kind: DrawingKind; side: ViewSide; points: Point[]; ends: string[] } | null>(null);
-  const drawingRef = useRef(drawing);
-  drawingRef.current = drawing;
+  const drawing = tool.kind === "draw" ? tool.draft : null;
   /** "U7.3 · PP3V3" for a point on a pin, else "". */
   const pointLabel = (p: Point): string => {
     if (!model) return "";
@@ -762,8 +774,8 @@ export function App() {
     return label;
   };
   const finishDrawing = useCallback(
-    (d: { kind: DrawingKind; side: ViewSide; points: Point[]; ends: string[] }) => {
-      setDrawing(null);
+    (d: Draft) => {
+      endTool();
       if (d.points.length < DRAWING_POINTS[d.kind]) return;
       const add = (text?: string) =>
         updateNotes((n) =>
@@ -779,45 +791,48 @@ export function App() {
       if (d.kind === "text") void askText(t("draw.textAsk"), "", { title: t("draw.textTool") }).then((text) => text?.trim() && add(text.trim()));
       else add();
     },
-    [updateNotes, t],
+    [updateNotes, t, endTool],
   );
   const pickDrawPoint = (point: Point, clicked: ViewSide) => {
-    const d = drawingRef.current;
-    if (!d) return;
-    const next = { ...d, side: d.points.length ? d.side : clicked, points: [...d.points, point], ends: [...d.ends, pointLabel(point)] };
-    if (next.kind !== "area" && next.points.length >= DRAWING_POINTS[next.kind]) finishDrawing(next);
-    else setDrawing(next);
+    if (toolRef.current.kind !== "draw") return;
+    const { tool: next, finished } = drawPoint(toolRef.current, point, clicked, pointLabel(point));
+    if (finished) finishDrawing(finished);
+    else switchTool(next);
   };
   // Moving a drawing (and its group): the next click on the board is where its first point goes.
-  const [movingDrawing, setMovingDrawing] = useState<string | null>(null);
-  const movingRef = useRef(movingDrawing);
-  movingRef.current = movingDrawing;
+  const movingDrawing = tool.kind === "move" ? tool.drawing : null;
   useEffect(() => {
-    const onMove = (e: Event) => {
-      setDrawing(null);
-      setMovingDrawing((e as CustomEvent<string>).detail);
-    };
+    const onMove = (e: Event) => switchTool(moveTool((e as CustomEvent<string>).detail));
     window.addEventListener("avero:move-drawing", onMove);
     return () => window.removeEventListener("avero:move-drawing", onMove);
-  }, []);
+  }, [switchTool]);
   const placeMovedDrawing = (point: Point) => {
-    const id = movingRef.current;
-    setMovingDrawing(null);
+    const current = toolRef.current;
+    const id = current.kind === "move" ? current.drawing : null;
+    endTool();
     const d = notesForModel?.drawings?.find((x) => x.id === id);
     if (!id || !d) return;
     updateNotes((n) => moveDrawing(n, id, point.x - d.points[0].x, point.y - d.points[0].y));
   };
-  const startDrawing = (kind: DrawingKind) => {
-    setMovingDrawing(null);
-    setPlacingMarker(false);
-    setDrawing({ kind, side, points: [], ends: [] });
-  };
+  const startDrawing = (kind: DrawingKind) => switchTool(drawTool(kind, side));
   // The ruler: two points, their distance; nothing is stored.
-  const [ruler, setRuler] = useState<{ side: ViewSide; points: Point[] } | null>(null);
-  const rulerRef = useRef(ruler);
-  rulerRef.current = ruler;
-  const pickRulerPoint = (point: Point, clicked: ViewSide) =>
-    setRuler((r) => (!r ? r : r.points.length >= 2 ? { side: clicked, points: [point] } : { side: r.points.length ? r.side : clicked, points: [...r.points, point] }));
+  const ruler = tool.kind === "ruler" ? tool : null;
+  const pickRulerPoint = (point: Point, clicked: ViewSide) => setTool((current) => rulerPoint(current, point, clicked));
+  /** A click on the board for the tool in use. */
+  const pickPoint = (point: Point, clicked: ViewSide) => {
+    switch (toolRef.current.kind) {
+      case "marker":
+        return placeMarker(point, clicked);
+      case "draw":
+        return pickDrawPoint(point, clicked);
+      case "move":
+        return placeMovedDrawing(point);
+      case "ruler":
+        return pickRulerPoint(point, clicked);
+      case "align":
+        return pickBoardPoint(point);
+    }
+  };
   const rulerText = useMemo(() => {
     if (!ruler || ruler.points.length < 2) return null;
     const [a, b] = ruler.points;
@@ -868,8 +883,6 @@ export function App() {
     [boardMarkers],
   );
 
-  const placingMarkerRef = useRef(placingMarker);
-  placingMarkerRef.current = placingMarker;
   const togglePinnedRef = useRef(togglePinned);
   togglePinnedRef.current = togglePinned;
 
@@ -1242,17 +1255,10 @@ export function App() {
     setBgaPart(null);
     setDonorPart(null);
     setDiffMarks(null);
-    // Tools in progress belong to the board they were started on: another
-    // board (tab switch, new file) ends them instead of finishing them there.
-    setDrawing(null);
-    setRuler(null);
-    setPlacingMarker(false);
-    const a = aligningRef.current;
-    if (a) {
-      if (a.fresh) void invoke("remove_photo", { path: a.file }).catch(() => {});
-      setAligning(null);
-    }
-  }, [model]);
+    // The tool in use belongs to the board it was started on: another
+    // board (tab switch, new file) ends it instead of finishing it there.
+    switchTool(NO_TOOL);
+  }, [model, switchTool]);
   const addPartToSelection = (part: number) => {
     setMultiParts((list) => {
       const base = list.length === 0 && selection.kind === "part" && selection.part !== part ? [selection.part] : list;
@@ -1674,7 +1680,7 @@ export function App() {
         return;
       }
       case "marker":
-        if (model) setPlacingMarker((v) => !v);
+        if (model) switchTool(toggleMarker(toolRef.current));
         return;
       case "rotate":
         return setRotation((r) => (r + 1) & 3);
@@ -2154,8 +2160,8 @@ export function App() {
     realignPhoto: () => storedPhoto && void startAlignment(storedPhoto.file, false),
     removePhoto,
     stopCompare: () => setCompareTab(null),
-    startRuler: () => setRuler({ side, points: [] }),
-    placeMarker: () => setPlacingMarker(true),
+    startRuler: () => switchTool(rulerTool(side)),
+    placeMarker: () => switchTool(MARKER_TOOL),
     padValues: cyclePadValues,
     hideSelected,
     showAllParts: () => updateNotes((n) => showParts(n)),
@@ -2236,7 +2242,7 @@ export function App() {
     back: () => navigate(-1),
     forward: () => navigate(1),
     bookmark: () => void addBookmarkHere(),
-    ruler: () => model && setRuler((r) => (r ? null : { side, points: [] })),
+    ruler: () => model && switchTool(toggleRuler(toolRef.current, side)),
     shortcuts: () => setDialog("help"),
     checkUpdates: () => void checkUpdates(true),
     quit: () => void saveAndQuit(),
@@ -2400,20 +2406,19 @@ export function App() {
           searchRef.current?.focus();
           break;
         case "Escape":
-          if (movingRef.current) setMovingDrawing(null);
+          // Moving a drawing ends first, then the isolation, then any other tool.
+          if (toolRef.current.kind === "move") switchTool(NO_TOOL);
           else if (isolationRef.current) isolationRef.current();
-          else if (rulerRef.current) setRuler(null);
-          else if (drawingRef.current) setDrawing(null);
-          else if (aligningRef.current) cancelAlignment();
-          else if (placingMarkerRef.current) setPlacingMarker(false);
+          else if (toolRef.current.kind !== "none") switchTool(NO_TOOL);
           else setSelection(NONE);
           break;
         case "o":
           if (model) originKeyRef.current.originAtMouse();
           break;
         case "Enter": {
-          if (drawingRef.current?.kind === "area") {
-            finishDrawing(drawingRef.current);
+          const area = openArea(toolRef.current);
+          if (area) {
+            finishDrawing(area);
             break;
           }
           const bounds = model?.selectionBounds(selection);
@@ -2583,13 +2588,9 @@ export function App() {
           onPick={(sel) => select(sel, true)}
           searchRef={searchRef}
           placingMarker={placingMarker}
-          onMarker={() => setPlacingMarker((v) => !v)}
+          onMarker={() => switchTool(toggleMarker(toolRef.current))}
           drawing={ruler ? "ruler" : (drawing?.kind ?? null)}
-          onDraw={(kind) => {
-            setRuler(kind === "ruler" ? { side, points: [] } : null);
-            if (kind && kind !== "ruler") startDrawing(kind);
-            else setDrawing(null);
-          }}
+          onDraw={(kind) => switchTool(kind === "ruler" ? rulerTool(side) : kind ? drawTool(kind, side) : NO_TOOL)}
           ui={settings}
           onUiLevel={(level) => setSettings((old) => ({ ...old, uiLevel: level }))}
         />
@@ -2649,19 +2650,7 @@ export function App() {
                     initialView={initialView}
                     photo={bothSides ? undefined : photoLayer}
                     partValues={partValues}
-                    onPointPick={
-                      movingDrawing
-                        ? placeMovedDrawing
-                        : drawing
-                          ? pickDrawPoint
-                          : ruler
-                            ? pickRulerPoint
-                            : placingMarker
-                              ? placeMarker
-                              : aligning && aligning.photoPoints.length >= aligning.count
-                                ? pickBoardPoint
-                                : undefined
-                    }
+                    onPointPick={takesClicks(tool) ? pickPoint : undefined}
                     drawings={boardDrawings}
                     draft={drawing && drawing.points.length ? { id: "draft", kind: drawing.kind, side: drawing.side, points: drawing.points } : null}
                     onSelect={(sel, zoom) => {
@@ -2687,7 +2676,7 @@ export function App() {
                     {movingDrawing && (
                       <div className="placing-hint drawing-hint">
                         {t("draw.moving")}
-                        <button className="small" onClick={() => setMovingDrawing(null)}>
+                        <button className="small" onClick={() => switchTool(NO_TOOL)}>
                           {t("draw.cancel")}
                         </button>
                       </div>
@@ -2727,7 +2716,7 @@ export function App() {
                     {ruler && (
                       <div className="placing-hint drawing-hint ruler-hint">
                         {rulerText ? <strong>{rulerText.detail}</strong> : t("ruler.hint")}
-                        <button className="small" onClick={() => setRuler(null)}>
+                        <button className="small" onClick={() => switchTool(NO_TOOL)}>
                           {t("ruler.done")}
                         </button>
                       </div>
@@ -2740,7 +2729,7 @@ export function App() {
                             {t("draw.finish")}
                           </button>
                         )}
-                        <button className="small" onClick={() => setDrawing(null)}>
+                        <button className="small" onClick={() => switchTool(NO_TOOL)}>
                           {t("photo.cancel")}
                         </button>
                       </div>
@@ -2791,7 +2780,7 @@ export function App() {
                       padValues={padValues}
                       partValues={partValues}
                       drawings={boardDrawings}
-                      onPointPick={drawing ? pickDrawPoint : ruler ? pickRulerPoint : placingMarker ? placeMarker : undefined}
+                      onPointPick={takesClicks(tool, true) ? pickPoint : undefined}
                       onSelect={(sel, zoom) => {
                         setMultiParts([]);
                         select(sel, zoom);
@@ -3115,7 +3104,7 @@ export function App() {
               point={aligning.photoPoints[aligning.boardPoints.length]}
               index={aligning.boardPoints.length}
               count={aligning.count}
-              onCancel={cancelAlignment}
+              onCancel={() => switchTool(NO_TOOL)}
             />
           )}
           {model && storedPhoto && !aligning && (
@@ -3280,11 +3269,11 @@ export function App() {
             count={aligning.count}
             onCount={(count) => {
               setSettings((old) => ({ ...old, photoPoints: count }));
-              setAligning((a) => a && { ...a, count, photoPoints: a.photoPoints.slice(0, count) });
+              setTool((current) => changeAlignment(current, (a) => ({ ...a, count, photoPoints: a.photoPoints.slice(0, count) })));
             }}
-            onUndo={() => setAligning((a) => a && { ...a, photoPoints: a.photoPoints.slice(0, -1) })}
-            onPoint={(p) => setAligning((a) => a && { ...a, photoPoints: [...a.photoPoints, p] })}
-            onCancel={cancelAlignment}
+            onUndo={() => setTool((current) => changeAlignment(current, (a) => ({ ...a, photoPoints: a.photoPoints.slice(0, -1) })))}
+            onPoint={(p) => setTool((current) => changeAlignment(current, (a) => ({ ...a, photoPoints: [...a.photoPoints, p] })))}
+            onCancel={() => switchTool(NO_TOOL)}
           />
         )}
         {dialog === "palette" && (

@@ -67,6 +67,10 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - **Foto des echten Boards** unter der Boardview (Darstellung → „Foto dieser Seite hinzufügen…"): zwei markante Punkte im Foto anklicken, dann dieselben Punkte auf dem Board (Pins rasten ein) – das Foto liegt danach deckungsgleich darunter, mit einstellbarer Deckkraft, getrennt für Ober- und Unterseite. Liegt neben dem Board ein PDF mit einem Bild der Platine (wie bei manchen Boardview-Paketen), übernimmt Avero die angezeigte Seite mit einem Klick als Foto und legt es selbst auf den Board-Umriss – ohne Datei auswählen, ohne Punkte klicken. Mit „Daneben“ steht das Foto unverändert neben dem Board: ein Klick auf ein Bauteil im Foto wählt es auf dem Board aus und springt hin, das Bauteil unter dem Mauszeiger wird mit Namen angezeigt, und was auf dem Board ausgewählt ist (Bauteil, Pin, alle Pins eines Netzes), wird im Foto markiert.
 - **Inhaltssuche über die ganze Bibliothek** (Bibliothek → „Inhalt“): Schaltpläne werden nach Text durchsucht, Boardviews nach Bauteilen und Netzen. Alles wird einmal indiziert; ein Klick auf einen Treffer öffnet Board und Schaltplan und springt zur Fundstelle.
 
+**Neu in 0.9.41**
+- **Immer nur ein Werkzeug:** Lineal, Markierung setzen, Zeichnen, Zeichnung verschieben und Foto ausrichten schließen sich jetzt aus. Wer eines startet, beendet das vorige – bisher konnten z. B. Lineal und Markierung zugleich aktiv sein, und unklar war, wohin der nächste Klick geht. Ein noch nicht fertig ausgerichtetes, neu eingelesenes Foto wird dabei wie bei Escape verworfen. Ein Board- oder Reiterwechsel beendet jetzt auch das Verschieben einer Zeichnung.
+- Intern: Die Werkzeuge liegen in einem Modul (`src/boardTool.ts`) mit getesteten Übergängen; ein neuer Browser-Test (`tools.mjs`) prüft Werkzeugwechsel, Enter und Escape.
+
 **Neu in 0.9.40**
 - Intern: Die Seitenleiste liest das aktive Board aus einer Board-Sitzung (`src/components/BoardSession.tsx`) statt über rund 40 durchgereichte Angaben. Details und Messen holen sich Board, Auswahl, Notizen und Sprünge selbst. Für dich ändert sich nichts.
 

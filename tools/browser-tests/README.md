@@ -18,6 +18,9 @@ Mit `CHROMIUM=/pfad/zu/chromium` wird ein vorhandenes Chromium benutzt.
 | `sweep.mjs [board.json] [view\|workshop]` | Suche, alle Reiter, Leitfäden, Tasten, Klicks, Palette, Einstellungen, Hilfe, Bibliothek, BGA, Signalweg – jeder Seitenfehler zählt |
 | `features.mjs [board.json]` | Jumper-Plan, BGA-Ansicht, Hinweise, Reparaturchronik mit vorbereitetem Fall, Screenshots |
 | `ui-levels.mjs [board.json] [Bauteil]` | Stufen „Ansehen“ und „Werkstatt“, Screenshots, gespeicherte Stufe |
+| `tabs.mjs [board.json]` | Reiter öffnen, wechseln (⌃⇥), schließen; Auswahl bleibt je Reiter |
+| `commands.mjs [board.json]` | Palette zeigt eingestellte Tasten, Tasten lösen ihre Befehle aus |
+| `tools.mjs [board.json]` | Immer nur ein Werkzeug (Lineal, Markierung, Zeichnen, Verschieben); Enter schließt eine Fläche, Escape beendet das Werkzeug |
 
 Ein Board als JSON:
 
