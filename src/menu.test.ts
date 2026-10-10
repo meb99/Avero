@@ -1,6 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@tauri-apps/api/menu", () => ({ Menu: { new: async () => ({ setAsAppMenu: async () => null }) } }));
+let built: unknown = null;
+vi.mock("@tauri-apps/api/menu", () => ({
+  Menu: {
+    new: async (options: unknown) => {
+      built = options;
+      return { setAsAppMenu: async () => null };
+    },
+  },
+}));
+
+/** A menu item by id, anywhere in the built menu. */
+function findItem(node: unknown, id: string): { id: string; text: string; accelerator?: string } | undefined {
+  if (!node || typeof node !== "object") return undefined;
+  const n = node as { id?: string; items?: unknown[] };
+  if (n.id === id) return n as { id: string; text: string };
+  for (const child of n.items ?? []) {
+    const hit = findItem(child, id);
+    if (hit) return hit;
+  }
+  return undefined;
+}
 
 const { installMenu, menuOwnsKey } = await import("./menu");
 const { translator } = await import("./i18n");
@@ -33,3 +53,18 @@ describe("native menu keys", () => {
     expect(menuOwnsKey({ ...key("d", "KeyD"), metaKey: false })).toBe(false);
   });
 });
+
+describe("menu from the command register", () => {
+  it("takes texts, key equivalents and shown keys from the register", async () => {
+    const { rebind } = await import("./shortcuts");
+    await installMenu(translator("de"), () => ({}) as never, [], "0.0.0");
+    expect(findItem(built, "open")).toMatchObject({ text: "Öffnen…", accelerator: "CmdOrCtrl+O" });
+    expect(findItem(built, "search-schematic")?.accelerator).toBe("CmdOrCtrl+Alt+F");
+    expect(findItem(built, "nav-back")?.text).toMatch(/ {2}⌘\[$/);
+    expect(findItem(built, "grid")?.text).toMatch(/ {2}G$/);
+    // A key set in the settings shows in the menu as well.
+    await installMenu(translator("de"), () => ({}) as never, [], "0.0.0", undefined, rebind(undefined, "back", "Alt+b"), "de");
+    expect(findItem(built, "nav-back")?.text).toMatch(/ {2}⌥B$/);
+  });
+});
+

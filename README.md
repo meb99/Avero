@@ -67,6 +67,10 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - **Foto des echten Boards** unter der Boardview (Darstellung → „Foto dieser Seite hinzufügen…"): zwei markante Punkte im Foto anklicken, dann dieselben Punkte auf dem Board (Pins rasten ein) – das Foto liegt danach deckungsgleich darunter, mit einstellbarer Deckkraft, getrennt für Ober- und Unterseite. Liegt neben dem Board ein PDF mit einem Bild der Platine (wie bei manchen Boardview-Paketen), übernimmt Avero die angezeigte Seite mit einem Klick als Foto und legt es selbst auf den Board-Umriss – ohne Datei auswählen, ohne Punkte klicken. Mit „Daneben“ steht das Foto unverändert neben dem Board: ein Klick auf ein Bauteil im Foto wählt es auf dem Board aus und springt hin, das Bauteil unter dem Mauszeiger wird mit Namen angezeigt, und was auf dem Board ausgewählt ist (Bauteil, Pin, alle Pins eines Netzes), wird im Foto markiert.
 - **Inhaltssuche über die ganze Bibliothek** (Bibliothek → „Inhalt“): Schaltpläne werden nach Text durchsucht, Boardviews nach Bauteilen und Netzen. Alles wird einmal indiziert; ein Klick auf einen Treffer öffnet Board und Schaltplan und springt zur Fundstelle.
 
+**Neu in 0.9.39**
+- **Befehlspalette zeigt die eingestellten Tasten:** Wer in den Einstellungen eine Werkbank-Taste umbelegt (z. B. Umdrehen auf X), sieht in der Palette ⌘K die neue Taste statt der alten, auf Deutsch auch „Leertaste“ statt „Space“. Die Menüleiste zeigt bei Zurück, Vor und Lesezeichen ebenfalls die eingestellte Taste.
+- Intern: Ein Befehlsregister (`src/commands.ts`) beschreibt jeden Befehl einmal – Text, Taste, Menü-Kürzel, wann er möglich ist. Menüleiste, Palette und Tastatur lesen daraus.
+
 **Neu in 0.9.38**
 - Intern: Alle Reiter liegen in einer Reiter-Sammlung (`src/tabs.ts`), der aktive eingeschlossen. Öffnen, Wechseln, Schließen und die Suche nach einer offenen Datei folgen einer Regel und sind ohne Oberfläche getestet. Für dich ändert sich nichts.
 

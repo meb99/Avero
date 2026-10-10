@@ -37,6 +37,7 @@ import { BoardModel, netSides, visibleFrom, type ViewSide } from "./core/board";
 import { findPoint } from "./core/points";
 import { padValueSource } from "./workbench/padValues";
 import type { Command } from "./core/commands";
+import { commandForKey, paletteCommands as registerPalette, type CommandActions, type CommandState } from "./commands";
 import { mapSelection } from "./core/compare";
 import { alignedToA, alignedToB, alignOnParts, matchNets } from "./core/diff";
 import { search } from "./core/search";
@@ -57,7 +58,7 @@ import {
 import type { LoadError, Point, Selection, Side } from "./core/types";
 import { emitTo, listen } from "@tauri-apps/api/event";
 import { I18nContext, systemLanguage, translator, type MessageKey } from "./i18n";
-import { installMenu, menuOwnsKey, type MenuActions } from "./menu";
+import { installMenu, menuOwnsKey } from "./menu";
 import { closeSchematicWindow, LINK, openSchematicWindow, type LinkedDoc } from "./schematic/link";
 import { DARK, LIGHT, withColors } from "./render/palette";
 import { setPdfPasswordPrompt, type SchematicDocument } from "./schematic/document";
@@ -469,13 +470,9 @@ export function App() {
       if (bounds) viewRef.current?.zoomTo(bounds);
     });
   };
-  // The key handler is bound once per board; these read the current state.
-  const isolationKeyRef = useRef(toggleIsolation);
-  isolationKeyRef.current = toggleIsolation;
+  // The key handler is bound once per board; this reads the current state.
   const isolationRef = useRef<(() => void) | null>(null);
   isolationRef.current = isolationFor ? endIsolation : null;
-  const hideKeyRef = useRef(hideSelected);
-  hideKeyRef.current = hideSelected;
 
   // --- facts from the schematic's text ---------------------------------------
   // Values, part numbers and net voltages, read once the schematic is indexed.
@@ -2130,8 +2127,49 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t]);
 
-  const actions: MenuActions = {
+  const actions: CommandActions = {
     open: () => void openDialog(),
+    editBoard: () => {
+      setEditorBlank(false);
+      setDialog("editor");
+    },
+    newBoard: () => {
+      setEditorBlank(true);
+      setDialog("editor");
+    },
+    openProjectFolder: async () => {
+      const path = await pickProjectFolder(lang === "de" ? "PCB-Projektordner wählen" : "Choose PCB project folder");
+      if (!path) return;
+      setDialog(null);
+      setLoading(fileName(path));
+      const loaded = await loadPath(path, { xzzKey: settings.xzzKey, fzKey: settings.fzKey }, true);
+      if (loaded.result.ok && live.current.model) newTab();
+      finishLoad(loaded);
+    },
+    demo: () => void openDemo(),
+    toggleUiLevel: () => setSettings((s) => ({ ...s, uiLevel: s.uiLevel === "view" ? "workshop" : "view" })),
+    photoPane: () => setPhotoPane((v) => !v),
+    photoFromPdf: () => void photoFromPdf(),
+    realignPhoto: () => storedPhoto && void startAlignment(storedPhoto.file, false),
+    removePhoto,
+    stopCompare: () => setCompareTab(null),
+    startRuler: () => setRuler({ side, points: [] }),
+    placeMarker: () => setPlacingMarker(true),
+    padValues: cyclePadValues,
+    hideSelected,
+    showAllParts: () => updateNotes((n) => showParts(n)),
+    isolate: toggleIsolation,
+    enterValue,
+    toggleBench: () => setBench((b) => !b),
+    newCase: () => {
+      updateNotes((n) => addCase(n, t("measure.caseTitle", { n: n.cases.length + 1 })));
+      setToast(t("enter.caseMade"));
+    },
+    originAtSelection,
+    clearOrigin,
+    draw: startDrawing,
+    toggleBoard: () => setBoardHidden((v) => !v),
+    camera: () => (cameraPane ? setCameraPane(false) : openCamera()),
     openRecent: (path) => void openPath(path),
     clearRecent: () => {
       clearRecent();
@@ -2208,10 +2246,10 @@ export function App() {
 
   // The menu calls through actionsRef, so it is rebuilt only for new texts.
   useEffect(() => {
-    installMenu(t, () => actionsRef.current, recent, __APP_VERSION__, { presets: PRESET_IDS, own: layoutNames.split("\n").filter(Boolean) }).catch(() => {
+    installMenu(t, () => actionsRef.current, recent, __APP_VERSION__, { presets: PRESET_IDS, own: layoutNames.split("\n").filter(Boolean) }, settings.shortcuts, lang).catch(() => {
       // No native menu outside the desktop app (browser preview, tests).
     });
-  }, [t, recent, layoutNames]);
+  }, [t, recent, layoutNames, settings.shortcuts, lang]);
 
   // Once per start; dailyCheck itself limits the requests to one a day.
   useEffect(() => {
@@ -2224,114 +2262,52 @@ export function App() {
     return () => clearTimeout(id);
   }, [toast]);
 
-  const paletteCommands = (): Command[] => {
-    const a = actions;
-    const board = model !== null;
-    return [
-      { id: "open", label: t("menu.open"), shortcut: "⌘O", run: a.open },
-      { id: "library", label: t("menu.library"), shortcut: "⌘L", run: a.library },
-      { id: "board-edit", label: lang==="de"?"Board bearbeiten":"Edit board", enabled: board, run:()=>{setEditorBlank(false);setDialog("editor");} },
-      { id: "board-new", label: lang==="de"?"Neues Board erstellen":"Create board", run:()=>{setEditorBlank(true);setDialog("editor");} },
-      { id: "project-folder-open", label:lang==="de"?"ODB++-/EasyEDA-Projektordner öffnen":"Open ODB++ / EasyEDA project folder", run:async()=>{const path=await pickProjectFolder(lang==="de"?"PCB-Projektordner wählen":"Choose PCB project folder");if(!path)return;setDialog(null);setLoading(fileName(path));const loaded=await loadPath(path,{xzzKey:settings.xzzKey,fzKey:settings.fzKey},true);if(loaded.result.ok&&live.current.model)newTab();finishLoad(loaded);} },
-      { id: "import", label: t("menu.import"), shortcut: "⇧⌘I", run: a.importToLibrary },
-      { id: "demo", label: t("menu.demo"), run: () => void openDemo() },
-      { id: "flip", label: t("menu.flip"), shortcut: "Space", enabled: board, run: a.flip },
-      { id: "rotate", label: t("menu.rotate"), shortcut: "R", enabled: board, run: a.rotate },
-      { id: "rotate-back", label: t("menu.rotateBack"), shortcut: "⇧R", enabled: board, run: a.rotateBack },
-      { id: "fit", label: t("menu.fit"), shortcut: "F", enabled: board, run: a.fit },
-      { id: "ratsnest", label: t("menu.ratsnest"), shortcut: "⇧⌘R", enabled: board, run: a.toggleRatsnest },
-      { id: "schematic", label: t("menu.schematic"), shortcut: "⌘E", run: a.toggleSchematic },
-      { id: "schematic-search", label: t("menu.findSchematic"), shortcut: "⌥⌘F", enabled: schematic !== null, run: a.searchSchematic },
-      { id: "schematic-window", label: t("menu.popOut"), enabled: schematic !== null && !detached, run: a.popOutSchematic },
-      { id: "sidebar", label: t("menu.sidebar"), shortcut: "⌘I", enabled: board, run: a.toggleSidebar },
-      {
-        id: "ui-level",
-        label: t(settings.uiLevel === "view" ? "ui.toWorkshop" : "ui.toView"),
-        run: () => setSettings((s) => ({ ...s, uiLevel: s.uiLevel === "view" ? "workshop" : "view" })),
-      },
-      { id: "export", label: t("menu.exportImage"), shortcut: "⇧⌘E", enabled: board, run: a.exportImage },
-      { id: "export-pdf", label: t("menu.exportPdf"), shortcut: "⌥⌘E", enabled: board, run: a.exportPdf },
-      { id: "marker", label: t("marker.place"), shortcut: "M", enabled: board && notes !== null, run: () => setPlacingMarker(true) },
-      { id: "ruler", label: t("ruler.title"), shortcut: "L", enabled: board, run: () => setRuler({ side, points: [] }) },
-      { id: "pad-values", label: t("pad.command"), shortcut: "V", enabled: board, run: cyclePadValues },
-      { id: "hide-selected", label: t("hide.command"), shortcut: "H", enabled: board && notesForModel !== null, run: hideSelected },
-      { id: "isolate", label: t(isolationFor ? "isolate.end" : "isolate.command"), shortcut: "I", enabled: board, run: toggleIsolation },
-      { id: "project", label: t("project.command"), run: () => setDialog("project") },
-      { id: "package-export", label: t("package.export"), enabled: board && notesForModel !== null, run: () => void exportBoardPackage() },
-      { id: "enter-value", label: t("keys.enterValue"), shortcut: "E", enabled: board && selection.kind !== "none", run: enterValue },
-      { id: "bench", label: t(bench ? "bench.close" : "bench.open"), shortcut: "W", enabled: board && notesForModel !== null, run: () => setBench((b) => !b) },
-      {
-        id: "case-new",
-        label: t("measure.newCase"),
-        enabled: board && notesForModel !== null,
-        run: () => {
-          updateNotes((n) => addCase(n, t("measure.caseTitle", { n: n.cases.length + 1 })));
-          setToast(t("enter.caseMade"));
-        },
-      },
-      { id: "grid", label: t(settings.grid ? "grid.off" : "grid.on"), shortcut: "G", enabled: board, run: () => setSettings((s) => ({ ...s, grid: !s.grid })) },
-      { id: "origin-selection", label: t("origin.atSelection"), enabled: board && notesForModel !== null && selection.kind !== "none", run: originAtSelection },
-      { id: "origin-clear", label: t("origin.clear"), shortcut: "⇧O", enabled: !!boardOrigin, run: clearOrigin },
-      ...PRESET_IDS.map((id) => ({ id: `layout-${id}`, label: t("layout.apply", { name: t(`layout.${id}`) }), run: () => applyPreset(id) })),
-      ...layouts.map((l) => ({
-        id: `layout-own-${l.name}`,
-        label: t("layout.apply", { name: l.name }),
-        run: () => {
-          applyLayout(l);
-          setLayoutName(l.name);
-        },
-      })),
-      { id: "layout-save", label: t("layout.save"), run: () => void saveLayout() },
-      ...layouts.map((l) => ({ id: `layout-delete-${l.name}`, label: t("layout.delete", { name: l.name }), run: () => deleteLayout(l.name) })),
-      {
-        id: "show-all-parts",
-        label: t("hide.showAllCommand"),
-        enabled: !!notesForModel?.hidden,
-        run: () => updateNotes((n) => showParts(n)),
-      },
-      { id: "draw-line", label: t("draw.line"), enabled: board && notes !== null, run: () => startDrawing("line") },
-      { id: "draw-area", label: t("draw.area"), enabled: board && notes !== null, run: () => startDrawing("area") },
-      { id: "draw-jumper", label: t("draw.jumper"), enabled: board && notes !== null, run: () => startDrawing("jumper") },
-      { id: "draw-arrow", label: t("draw.arrow"), enabled: board && notes !== null, run: () => startDrawing("arrow") },
-      { id: "draw-rect", label: t("draw.rect"), enabled: board && notes !== null, run: () => startDrawing("rect") },
-      { id: "draw-circle", label: t("draw.circle"), enabled: board && notes !== null, run: () => startDrawing("circle") },
-      { id: "draw-text", label: t("draw.textTool"), enabled: board && notes !== null, run: () => startDrawing("text") },
-      { id: "photo-add", label: t("photo.add"), enabled: board && notes !== null, run: a.addPhoto },
-      { id: "photo-toggle", label: t("photo.toggle"), enabled: !!storedPhoto, run: a.togglePhoto },
-      { id: "photo-pane", label: t("photo.paneCommand"), enabled: !!model, run: () => {
-          setPhotoPane((v) => !v);
-        } },
-      { id: "csv-parts", label: t("csv.parts"), enabled: board, run: () => void exportCsv("parts") },
-      { id: "csv-nets", label: t("csv.nets"), enabled: board, run: () => void exportCsv("nets") },
-      { id: "csv-annotations", label: t("csv.annotations"), enabled: board && notesForModel !== null, run: () => void exportCsv("annotations") },
-      { id: "csv-readings", label: t("csv.readings"), enabled: board && notes !== null, run: () => void exportCsv("readings") },
-      { id: "nav-back", label: t("nav.back"), shortcut: "⌘[", enabled: board, run: () => navigate(-1) },
-      { id: "nav-forward", label: t("nav.forward"), shortcut: "⌘]", enabled: board, run: () => navigate(1) },
-      { id: "bookmark-add", label: t("bookmark.add"), shortcut: "⌘D", enabled: board && notes !== null, run: () => void addBookmarkHere() },
-      ...(notesForModel?.bookmarks ?? []).map((b) => ({ id: `bookmark-${b.id}`, label: `${t("bookmark.title")}: ${b.name}`, run: () => goToBookmark(b) })),
-      { id: "board-hide", label: t("board.toggle"), enabled: secondView, run: () => setBoardHidden((v) => !v) },
-      { id: "camera", label: t("camera.command"), enabled: board, run: () => (cameraPane ? setCameraPane(false) : openCamera()) },
-      { id: "photo-pdf", label: t("photo.pdfCommand"), enabled: !!model && notes !== null && !!schematic, run: () => void photoFromPdf() },
-      { id: "photo-realign", label: `${t("photo.title")}: ${t("photo.realign")}`, enabled: !!storedPhoto, run: () => storedPhoto && void startAlignment(storedPhoto.file, false) },
-      { id: "photo-remove", label: `${t("photo.title")}: ${t("photo.remove")}`, enabled: !!storedPhoto, run: removePhoto },
-      { id: "new-tab", label: t("tabs.new"), shortcut: "⌘T", run: a.newTab },
-      { id: "close", label: t("tabs.close"), shortcut: "⌘W", enabled: board || schematic !== null, run: a.closeBoard },
-      { id: "settings", label: t("menu.settings"), shortcut: "⌘,", run: a.settings },
-      { id: "shortcuts", label: t("menu.shortcuts"), shortcut: "⌘/", run: a.shortcuts },
-      { id: "updates", label: t("menu.checkUpdates"), run: a.checkUpdates },
-      { id: "website", label: t("menu.website"), run: a.website },
-      ...(compareModel ? [{ id: "compare-stop", label: t("compare.stop"), run: () => setCompareTab(null) }] : []),
-      ...comparable.map((tab) => ({
-        id: `compare-${tab.id}`,
-        label: `${t("compare.prefix")} ${tabInfos.find((i) => i.id === tab.id)?.title ?? ""}`,
-        run: () => setCompareTab(tab.id),
-      })),
-      ...tabInfos
-        .filter((tab) => tab.id !== activeTab)
-        .map((tab) => ({ id: `tab-${tab.id}`, label: `${t("tabs.tab")}: ${tab.title}`, run: () => switchTab(tab.id) })),
-      ...recent.map((path, i) => ({ id: `recent-${i}`, label: `${t("menu.recent")}: ${fileName(path)}`, run: () => a.openRecent(path) })),
-    ];
-  };
+  const commandState = (): CommandState => ({
+    lang,
+    board: model !== null,
+    notes: notes !== null,
+    boardNotes: notesForModel !== null,
+    schematic: schematic !== null,
+    detached,
+    selected: selection.kind !== "none",
+    hidden: !!notesForModel?.hidden,
+    photo: !!storedPhoto,
+    origin: !!boardOrigin,
+    secondView,
+    comparing: !!compareModel,
+    isolated: !!isolationFor,
+    bench,
+    grid: settings.grid,
+    uiLevel: settings.uiLevel,
+  });
+
+  const paletteCommands = (): Command[] =>
+    registerPalette(t, commandState(), () => actionsRef.current, settings.shortcuts, {
+      "origin-clear": [
+        ...PRESET_IDS.map((id) => ({ id: `layout-${id}`, label: t("layout.apply", { name: t(`layout.${id}`) }), run: () => applyPreset(id) })),
+        ...layouts.map((l) => ({
+          id: `layout-own-${l.name}`,
+          label: t("layout.apply", { name: l.name }),
+          run: () => {
+            applyLayout(l);
+            setLayoutName(l.name);
+          },
+        })),
+      ],
+      "layout-save": layouts.map((l) => ({ id: `layout-delete-${l.name}`, label: t("layout.delete", { name: l.name }), run: () => deleteLayout(l.name) })),
+      "bookmark-add": (notesForModel?.bookmarks ?? []).map((b) => ({ id: `bookmark-${b.id}`, label: `${t("bookmark.title")}: ${b.name}`, run: () => goToBookmark(b) })),
+      end: [
+        ...comparable.map((tab) => ({
+          id: `compare-${tab.id}`,
+          label: `${t("compare.prefix")} ${tabInfos.find((i) => i.id === tab.id)?.title ?? ""}`,
+          run: () => setCompareTab(tab.id),
+        })),
+        ...tabInfos
+          .filter((tab) => tab.id !== activeTab)
+          .map((tab) => ({ id: `tab-${tab.id}`, label: `${t("tabs.tab")}: ${tab.title}`, run: () => switchTab(tab.id) })),
+        ...recent.map((path, i) => ({ id: `recent-${i}`, label: `${t("menu.recent")}: ${fileName(path)}`, run: () => actionsRef.current.openRecent(path) })),
+      ],
+    });
 
   // --- keyboard ------------------------------------------------------------
 
@@ -2369,9 +2345,11 @@ export function App() {
       }
       // With the native menu bar, its key equivalents handle their ⌘ shortcuts.
       if (menuOwnsKey(e)) return;
-      if (mod && key === "k") {
+      // ⌘ keys of the command register (⌘K, ⌘O, ⌥⌘F, ⌘F, ⌘E, ⌘L, ⌘I).
+      const modCommand = mod ? commandForKey(e, !!model, "mod") : undefined;
+      if (modCommand) {
         e.preventDefault();
-        actionsRef.current.palette();
+        (modCommand.menuRun ?? modCommand.run)(actionsRef.current);
         return;
       }
       // ⌘[ / ⌘] as in Safari; ⌘← / ⌘→ as well, since "[" needs ⌥ on a German keyboard.
@@ -2396,37 +2374,6 @@ export function App() {
         else actionsRef.current.undo();
         return;
       }
-      if (mod && key === "o") {
-        e.preventDefault();
-        void openDialog();
-        return;
-      }
-      if (mod && e.altKey && e.code === "KeyF") {
-        e.preventDefault();
-        actionsRef.current.searchSchematic();
-        return;
-      }
-      if (mod && key === "f") {
-        e.preventDefault();
-        searchRef.current?.focus();
-        searchRef.current?.select();
-        return;
-      }
-      if (mod && key === "e") {
-        e.preventDefault();
-        void toggleSchematic();
-        return;
-      }
-      if (mod && key === "l") {
-        e.preventDefault();
-        setDialog((d) => (d === "library" ? null : "library"));
-        return;
-      }
-      if (mod && key === "i") {
-        e.preventDefault();
-        setSettings((s) => ({ ...s, showSidebar: !s.showSidebar }));
-        return;
-      }
       // Bench keys from the settings; pedal keys (F13 …, Page Down) also while typing a value.
       if (!dialog && !isModifierOnly(e)) {
         const name = keyName(e);
@@ -2438,19 +2385,18 @@ export function App() {
         }
       }
       if (isTyping(e.target) || dialog || mod || e.altKey) return;
+      // Single keys of the command register (?, L, ⇧R, V, H, I, ⇧O, G); with no board, those that need one do nothing.
+      const keyCommand = commandForKey(e, true, "plain");
+      if (keyCommand) {
+        if (commandForKey(e, !!model, "plain")) (keyCommand.menuRun ?? keyCommand.run)(actionsRef.current);
+        return;
+      }
       const view = viewRef.current;
       const sheet = schematicViewRef.current;
       switch (e.key) {
-        case "?":
-          setDialog("help");
-          break;
         case "/":
           e.preventDefault();
           searchRef.current?.focus();
-          break;
-        case "l":
-        case "L":
-          if (model) setRuler((r) => (r ? null : { side, points: [] }));
           break;
         case "Escape":
           if (movingRef.current) setMovingDrawing(null);
@@ -2461,27 +2407,8 @@ export function App() {
           else if (placingMarkerRef.current) setPlacingMarker(false);
           else setSelection(NONE);
           break;
-        case "R":
-          setRotation((r) => (r + 3) & 3);
-          break;
-        case "v":
-        case "V":
-          if (model) cyclePadValues();
-          break;
-        case "h":
-          if (model) hideKeyRef.current();
-          break;
-        case "i":
-          if (model) isolationKeyRef.current();
-          break;
         case "o":
           if (model) originKeyRef.current.originAtMouse();
-          break;
-        case "O":
-          if (model) originKeyRef.current.clearOrigin();
-          break;
-        case "g":
-          if (model) setSettings((s) => ({ ...s, grid: !s.grid }));
           break;
         case "Enter": {
           if (drawingRef.current?.kind === "area") {

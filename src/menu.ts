@@ -1,58 +1,10 @@
 import { Menu, type MenuItemOptions, type PredefinedMenuItemOptions, type SubmenuOptions } from "@tauri-apps/api/menu";
+import { command, shortcutOf, type CommandActions } from "./commands";
 import type { Translate } from "./i18n";
+import type { Shortcuts } from "./shortcuts";
 
-/** Everything the menu bar can trigger. */
-export interface MenuActions {
-  open(): void;
-  openRecent(path: string): void;
-  clearRecent(): void;
-  library(): void;
-  importToLibrary(): void;
-  /** The device project of the open board (several boards joined by connectors). */
-  project(): void;
-  /** The open board with everything as one package. */
-  exportPackage(): void;
-  closeBoard(): void;
-  newTab(): void;
-  nextTab(): void;
-  prevTab(): void;
-  exportImage(): void;
-  exportPdf(): void;
-  exportCsv(what: "parts" | "nets" | "readings" | "annotations"): void;
-  settings(): void;
-  search(): void;
-  searchSchematic(): void;
-  palette(): void;
-  /** Undo in the text field being edited, otherwise of the last change to readings and notes. */
-  undo(): void;
-  redo(): void;
-  flip(): void;
-  rotate(): void;
-  rotateBack(): void;
-  fit(): void;
-  zoomIn(): void;
-  zoomOut(): void;
-  toggleSchematic(): void;
-  popOutSchematic(): void;
-  toggleSidebar(): void;
-  toggleRatsnest(): void;
-  toggleGrid(): void;
-  addPhoto(): void;
-  togglePhoto(): void;
-  compare(): void;
-  back(): void;
-  forward(): void;
-  bookmark(): void;
-  ruler(): void;
-  shortcuts(): void;
-  checkUpdates(): void;
-  /** Saves what is unsaved, then quits. */
-  quit(): void;
-  /** A built-in layout ("preset:repair") or an own one ("own:Name"). */
-  layout(id: string): void;
-  saveLayout(): void;
-  website(): void;
-}
+/** Everything the menu bar can trigger (see the command register). */
+export type MenuActions = CommandActions;
 
 type Item = MenuItemOptions | SubmenuOptions | PredefinedMenuItemOptions;
 
@@ -102,10 +54,25 @@ export function menuOwnsKey(e: { key: string; code: string; metaKey: boolean; ct
  * Builds the macOS menu bar. Actions go through `actions()` so the menu
  * always calls the current handlers without being rebuilt on every render.
  */
-export async function installMenu(t: Translate, actions: () => MenuActions, recent: string[], version: string, layouts: { presets: string[]; own: string[] } = { presets: [], own: [] }): Promise<void> {
+export async function installMenu(
+  t: Translate,
+  actions: () => MenuActions,
+  recent: string[],
+  version: string,
+  layouts: { presets: string[]; own: string[] } = { presets: [], own: [] },
+  shortcuts?: Shortcuts,
+  lang = "en",
+): Promise<void> {
   const item = (id: string, text: string, run: (a: MenuActions) => void, accelerator?: string): MenuItemOptions => {
     if (accelerator) remember(accelerator.replace("CmdOrCtrl+", ""));
     return { id, text, accelerator, action: () => run(actions()) };
+  };
+  /** A command of the register: its text (with the key where the menu cannot take it), key equivalent and action. */
+  const cmd = (id: string): MenuItemOptions => {
+    const c = command(id);
+    const label = c.menuLabel?.(t) ?? c.label(t, { lang } as Parameters<typeof c.label>[1]);
+    const key = c.menuKey ? shortcutOf(c, shortcuts, lang) : undefined;
+    return item(c.menuId ?? c.id, key ? `${label}  ${key}` : label, (a) => (c.menuRun ?? c.run)(a), c.accelerator);
   };
 
   const recentItems: Item[] = recent.length
@@ -131,8 +98,8 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
           },
         },
         SEP,
-        item("check-updates", t("menu.checkUpdates"), (a) => a.checkUpdates()),
-        item("settings", t("menu.settings"), (a) => a.settings(), "CmdOrCtrl+,"),
+        cmd("updates"),
+        cmd("settings"),
         SEP,
         { item: "Services" },
         SEP,
@@ -141,82 +108,77 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
         { item: "ShowAll" },
         SEP,
         // Not the predefined item: unsaved readings are written before the app ends.
-        item("quit", t("menu.quit"), (a) => a.quit(), "CmdOrCtrl+Q"),
+        cmd("quit"),
       ],
     },
     {
       text: t("menu.file"),
       items: [
-        item("new-tab", t("tabs.new"), (a) => a.newTab(), "CmdOrCtrl+T"),
-        item("open", t("menu.open"), (a) => a.open(), "CmdOrCtrl+O"),
+        cmd("new-tab"),
+        cmd("open"),
         { text: t("menu.recent"), items: recentItems },
         SEP,
-        item("library", t("menu.library"), (a) => a.library(), "CmdOrCtrl+L"),
-        item("import", t("menu.import"), (a) => a.importToLibrary(), "CmdOrCtrl+Shift+I"),
-        item("project", t("project.command"), (a) => a.project()),
-        item("package-export", t("package.export"), (a) => a.exportPackage()),
+        cmd("library"),
+        cmd("import"),
+        cmd("project"),
+        cmd("package-export"),
         SEP,
-        item("export-image", t("menu.exportImage"), (a) => a.exportImage(), "CmdOrCtrl+Shift+E"),
-        item("export-pdf", t("menu.exportPdf"), (a) => a.exportPdf(), "CmdOrCtrl+Alt+E"),
+        cmd("export"),
+        cmd("export-pdf"),
         {
           text: t("menu.exportCsv"),
           items: [
-            item("csv-parts", t("csv.parts"), (a) => a.exportCsv("parts")),
-            item("csv-nets", t("csv.nets"), (a) => a.exportCsv("nets")),
-            item("csv-readings", t("csv.readings"), (a) => a.exportCsv("readings")),
-            item("csv-annotations", t("csv.annotations"), (a) => a.exportCsv("annotations")),
+            cmd("csv-parts"),
+            cmd("csv-nets"),
+            cmd("csv-readings"),
+            cmd("csv-annotations"),
           ],
         },
         SEP,
-        item("close-tab", t("tabs.close"), (a) => a.closeBoard(), "CmdOrCtrl+W"),
+        cmd("close"),
       ],
     },
     {
       text: t("menu.edit"),
       items: [
-        item("undo", t("menu.undo"), (a) => a.undo(), "CmdOrCtrl+Z"),
-        item("redo", t("menu.redo"), (a) => a.redo(), "CmdOrCtrl+Shift+Z"),
+        cmd("undo"),
+        cmd("redo"),
         SEP,
         { item: "Cut" },
         { item: "Copy" },
         { item: "Paste" },
         { item: "SelectAll" },
         SEP,
-        item("search", t("menu.find"), (a) => a.search(), "CmdOrCtrl+F"),
-        item("search-schematic", t("menu.findSchematic"), (a) => a.searchSchematic(), "CmdOrCtrl+Alt+F"),
-        item("palette", t("menu.palette"), (a) => a.palette(), "CmdOrCtrl+K"),
+        cmd("search"),
+        cmd("schematic-search"),
+        cmd("palette"),
       ],
     },
     {
       text: t("menu.view"),
       items: [
-        item("flip", t("menu.flip"), (a) => a.flip()),
-        item("rotate", t("menu.rotate"), (a) => a.rotate()),
-        item("rotate-back", t("menu.rotateBack"), (a) => a.rotateBack()),
+        cmd("flip"),
+        cmd("rotate"),
+        cmd("rotate-back"),
         SEP,
-        item("fit", t("menu.fit"), (a) => a.fit(), "CmdOrCtrl+0"),
-        // No accelerator: menu shortcuts name physical US keys, so ⌘+ would
-        // need ⌘⇧0 on a German keyboard. The web view handles ⌘+ instead.
-        item("zoom-in", t("menu.zoomIn"), (a) => a.zoomIn()),
-        item("zoom-out", t("menu.zoomOut"), (a) => a.zoomOut(), "CmdOrCtrl+-"),
+        cmd("fit"),
+        cmd("zoom-in"),
+        cmd("zoom-out"),
         SEP,
-        item("ratsnest", t("menu.ratsnest"), (a) => a.toggleRatsnest(), "CmdOrCtrl+Shift+R"),
-        // G is handled by the web view (a bare letter is no menu shortcut).
-        item("grid", `${t("menu.grid")}  G`, (a) => a.toggleGrid()),
-        item("schematic", t("menu.schematic"), (a) => a.toggleSchematic(), "CmdOrCtrl+E"),
-        item("schematic-window", t("menu.popOut"), (a) => a.popOutSchematic()),
-        item("sidebar", t("menu.sidebar"), (a) => a.toggleSidebar(), "CmdOrCtrl+I"),
+        cmd("ratsnest"),
+        cmd("grid"),
+        cmd("schematic"),
+        cmd("schematic-window"),
+        cmd("sidebar"),
         SEP,
-        item("photo-add", t("photo.add"), (a) => a.addPhoto()),
-        item("photo-toggle", t("photo.toggle"), (a) => a.togglePhoto()),
-        item("compare", t("compare.menu"), (a) => a.compare()),
+        cmd("photo-add"),
+        cmd("photo-toggle"),
+        cmd("compare"),
         SEP,
-        // Handled by the web view: menu shortcuts name physical US keys, and
-        // [ ] are ⌥5 ⌥6 on a German keyboard.
-        item("nav-back", `${t("nav.back")}  ⌘[`, (a) => a.back()),
-        item("nav-forward", `${t("nav.forward")}  ⌘]`, (a) => a.forward()),
-        item("bookmark-add", `${t("bookmark.add")}  ⌘D`, (a) => a.bookmark()),
-        item("ruler", `${t("ruler.title")}  L`, (a) => a.ruler()),
+        cmd("nav-back"),
+        cmd("nav-forward"),
+        cmd("bookmark-add"),
+        cmd("ruler"),
         SEP,
         { item: "Fullscreen" },
       ],
@@ -227,9 +189,8 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
         { item: "Minimize" },
         { item: "Maximize" },
         SEP,
-        // ⌃⇥ / ⌃⇧⇥ are handled by the web view; menus cannot take Tab.
-        item("next-tab", `${t("tabs.next")}  ⌃⇥`, (a) => a.nextTab()),
-        item("prev-tab", `${t("tabs.prev")}  ⌃⇧⇥`, (a) => a.prevTab()),
+        cmd("next-tab"),
+        cmd("prev-tab"),
         SEP,
         {
           text: t("layout.menu"),
@@ -237,7 +198,7 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
             ...layouts.presets.map((id) => item(`layout-${id}`, t(`layout.${id}` as Parameters<Translate>[0]), (a) => a.layout(`preset:${id}`))),
             ...(layouts.own.length ? [SEP, ...layouts.own.map((name, i) => item(`layout-own-${i}`, name, (a) => a.layout(`own:${name}`)))] : []),
             SEP,
-            item("layout-save", t("layout.save"), (a) => a.saveLayout()),
+            cmd("layout-save"),
           ],
         },
         SEP,
@@ -247,8 +208,8 @@ export async function installMenu(t: Translate, actions: () => MenuActions, rece
     {
       text: t("menu.help"),
       items: [
-        item("shortcuts", t("menu.shortcuts"), (a) => a.shortcuts(), "CmdOrCtrl+/"),
-        item("website", t("menu.website"), (a) => a.website()),
+        cmd("shortcuts"),
+        cmd("website"),
       ],
     },
   ];

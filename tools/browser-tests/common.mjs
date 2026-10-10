@@ -26,7 +26,7 @@ export function boardArg(index = 2) {
  * reopened twice there: tests that count tabs start with no files and open them through
  * `recent` instead.
  */
-export async function openApp(boardJson, { level = "workshop", notes = null, viewport = { width: 1300, height: 820 }, files = ["/x/board.cad"], recent = [] } = {}) {
+export async function openApp(boardJson, { level = "workshop", notes = null, viewport = { width: 1300, height: 820 }, files = ["/x/board.cad"], recent = [], settings = {} } = {}) {
   // CHROMIUM: a Chromium binary to use instead of Playwright's own (npx playwright install chromium).
   const browser = await chromium.launch({
     ...(process.env.CHROMIUM && { executablePath: process.env.CHROMIUM }),
@@ -40,9 +40,9 @@ export async function openApp(boardJson, { level = "workshop", notes = null, vie
   });
   await page.route("https://api.github.com/**", (route) => route.fulfill({ status: 404, body: "" }));
   await page.addInitScript(
-    ({ boardJson, level, notes, files, recent }) => {
+    ({ boardJson, level, notes, files, recent, settings }) => {
       try {
-        if (!localStorage.getItem("avero.settings.v1")) localStorage.setItem("avero.settings.v1", JSON.stringify({ revision: 2, uiLevel: level }));
+        if (!localStorage.getItem("avero.settings.v1")) localStorage.setItem("avero.settings.v1", JSON.stringify({ revision: 2, uiLevel: level, ...settings }));
         if (recent.length) localStorage.setItem("avero.recent.v1", JSON.stringify(recent));
       } catch {}
       window.__saved = {};
@@ -89,7 +89,7 @@ export async function openApp(boardJson, { level = "workshop", notes = null, vie
       };
       window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
     },
-    { boardJson, level, notes, files, recent },
+    { boardJson, level, notes, files, recent, settings },
   );
   await page.goto(URL);
   // No files to reopen: the app starts on its welcome screen.
