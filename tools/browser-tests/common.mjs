@@ -19,9 +19,14 @@ export function boardArg(index = 2) {
 
 /**
  * Opens the app on a board. `level` is the interface level the app starts with ("view" or
- * "workshop"); `notes` (optional) is what the notes of the board hold when first loaded.
+ * "workshop"); `notes` (optional) is what the notes of the board hold when first loaded;
+ * `files` are the board files reopened from the last session, one tab each (every one
+ * shows the same board, told apart by its path); `recent` fills "Zuletzt geöffnet".
+ * In the dev server React runs start-up effects twice (StrictMode), so the session is
+ * reopened twice there: tests that count tabs start with no files and open them through
+ * `recent` instead.
  */
-export async function openApp(boardJson, { level = "workshop", notes = null, viewport = { width: 1300, height: 820 } } = {}) {
+export async function openApp(boardJson, { level = "workshop", notes = null, viewport = { width: 1300, height: 820 }, files = ["/x/board.cad"], recent = [] } = {}) {
   // CHROMIUM: a Chromium binary to use instead of Playwright's own (npx playwright install chromium).
   const browser = await chromium.launch({
     ...(process.env.CHROMIUM && { executablePath: process.env.CHROMIUM }),
@@ -35,13 +40,14 @@ export async function openApp(boardJson, { level = "workshop", notes = null, vie
   });
   await page.route("https://api.github.com/**", (route) => route.fulfill({ status: 404, body: "" }));
   await page.addInitScript(
-    ({ boardJson, level, notes }) => {
+    ({ boardJson, level, notes, files, recent }) => {
       try {
         if (!localStorage.getItem("avero.settings.v1")) localStorage.setItem("avero.settings.v1", JSON.stringify({ revision: 2, uiLevel: level }));
+        if (recent.length) localStorage.setItem("avero.recent.v1", JSON.stringify(recent));
       } catch {}
       window.__saved = {};
       window.__seed = notes;
-      window.__stores = { workspace: JSON.stringify({ version: 1, active: 0, tabs: [{ path: "/x/board.cad", schematicVisible: false }] }) };
+      window.__stores = { workspace: JSON.stringify({ version: 1, active: 0, tabs: files.map((path) => ({ path, schematicVisible: false })) }) };
       window.__TAURI_INTERNALS__ = {
         metadata: { currentWindow: { label: "main" }, currentWebview: { windowLabel: "main", label: "main" } },
         transformCallback: (cb) => {
@@ -53,6 +59,8 @@ export async function openApp(boardJson, { level = "workshop", notes = null, vie
           if (cmd.startsWith("plugin:menu|")) throw new Error("no menu");
           switch (cmd) {
             case "open_board":
+              // Like the real bridge: the answer comes in a later task, so React renders in between.
+              await new Promise((r) => setTimeout(r, 30));
               return JSON.parse(boardJson);
             case "take_pending_paths":
               return [];
@@ -81,10 +89,11 @@ export async function openApp(boardJson, { level = "workshop", notes = null, vie
       };
       window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
     },
-    { boardJson, level, notes },
+    { boardJson, level, notes, files, recent },
   );
   await page.goto(URL);
-  await page.waitForSelector(".board-view", { timeout: 30000 });
+  // No files to reopen: the app starts on its welcome screen.
+  await page.waitForSelector(files.length ? ".board-view" : ".welcome", { timeout: 30000 });
   await page.waitForTimeout(1500);
 
   const step = async (name, fn) => {

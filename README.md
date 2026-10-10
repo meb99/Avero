@@ -67,6 +67,9 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - **Foto des echten Boards** unter der Boardview (Darstellung → „Foto dieser Seite hinzufügen…"): zwei markante Punkte im Foto anklicken, dann dieselben Punkte auf dem Board (Pins rasten ein) – das Foto liegt danach deckungsgleich darunter, mit einstellbarer Deckkraft, getrennt für Ober- und Unterseite. Liegt neben dem Board ein PDF mit einem Bild der Platine (wie bei manchen Boardview-Paketen), übernimmt Avero die angezeigte Seite mit einem Klick als Foto und legt es selbst auf den Board-Umriss – ohne Datei auswählen, ohne Punkte klicken. Mit „Daneben“ steht das Foto unverändert neben dem Board: ein Klick auf ein Bauteil im Foto wählt es auf dem Board aus und springt hin, das Bauteil unter dem Mauszeiger wird mit Namen angezeigt, und was auf dem Board ausgewählt ist (Bauteil, Pin, alle Pins eines Netzes), wird im Foto markiert.
 - **Inhaltssuche über die ganze Bibliothek** (Bibliothek → „Inhalt“): Schaltpläne werden nach Text durchsucht, Boardviews nach Bauteilen und Netzen. Alles wird einmal indiziert; ein Klick auf einen Treffer öffnet Board und Schaltplan und springt zur Fundstelle.
 
+**Neu in 0.9.38**
+- Intern: Alle Reiter liegen in einer Reiter-Sammlung (`src/tabs.ts`), der aktive eingeschlossen. Öffnen, Wechseln, Schließen und die Suche nach einer offenen Datei folgen einer Regel und sind ohne Oberfläche getestet. Für dich ändert sich nichts.
+
 **Neu in 0.9.37**
 - **Aufgeräumte Werkzeugleiste:** Spiegeln, Drehen und Einpassen liegen zusammen auf einer ruhigen Fläche, die Zeichenwerkzeuge auf einer zweiten. In „Ansehen“ fallen die Zoom-Knöpfe weg (Trackpad, Mausrad und `⌘+` / `⌘−` zoomen weiter), in der Werkstatt bleiben sie.
 - **Reiter der Seitenleiste als Symbole:** Jeder Reiter hat ein Symbol, der gewählte zeigt zusätzlich seinen Namen. Name und Anzahl stehen beim Überfahren. Alle Reiter der Werkstatt passen jetzt ohne seitliches Blättern in die Leiste.

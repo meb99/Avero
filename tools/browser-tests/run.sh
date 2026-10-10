@@ -28,5 +28,6 @@ for board in "$here/out/demo.json" "$@"; do
   node "$here/features.mjs" "$board" || status=1
 done
 node "$here/ui-levels.mjs" "$here/out/demo.json" || status=1
+node "$here/tabs.mjs" "$here/out/demo.json" || status=1
 echo "Screenshots: $here/out"
 exit $status

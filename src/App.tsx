@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState, type SetStateAction } from "react";
 import { AskHost, askConfirm, askText } from "./components/Ask";
 import { copyText } from "./core/clipboard";
 import { takeAllFileReadings } from "./workbench/fileReadings";
@@ -52,7 +52,6 @@ import {
   saveBytes,
   schematicsFor,
   setWindowTitle,
-  type BoardSource,
   type Loaded,
 } from "./core/loader";
 import type { LoadError, Point, Selection, Side } from "./core/types";
@@ -62,6 +61,7 @@ import { installMenu, menuOwnsKey, type MenuActions } from "./menu";
 import { closeSchematicWindow, LINK, openSchematicWindow, type LinkedDoc } from "./schematic/link";
 import { DARK, LIGHT, withColors } from "./render/palette";
 import { setPdfPasswordPrompt, type SchematicDocument } from "./schematic/document";
+import { activeTab as activeOf, findTab, initialTabs, releasedOnClose, tabOfFile, tabsReducer, type Tab } from "./tabs";
 import { readSchematicFacts, type SchematicFacts } from "./schematic/partInfo";
 import { SchematicView, type SchematicFocus, type SchematicViewHandle, type WordTarget } from "./schematic/SchematicView";
 import { DocTabs } from "./schematic/DocTabs";
@@ -153,34 +153,6 @@ interface PhotoAlignment {
   boardPoints: Point[];
 }
 
-/** Everything that belongs to one tab. */
-interface Tab {
-  id: number;
-  model: BoardModel | null;
-  source: BoardSource | null;
-  side: ViewSide;
-  rotation: number;
-  selection: Selection;
-  /** Schematics, datasheets, layouts and revisions open for this board. */
-  docs: SchematicDocument[];
-  /** The document shown (the others keep their page, zoom and search). */
-  docIndex: number;
-  schematicVisible: boolean;
-  view?: ViewState;
-}
-
-const emptyTab = (id: number): Tab => ({
-  id,
-  model: null,
-  source: null,
-  side: "top",
-  rotation: 0,
-  selection: NONE,
-  docs: [],
-  docIndex: 0,
-  schematicVisible: true,
-});
-
 /** The same file, or the same content under another name. */
 const sameDocument = (a: SchematicDocument, b: SchematicDocument) =>
   (!!a.path && a.path === b.path) || (!!a.contentId && a.contentId === b.contentId);
@@ -240,9 +212,31 @@ function focusText(model: BoardModel, sel: Selection): string | undefined {
 
 export function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
-  const [model, setModel] = useState<BoardModel | null>(null);
-  const [source, setSource] = useState<BoardSource | null>(null);
-  const [side, setSide] = useState<ViewSide>("top");
+  // Every open tab, the active one included (src/tabs.ts). The active tab's fields read
+  // like states, and their setters change the active tab in the collection.
+  const [tabState, dispatchTabs] = useReducer(tabsReducer, undefined, initialTabs);
+  const tabsStateRef = useRef(tabState);
+  tabsStateRef.current = tabState;
+  const { model, source, side, rotation, selection, docs, docIndex, schematicVisible } = activeOf(tabState);
+  const { setModel, setSource, setSide, setRotation, setSelection, setDocs, setDocIndex, setSchematicVisible } = useMemo(() => {
+    const field =
+      <K extends Exclude<keyof Tab, "id" | "view">>(key: K) =>
+      (value: SetStateAction<Tab[K]>) =>
+        dispatchTabs({
+          type: "update",
+          change: (t) => ({ [key]: typeof value === "function" ? (value as (old: Tab[K]) => Tab[K])(t[key]) : value }) as Partial<Tab>,
+        });
+    return {
+      setModel: field("model"),
+      setSource: field("source"),
+      setSide: field("side"),
+      setRotation: field("rotation"),
+      setSelection: field("selection"),
+      setDocs: field("docs"),
+      setDocIndex: field("docIndex"),
+      setSchematicVisible: field("schematicVisible"),
+    };
+  }, []);
   const bothSides = settings.bothSides;
   const splitViews = bothSides && settings.bothSidesMode !== "together";
   const splitViewsRef = useRef(splitViews);
@@ -260,8 +254,6 @@ export function App() {
     setBothSides(false);
     setSide((s) => (s === "top" ? "bottom" : "top"));
   };
-  const [rotation, setRotation] = useState(0);
-  const [selection, setSelection] = useState<Selection>(NONE);
   // Trace layers switched off, for the board they were chosen on.
   const [layerChoice, setLayerChoice] = useState<{ model: BoardModel | null; hidden: ReadonlySet<number> }>({
     model: null,
@@ -289,10 +281,7 @@ export function App() {
   const [lockedDismissed, setLockedDismissed] = useState<BoardModel | null>(null);
   const [update, setUpdate] = useState<Update | null>(null);
   const [installing, setInstalling] = useState(false);
-  const [docs, setDocs] = useState<SchematicDocument[]>([]);
-  const [docIndex, setDocIndex] = useState(0);
   const schematic = docs[Math.min(docIndex, docs.length - 1)] ?? null;
-  const [schematicVisible, setSchematicVisible] = useState(true);
   // The aligned photo beside the board (click a part on it to select it);
   // it takes the schematic's place, two panes would squeeze the board.
   const [photoPane, setPhotoPane] = useState(false);
@@ -309,20 +298,16 @@ export function App() {
   // Text searched in the schematic on request (library full-text search);
   // the next selection on the board replaces it.
   const [textQuery, setTextQuery] = useState<string | { text: string; spot: SpatialHit } | null>(null);
-  // The active tab lives in the states above; `tabs` keeps the other tabs as
-  // they were left (its entry for the active tab is stale).
-  const [tabs, setTabs] = useState<Tab[]>(() => [emptyTab(0)]);
-  const [activeTab, setActiveTab] = useState(0);
+  const tabs = tabState.list;
+  const activeTab = tabState.active;
   const [initialView, setInitialView] = useState<ViewState | undefined>(undefined);
   // Another tab's board shown next to this one for comparison.
   const [compareTab, setCompareTab] = useState<number | null>(null);
   const compareViewRef = useRef<BoardViewHandle>(null);
   const [paletteQuery, setPaletteQuery] = useState("");
-  const nextTabId = useRef(1);
-  const live = useRef<Tab>(emptyTab(0));
-  live.current = { id: activeTab, model, source, side, rotation, selection, docs, docIndex, schematicVisible };
-  const tabsRef = useRef(tabs);
-  tabsRef.current = tabs;
+  // The active tab as last rendered, for callbacks made in an earlier render.
+  const live = useRef<Tab>(activeOf(tabState));
+  live.current = activeOf(tabState);
   const viewRef = useRef<BoardViewHandle>(null);
   // The bottom side's own view when both sides are shown in two views.
   const viewRef2 = useRef<BoardViewHandle>(null);
@@ -989,13 +974,13 @@ export function App() {
         setSchematicVisible(true);
         return;
       }
-      const tab = tabsRef.current.find((t) => t.id === tabId);
+      const tab = tabsStateRef.current.list.find((t) => t.id === tabId);
       if (!tab) {
         doc.destroy();
         return;
       }
       const next = add(tab.docs);
-      setTabs((ts) => ts.map((t) => (t.id === tabId ? { ...t, ...next, schematicVisible: true } : t)));
+      dispatchTabs({ type: "update", id: tabId, change: { ...next, schematicVisible: true } });
     } catch (e) {
       if (live.current.id === tabId) setError({ name, error: { code: "schematic", message: e instanceof Error ? e.message : String(e) } });
     }
@@ -1047,62 +1032,41 @@ export function App() {
   // --- tabs ----------------------------------------------------------------
   // These only use refs and state setters, so any render's copy works.
 
-  const restoreTab = (tab: Tab) => {
-    setActiveTab(tab.id);
+  /** What changes along with the active tab: the view it left off at, and what belonged to the old one. */
+  const afterSwitch = (view: ViewState | undefined) => {
     setTextQuery(null);
     setCompareTab(null);
-    setModel(tab.model);
-    setSource(tab.source);
-    setSide(tab.side);
-    setRotation(tab.rotation);
-    setSelection(tab.selection);
-    setDocs(tab.docs);
-    setDocIndex(tab.docIndex);
-    setSchematicVisible(tab.schematicVisible);
-    setInitialView(tab.view);
+    setInitialView(view);
     setError(null);
   };
-
-  const saveActiveTab = (): Tab => {
-    const saved = { ...live.current, view: viewRef.current?.viewState() };
-    setTabs((ts) => ts.map((t) => (t.id === saved.id ? saved : t)));
-    return saved;
-  };
+  const leaving = () => viewRef.current?.viewState();
 
   const switchTab = (id: number) => {
-    const target = tabsRef.current.find((t) => t.id === id);
-    if (!target || id === live.current.id) return;
-    saveActiveTab();
-    restoreTab(target);
+    const target = tabsStateRef.current.list.find((t) => t.id === id);
+    if (!target || id === tabsStateRef.current.active) return;
+    dispatchTabs({ type: "switch", id, view: leaving() });
+    afterSwitch(target.view);
   };
 
   const cycleTab = (step: number) => {
-    const list = tabsRef.current;
-    const i = list.findIndex((t) => t.id === live.current.id);
+    const { list, active } = tabsStateRef.current;
+    const i = list.findIndex((t) => t.id === active);
     if (list.length > 1) switchTab(list[(i + step + list.length) % list.length].id);
   };
 
   const newTab = () => {
-    saveActiveTab();
-    const tab = emptyTab(nextTabId.current++);
-    setTabs((ts) => [...ts, tab]);
-    restoreTab(tab);
+    dispatchTabs({ type: "new", view: leaving() });
+    afterSwitch(undefined);
   };
 
   const closeTab = (id: number) => {
-    const all = tabsRef.current;
-    const index = all.findIndex((t) => t.id === id);
+    const before = tabsStateRef.current;
+    const index = before.list.findIndex((t) => t.id === id);
     if (index < 0) return;
-    const active = id === live.current.id;
-    for (const doc of (active ? live.current : all[index]).docs) doc.destroy();
-    const rest = all.filter((t) => t.id !== id);
-    if (!active) {
-      setTabs(rest);
-      return;
-    }
-    const next = rest[Math.min(index, rest.length - 1)] ?? emptyTab(nextTabId.current++);
-    setTabs(rest.length > 0 ? rest : [next]);
-    restoreTab(next);
+    for (const doc of releasedOnClose(before, id)) doc.destroy();
+    const after = tabsReducer(before, { type: "close", id });
+    dispatchTabs({ type: "close", id });
+    if (id === before.active) afterSwitch(activeOf(after).view);
   };
 
   /** Opens a board or PDF. `schematicPath` overrides the automatic schematic lookup. */
@@ -1140,10 +1104,7 @@ export function App() {
         return;
       }
       // Already open in a tab: show that tab (with the requested schematic).
-      const openIn = tabsRef.current.find((t) => {
-        const source=(t.id === live.current.id ? live.current : t).source;
-        return source?.path === path && (projectMember?source.projectMember===projectMember:!source.projectMember);
-      });
+      const openIn = tabOfFile(tabsStateRef.current, path, projectMember);
       if (openIn) {
         switchTab(openIn.id);
         // Shown, or added, when asked for (an open one is not read again).
@@ -1781,7 +1742,7 @@ export function App() {
     if (!out) return;
     // PDFs of boards open in tabs go along as they are open.
     const docsOf = (path: string) => {
-      const tab = tabsRef.current.map((tb) => (tb.id === live.current.id ? live.current : tb)).find((tb) => tb.source?.path === path);
+      const tab = findTab(tabsStateRef.current, (tb) => tb.source?.path === path);
       return tab ? tab.docs.flatMap((d) => (d.path ? [d.path] : [])) : undefined;
     };
     try {
@@ -1799,8 +1760,7 @@ export function App() {
     const part = model.parts[pin.part].name;
     return continuations(projectHere.project, projectHere.board.id, part, pin.number).map((c) => {
       const board = projectHere.project.boards.find((b) => b.id === c.board)!;
-      const tab = tabsRef.current.find((tb) => (tb.id === live.current.id ? live.current : tb).source?.path === board.path);
-      const other = tab ? (tab.id === live.current.id ? live.current : tab).model : null;
+      const other = findTab(tabsStateRef.current, (tb) => tb.source?.path === board.path)?.model ?? null;
       const otherPart = other?.findPart(c.part);
       const otherPin = otherPart !== undefined ? other!.findPin(otherPart, c.pin) : undefined;
       return {
@@ -1816,7 +1776,7 @@ export function App() {
   };
   /** To a pin on another board of the device: its tab, or the board opened. */
   const goToBoardPin = (path: string, part: string, pin: string) => {
-    const tab = tabsRef.current.find((tb) => (tb.id === live.current.id ? live.current : tb).source?.path === path);
+    const tab = findTab(tabsStateRef.current, (tb) => tb.source?.path === path);
     pendingBoardSearch.current = `${part}.${pin}`;
     if (tab) {
       if (tab.id !== live.current.id) switchTab(tab.id);
@@ -1909,7 +1869,8 @@ export function App() {
   // --- workspace: what was open, back on the next start ------------------------
 
   const workspaceSnapshot = useCallback(async (): Promise<Workspace> => {
-    const tabsNow = tabsRef.current.map((t) => (t.id === live.current.id ? { ...live.current, view: viewRef.current?.viewState() } : t));
+    const { list, active } = tabsStateRef.current;
+    const tabsNow = list.map((t) => (t.id === active ? { ...t, view: viewRef.current?.viewState() } : t));
     const withFiles = tabsNow.filter((t) => t.source?.path);
     let frame: Workspace["window"];
     try {
@@ -1935,7 +1896,7 @@ export function App() {
         rotation: t.rotation,
         ...(t.view && { view: t.view }),
       })),
-      active: Math.max(0, withFiles.findIndex((t) => t.id === live.current.id)),
+      active: Math.max(0, withFiles.findIndex((t) => t.id === active)),
       ...(frame && { window: frame }),
     };
   }, []);
@@ -1990,7 +1951,7 @@ export function App() {
         if (tab.schematicPath && paths.length > 1) await openSchematicPathRef.current(tab.schematicPath);
         if (!tab.schematicVisible) setSchematicVisible(false);
       }
-      const active = tabsRef.current.filter((t) => (t.id === live.current.id ? live.current : t).source?.path)[ws.active];
+      const active = tabsStateRef.current.list.filter((t) => t.source?.path)[ws.active];
       if (active && active.id !== live.current.id) switchTabRef.current(active.id);
     };
     void restore().finally(() => {
@@ -2040,10 +2001,11 @@ export function App() {
 
   // --- app actions: menu bar, command palette ------------------------------
 
-  const tabInfos: TabInfo[] = tabs.map((tab) => {
-    const shown = tab.id === activeTab ? live.current : tab;
-    return { id: tab.id, title: shown.source?.name ?? shown.docs[shown.docIndex]?.name ?? t("tabs.empty"), detail: shown.source?.path };
-  });
+  const tabInfos: TabInfo[] = tabs.map((tab) => ({
+    id: tab.id,
+    title: tab.source?.name ?? tab.docs[tab.docIndex]?.name ?? t("tabs.empty"),
+    detail: tab.source?.path,
+  }));
 
   const exportImage = useCallback(async () => {
     const view = viewRef.current;
@@ -2385,7 +2347,7 @@ export function App() {
       }
       if (e.metaKey && !e.shiftKey && !e.altKey && /^[1-9]$/.test(e.key)) {
         e.preventDefault();
-        const list = tabsRef.current;
+        const list = tabsStateRef.current.list;
         const target = e.key === "9" ? list[list.length - 1] : list[Number(e.key) - 1];
         if (target) switchTab(target.id);
         return;
@@ -3300,15 +3262,12 @@ export function App() {
           <ProjectDialog
             projects={projects}
             current={source?.path ? { path: source.path, name: source.name } : undefined}
-            open={tabsRef.current.flatMap((tb) => {
-              const shown = tb.id === live.current.id ? live.current : tb;
-              return shown.source?.path ? [{ path: shown.source.path, name: shown.source.name, parts: shown.model?.parts.map((p) => p.name) }] : [];
-            })}
+            open={tabs.flatMap((tb) => (tb.source?.path ? [{ path: tb.source.path, name: tb.source.name, parts: tb.model?.parts.map((p) => p.name) }] : []))}
             onChange={saveProjects}
             onExport={(p) => void exportDevice(p)}
             onOpenBoard={(path) => {
               setDialog(null);
-              const tab = tabsRef.current.find((tb) => (tb.id === live.current.id ? live.current : tb).source?.path === path);
+              const tab = findTab(tabsStateRef.current, (tb) => tb.source?.path === path);
               if (tab) switchTab(tab.id);
               else void openPath(path);
             }}
