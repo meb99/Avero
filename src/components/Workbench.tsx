@@ -22,7 +22,6 @@ import {
   updateCase,
   updateDrawing,
   type BoardNotes,
-  type Bookmark,
   type DrawingColor,
   type DrawingKind,
   type NetStatus,
@@ -34,23 +33,7 @@ import type { StepSubject } from "./Chronicle";
 import { ConditionsEditor } from "./Conditions";
 import { MeasureLists } from "./MeasureLists";
 import { Versions } from "./Versions";
-
-interface Props {
-  model: BoardModel;
-  notes: BoardNotes;
-  update(change: (n: BoardNotes) => BoardNotes): void;
-  tolerance: number;
-  onTolerance(t: number): void;
-  onSelect(selection: Selection, zoom: boolean): void;
-  onShowMarker(id: string): void;
-  onShowDrawing(id: string): void;
-  onShowBookmark(b: Bookmark): void;
-  onAddBookmark(): void;
-  error: string | null;
-  selection: Selection;
-  units: "mm" | "mil";
-  listFocus?: { listId: string; index: number; n: number } | null;
-}
+import { useBoardSession } from "./BoardSession";
 
 const SHORT = { diode: "D", voltage: "U", resistance: "R" } as const;
 
@@ -99,7 +82,10 @@ function NotesField({ value, onSave, placeholder }: { value: string; onSave(v: s
 }
 
 /** The "Measure" tab: repair cases, all measured nets, notes, import/export. */
-export function Workbench({ model, notes, update, tolerance, onTolerance, onSelect, onShowMarker, onShowDrawing, onShowBookmark, onAddBookmark, error, selection, units, listFocus }: Props) {
+export function Workbench({ notes }: { notes: BoardNotes }) {
+  const { model, updateNotes: update, settings, onTolerance, onSelect, onShowMarker, onShowDrawing, onShowBookmark, onAddBookmark, notesError: error, selection, listFocus } =
+    useBoardSession();
+  const { tolerance, units } = settings;
   const { t, lang } = useI18n();
   const boundLabel = useBoundLabel();
   const [onlyDeviations, setOnlyDeviations] = useState(false);

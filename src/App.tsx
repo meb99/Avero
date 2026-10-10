@@ -25,6 +25,7 @@ import { LibraryDialog, type LibraryDrop } from "./components/Library";
 import type { SpatialHit } from "./workbench/spatialSearch";
 import { BoardEditor } from "./components/BoardEditor";
 import { CloseIcon } from "./components/Icons";
+import { BoardSessionProvider } from "./components/BoardSession";
 import { Sidebar, SIDEBAR_TABS, type SidebarTab } from "./components/Sidebar";
 import { Splitter, StackSplitter } from "./components/Splitter";
 import { StatusBar } from "./components/StatusBar";
@@ -2981,86 +2982,91 @@ export function App() {
                 )}
               </div>
               {model && settings.showSidebar && (
-                <Sidebar
-                  model={model}
-                  selection={selection}
-                  side={side}
-                  settings={settings}
-                  notes={notes}
-                  notesError={notesError}
-                  updateNotes={updateNotes}
-                  onTolerance={(tolerance) => setSettings((s) => ({ ...s, tolerance }))}
-                  onSelect={select}
-                  palette={palette}
-                  hiddenLayers={hiddenLayers}
-                  onHiddenLayers={(hidden) => setLayerChoice({ model, hidden })}
-                  documents={documentsShownFirst}
-                  onSchematicJump={jumpInSchematic}
-                  onRenameNet={renameModelNet}
-                  onSetNetKind={(net, kind) => model && updateNotes((n) => setNetKind(n, model.fileNetName(net), kind))}
-                  crossBoard={projectHere ? crossBoard : undefined}
-                  onCrossBoard={goToBoardPin}
-                  namesRevision={namesRevision}
-                  pinnedNets={pinnedNets}
-                  onTogglePin={togglePinned}
-                  marked={markedParts}
-                  onMarkParts={markParts}
-                  onPinNets={(nets) => setPinChoice({ model, nets: [...new Set(nets)] })}
-                  onShowMarker={showMarker}
-                  onShowDrawing={showDrawing}
-                  onShowBookmark={goToBookmark}
-                  onAddBookmark={() => void addBookmarkHere()}
-                  obdata={boardObdata?.obdata ?? null}
-                  knowledgeCount={knowledgeForBoard}
-                  schematicFacts={schematicFacts}
-                  multiParts={multiParts}
-                  onMultiParts={setMultiParts}
-                  onOpenBga={setBgaPart}
-                  onFindDonors={setDonorPart}
-                  datasheets={datasheets}
-                  onOpenDatasheet={(sheet, page) => void openDatasheet(sheet, page)}
-                  onAddDatasheet={(part) => void addDatasheet(part)}
-                  onRemoveDatasheet={(sheet) => {
-                    saveDatasheets(datasheets.filter((s) => s.id !== sheet.id));
-                    if (sheetPane?.sheet.id === sheet.id)
-                      setSheetPane((old) => {
-                        old?.doc.destroy();
-                        return null;
-                      });
-                    void invoke("remove_datasheet", { path: sheet.file }).catch(() => {});
+                <BoardSessionProvider
+                  value={{
+                    model,
+                    selection,
+                    side,
+                    settings,
+                    notes,
+                    notesError,
+                    updateNotes,
+                    onTolerance: (tolerance) => setSettings((s) => ({ ...s, tolerance })),
+                    onSelect: select,
+                    palette,
+                    hiddenLayers,
+                    onHiddenLayers: (hidden) => setLayerChoice({ model, hidden }),
+                    documents: documentsShownFirst,
+                    onSchematicJump: jumpInSchematic,
+                    onRenameNet: renameModelNet,
+                    onSetNetKind: (net, kind) => model && updateNotes((n) => setNetKind(n, model.fileNetName(net), kind)),
+                    crossBoard: projectHere ? crossBoard : undefined,
+                    onCrossBoard: goToBoardPin,
+                    namesRevision,
+                    pinnedNets,
+                    onTogglePin: togglePinned,
+                    marked: markedParts,
+                    onMarkParts: markParts,
+                    onPinNets: (nets) => setPinChoice({ model, nets: [...new Set(nets)] }),
+                    onShowMarker: showMarker,
+                    onShowDrawing: showDrawing,
+                    onShowBookmark: goToBookmark,
+                    onAddBookmark: () => void addBookmarkHere(),
+                    obdata: boardObdata?.obdata ?? null,
+                    schematicFacts,
+                    multiParts,
+                    onMultiParts: setMultiParts,
+                    onOpenBga: setBgaPart,
+                    onFindDonors: setDonorPart,
+                    datasheets,
+                    onOpenDatasheet: (sheet, page) => void openDatasheet(sheet, page),
+                    onAddDatasheet: (part) => void addDatasheet(part),
+                    onRemoveDatasheet: (sheet) => {
+                      saveDatasheets(datasheets.filter((s) => s.id !== sheet.id));
+                      if (sheetPane?.sheet.id === sheet.id)
+                        setSheetPane((old) => {
+                          old?.doc.destroy();
+                          return null;
+                        });
+                      void invoke("remove_datasheet", { path: sheet.file }).catch(() => {});
+                    },
+                    listFocus,
                   }}
-                  tabRequest={tabRequest}
-                  onTabChange={onSidebarTab}
-                  listFocus={listFocus}
-                  width={sidebarWidth}
-                  onWidth={(w, done) => {
-                    setSidebarWidth(w);
-                    if (done) setSettings((old) => ({ ...old, sidebarWidth: w }));
-                  }}
-                  collapsed={settings.sidebarCollapsed}
-                  onCollapsed={(c) => setSettings((old) => ({ ...old, sidebarCollapsed: c }))}
-                  knowledge={
-                    <KnowledgePanel
-                      model={model}
-                      base={knowledgeView}
-                      device={boardDevice}
-                      boardNumbers={boardNumbers}
-                      busy={knowledgeBusy}
-                      message={knowledgeMessage}
-                      onImport={() => void importKnowledge()}
-                      onRemove={(page) => {
-                        const next = { ...knowledge, pages: knowledge.pages.filter((x) => x !== page) };
-                        setKnowledge(next);
-                        void saveKnowledge(next).catch((e) => setKnowledgeMessage(String(e)));
-                      }}
-                      onOpenUrl={(url) => openExternal(url)}
-                      onSelect={select}
-                      boardObdata={boardObdata?.obdata?.id ?? null}
-                      chosenObdata={notes?.obdata ?? null}
-                      onChooseObdata={notes ? (id) => updateNotes((n) => linkObdata(n, id)) : undefined}
-                    />
-                  }
-                />
+                >
+                  <Sidebar
+                    knowledgeCount={knowledgeForBoard}
+                    tabRequest={tabRequest}
+                    onTabChange={onSidebarTab}
+                    width={sidebarWidth}
+                    onWidth={(w, done) => {
+                      setSidebarWidth(w);
+                      if (done) setSettings((old) => ({ ...old, sidebarWidth: w }));
+                    }}
+                    collapsed={settings.sidebarCollapsed}
+                    onCollapsed={(c) => setSettings((old) => ({ ...old, sidebarCollapsed: c }))}
+                    knowledge={
+                      <KnowledgePanel
+                        model={model}
+                        base={knowledgeView}
+                        device={boardDevice}
+                        boardNumbers={boardNumbers}
+                        busy={knowledgeBusy}
+                        message={knowledgeMessage}
+                        onImport={() => void importKnowledge()}
+                        onRemove={(page) => {
+                          const next = { ...knowledge, pages: knowledge.pages.filter((x) => x !== page) };
+                          setKnowledge(next);
+                          void saveKnowledge(next).catch((e) => setKnowledgeMessage(String(e)));
+                        }}
+                        onOpenUrl={(url) => openExternal(url)}
+                        onSelect={select}
+                        boardObdata={boardObdata?.obdata?.id ?? null}
+                        chosenObdata={notes?.obdata ?? null}
+                        onChooseObdata={notes ? (id) => updateNotes((n) => linkObdata(n, id)) : undefined}
+                      />
+                    }
+                  />
+                </BoardSessionProvider>
               )}
             </>
           )}

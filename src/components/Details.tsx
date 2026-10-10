@@ -5,69 +5,25 @@ import { askConfirm } from "./Ask";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { chipFor, type ChipInfo, type ChipPin } from "../knowledge/chips";
 import { checkPinout, type PinoutCheck } from "../knowledge/pinout";
-import { netReadings, partValues, type ObdData } from "../knowledge/obdata";
-import type { SchematicDocument } from "../schematic/document";
+import { netReadings, partValues } from "../knowledge/obdata";
 import { SchematicHits, type PartMapping } from "./SchematicHits";
 import { ballGrid } from "../core/bga";
-import type { SchematicFacts } from "../schematic/partInfo";
-import type { RGBA } from "../render/palette";
-import { visibleFrom, type BoardModel, type ViewSide } from "../core/board";
-import type { NetKind, Selection, Side } from "../core/types";
+import { visibleFrom } from "../core/board";
+import type { NetKind, Side } from "../core/types";
 import { formatLength, formatSize } from "../format";
 import { useI18n, type MessageKey } from "../i18n";
-import type { Settings } from "../settings";
 import { activeCase, pointReadingsFor, readingsFor, setOwnPart, setOwnPin, updateDocLinks, type BoardNotes } from "../workbench/notes";
 import { OwnPartInfo, OwnPinInfo } from "./OwnInfo";
 import { BoundNotes } from "./BoundNotes";
+import { useBoardSession } from "./BoardSession";
 import { jumperTargets, signalClass } from "../core/jumper";
 import { JumperPlanCard } from "./JumperPlan";
 import { NetHintCard } from "./NetHint";
 import { netHint } from "../workbench/hints";
-import { datasheetsFor, partNumbers, type Datasheet } from "../workbench/datasheets";
+import { datasheetsFor, partNumbers } from "../workbench/datasheets";
 import { formatValue, hasValues } from "../workbench/measure";
 import { MeasureBlock, NetPoints, PointMeasureBlock } from "./MeasureBlock";
 import { findPoint, pinKey, pointLabel, pointOf } from "../core/points";
-
-interface Props {
-  model: BoardModel;
-  selection: Selection;
-  side: ViewSide;
-  settings: Settings;
-  notes: BoardNotes | null;
-  updateNotes(change: (n: BoardNotes) => BoardNotes): void;
-  onSelect(selection: Selection, zoom: boolean): void;
-  /** The board's open documents (the one shown first), for the list of occurrences. */
-  documents?: SchematicDocument[];
-  onSchematicJump?(text: string, hit: number, doc: SchematicDocument): void;
-  /** Gives a net its own name; returns an error message or null. */
-  onRenameNet?(net: number, name: string): string | null;
-  /** Corrects the net's kind (undefined: back to the file's). */
-  onSetNetKind?(net: number, kind: NetKind | undefined): void;
-  /** Where a pin continues on another board of the device (see project.ts). */
-  crossBoard?(pin: number): CrossHit[];
-  onCrossBoard?(path: string, part: string, pin: string): void;
-  /** Nets pinned in their own colors on the board. */
-  pinnedNets?: ReadonlyMap<number, RGBA>;
-  onTogglePin?(net: number): void;
-  /** Pins a set of nets in their own colours (a traced signal path). */
-  onPinNets?(nets: number[]): void;
-  /** Parts marked on the board from here (same type, short candidates), with what they are. */
-  marked?: { parts: number[]; label: string } | null;
-  onMarkParts?(parts: number[] | null, label?: string): void;
-  /** Known-good values of OpenBoardData for this board. */
-  obdata?: ObdData | null;
-  /** Values, part numbers and net voltages read from the schematic's text. */
-  schematicFacts?: SchematicFacts | null;
-  /** Opens the ball map of a BGA. */
-  onOpenBga?(part: number): void;
-  /** Looks for the part on the other boards of the library. */
-  onFindDonors?(part: number): void;
-  /** Stored datasheets, and opening or adding one. */
-  datasheets?: readonly Datasheet[];
-  onOpenDatasheet?(sheet: Datasheet, page?: number): void;
-  onAddDatasheet?(part: number): void;
-  onRemoveDatasheet?(sheet: Datasheet): void;
-}
 
 /** Datasheet name of a pin, its function and target value on hover. */
 function PinFunction({ pin }: { pin?: ChipPin }) {
@@ -233,7 +189,9 @@ function CrossBoard({ rows, onGo }: { rows: { from: string; hit: CrossHit }[]; o
   );
 }
 
-export function Details({
+/** The "Details" tab: what the selection is, its values, measurements and links. */
+export function Details() {
+  const {
   model,
   selection,
   side,
@@ -260,7 +218,7 @@ export function Details({
   onOpenDatasheet,
   onAddDatasheet,
   onRemoveDatasheet,
-}: Props) {
+  } = useBoardSession();
   const { t, lang } = useI18n();
   const u = settings.units;
   // "Ansehen": workshop sections only where there is something in them already.

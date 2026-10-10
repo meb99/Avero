@@ -1,4 +1,3 @@
-import type { CrossHit } from "./Details";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { BookIcon, ChevronLeftIcon, ChevronRightIcon, ChipIcon, DiagnoseIcon, InfoIcon, LayersIcon, MeterIcon, NetIcon } from "./Icons";
 import { Diagnosis } from "./Diagnosis";
@@ -7,21 +6,15 @@ import { PowerTree } from "./PowerTree";
 import { HiddenParts } from "./HiddenParts";
 import { MultiSelection } from "./MultiSelection";
 import { matchesQuery, parsePartQuery, partSpecs } from "../core/partSearch";
-import type { ObdData } from "../knowledge/obdata";
-import type { BoardModel, ViewSide } from "../core/board";
-import type { Net, NetKind, Selection } from "../core/types";
+import type { Net } from "../core/types";
 import { partRole, type PartRole } from "../core/partRole";
 import { useI18n } from "../i18n";
-import { showsExtra, type Settings } from "../settings";
-import type { BoardNotes, Bookmark } from "../workbench/notes";
+import { showsExtra } from "../settings";
 import { Workbench } from "./Workbench";
 import { Details } from "./Details";
+import { useBoardSession } from "./BoardSession";
 import { VirtualList } from "./VirtualList";
 import { LayerList } from "./LayerList";
-import type { Palette, RGBA } from "../render/palette";
-import type { SchematicDocument } from "../schematic/document";
-import type { SchematicFacts } from "../schematic/partInfo";
-import type { Datasheet } from "../workbench/datasheets";
 import { NOT_A_RAIL } from "../workbench/consoleGuides";
 import { railVolts } from "../workbench/diagnosis";
 
@@ -52,55 +45,10 @@ type Tab = SidebarTab;
 export const SIDEBAR_TABS: readonly SidebarTab[] = ["details", "parts", "nets", "layers", "knowledge", "measure", "diagnose"];
 
 interface Props {
-  model: BoardModel;
-  selection: Selection;
-  side: ViewSide;
-  settings: Settings;
-  notes: BoardNotes | null;
-  notesError: string | null;
-  updateNotes(change: (n: BoardNotes) => BoardNotes): void;
-  onTolerance(t: number): void;
-  onSelect(selection: Selection, zoom: boolean): void;
-  palette: Palette;
-  hiddenLayers: ReadonlySet<number>;
-  onHiddenLayers(hidden: ReadonlySet<number>): void;
-  /** The board's open documents, the one shown first. */
-  documents: SchematicDocument[];
-  onSchematicJump(text: string, hit: number, doc: SchematicDocument): void;
-  onRenameNet(net: number, name: string): string | null;
-  onSetNetKind?(net: number, kind: NetKind | undefined): void;
-  /** Where a pin continues on another board of the device (see project.ts). */
-  crossBoard?(pin: number): CrossHit[];
-  onCrossBoard?(path: string, part: string, pin: string): void;
-  /** Changes when net names change, so name-sorted lists refresh. */
-  namesRevision: number;
-  pinnedNets: ReadonlyMap<number, RGBA>;
-  onTogglePin(net: number): void;
-  onPinNets(nets: number[]): void;
-  marked: { parts: number[]; label: string } | null;
-  onMarkParts(parts: number[] | null, label?: string): void;
-  onShowMarker(id: string): void;
-  onShowDrawing(id: string): void;
-  onShowBookmark(b: Bookmark): void;
-  onAddBookmark(): void;
-  /** Known-good values of OpenBoardData for this board, if any. */
-  obdata: ObdData | null;
-  /** Values, part numbers and net voltages read from the schematic. */
-  schematicFacts: SchematicFacts | null;
-  /** Parts chosen together (⌘/Shift-click). */
-  multiParts: readonly number[];
-  onMultiParts(parts: number[]): void;
-  onOpenBga(part: number): void;
-  onFindDonors(part: number): void;
-  datasheets: readonly Datasheet[];
-  onOpenDatasheet(sheet: Datasheet, page?: number): void;
-  onAddDatasheet(part: number): void;
-  onRemoveDatasheet(sheet: Datasheet): void;
   /** Shows a tab from outside (next measuring point by key). */
   tabRequest?: { tab: SidebarTab; n: number } | null;
   /** Told which tab is shown (layouts remember it). */
   onTabChange?(tab: SidebarTab): void;
-  listFocus?: { listId: string; index: number; n: number } | null;
   /** Contents of the "Knowledge" tab. */
   knowledge: ReactNode;
   knowledgeCount: number;
@@ -115,55 +63,24 @@ export const SIDEBAR_MIN = 260;
 export const SIDEBAR_MAX = 760;
 export const SIDEBAR_DEFAULT = 340;
 
-export function Sidebar({
-  obdata,
-  model,
-  selection,
-  side,
-  settings,
-  notes,
-  notesError,
-  updateNotes,
-  onTolerance,
-  onSelect,
-  palette,
-  hiddenLayers,
-  onHiddenLayers,
-  documents,
-  onSchematicJump,
-  onRenameNet,
-  onSetNetKind,
-  crossBoard,
-  onCrossBoard,
-  namesRevision,
-  pinnedNets,
-  onTogglePin,
-  onPinNets,
-  marked,
-  onMarkParts,
-  onShowMarker,
-  onShowDrawing,
-  onShowBookmark,
-  onAddBookmark,
-  knowledge,
-  knowledgeCount,
-  schematicFacts,
-  multiParts,
-  onMultiParts,
-  onOpenBga,
-  onFindDonors,
-  datasheets,
-  onOpenDatasheet,
-  onAddDatasheet,
-  onRemoveDatasheet,
-  tabRequest,
-  onTabChange,
-  listFocus,
-  width,
-  onWidth,
-  collapsed,
-  onCollapsed,
-}: Props) {
+export function Sidebar({ tabRequest, onTabChange, knowledge, knowledgeCount, width, onWidth, collapsed, onCollapsed }: Props) {
+  const {
+    model,
+    selection,
+    settings,
+    notes,
+    updateNotes,
+    onSelect,
+    palette,
+    hiddenLayers,
+    onHiddenLayers,
+    namesRevision,
+    marked,
+    onMarkParts,
+    schematicFacts,
+    multiParts,
+    onMultiParts,
+  } = useBoardSession();
   const asideRef = useRef<HTMLElement>(null);
   const { t, lang } = useI18n();
   const [tab, setTab] = useState<Tab>("details");
@@ -369,34 +286,7 @@ export function Sidebar({
               onClear={() => onMultiParts([])}
             />
           )}
-          <Details
-            model={model}
-            selection={selection}
-            side={side}
-            settings={settings}
-            notes={notes}
-            updateNotes={updateNotes}
-            onSelect={onSelect}
-            documents={documents}
-            onSchematicJump={onSchematicJump}
-            onRenameNet={onRenameNet}
-            onSetNetKind={onSetNetKind}
-            crossBoard={crossBoard}
-            onCrossBoard={onCrossBoard}
-            pinnedNets={pinnedNets}
-            onTogglePin={onTogglePin}
-            onPinNets={onPinNets}
-            marked={marked}
-            onMarkParts={onMarkParts}
-            obdata={obdata}
-            schematicFacts={schematicFacts}
-            onOpenBga={onOpenBga}
-            onFindDonors={onFindDonors}
-            datasheets={datasheets}
-            onOpenDatasheet={onOpenDatasheet}
-            onAddDatasheet={onAddDatasheet}
-            onRemoveDatasheet={onRemoveDatasheet}
-          />
+          <Details />
         </div>
       )}
 
@@ -410,22 +300,7 @@ export function Sidebar({
 
       {tab === "measure" && notes && (
         <div className="panel scroll">
-          <Workbench
-            model={model}
-            notes={notes}
-            update={updateNotes}
-            tolerance={settings.tolerance}
-            onTolerance={onTolerance}
-            onSelect={onSelect}
-            onShowMarker={onShowMarker}
-            onShowDrawing={onShowDrawing}
-            onShowBookmark={onShowBookmark}
-            onAddBookmark={onAddBookmark}
-            error={notesError}
-            selection={selection}
-            units={settings.units}
-            listFocus={listFocus}
-          />
+          <Workbench notes={notes} />
         </div>
       )}
 
