@@ -61,6 +61,22 @@ Befehle mit `&&` verketten, damit ein Fehler den Commit verhindert.
 - `src/components/` – Oberfläche. `src/i18n/de.ts` und `en.ts`: jeder Text in beiden Sprachen.
 - `tools/browser-tests/` – Browser-Tests mit Attrappe der Tauri-Seite (siehe dortiges README).
 
+## Skills
+
+Unter `.claude/skills/` liegen Arbeitsweisen aus [mattpocock/skills](https://github.com/mattpocock/skills)
+(MIT, siehe `.claude/skills/LICENSE-mattpocock-skills`). Sie wirken in Cloud- und lokalen Sitzungen;
+lokal das Plugin `mattpocock-skills` deshalb nicht zusätzlich installieren.
+
+- `/grill-me`, `/grill-with-docs` – vor einer Änderung ausfragen, bis alles geklärt ist.
+- `/diagnosing-bugs` – Fehler nachstellen, eingrenzen, mit Test festhalten.
+- `/tdd` – erst der fehlschlagende Test, dann der Code.
+- `/improve-codebase-architecture` – Stellen zum Aufteilen finden (z. B. `src/App.tsx`).
+- `/prototype` – Varianten zum Anklicken, bevor gebaut wird.
+- `/handoff` – Übergabe an die nächste Sitzung.
+
+`GLOSSARY.md` (im Wurzelordner) und Entscheidungsnotizen in `docs/adr/` auf Deutsch schreiben.
+Updates der Skills holt man bei Bedarf neu aus dem Original-Repository.
+
 ## Oberfläche
 
 Zwei Stufen: **Ansehen** (schlanker Boardviewer) und **Werkstatt** (alle Werkzeuge), siehe
