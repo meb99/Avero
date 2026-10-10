@@ -67,6 +67,10 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - **Foto des echten Boards** unter der Boardview (Darstellung → „Foto dieser Seite hinzufügen…"): zwei markante Punkte im Foto anklicken, dann dieselben Punkte auf dem Board (Pins rasten ein) – das Foto liegt danach deckungsgleich darunter, mit einstellbarer Deckkraft, getrennt für Ober- und Unterseite. Liegt neben dem Board ein PDF mit einem Bild der Platine (wie bei manchen Boardview-Paketen), übernimmt Avero die angezeigte Seite mit einem Klick als Foto und legt es selbst auf den Board-Umriss – ohne Datei auswählen, ohne Punkte klicken. Mit „Daneben“ steht das Foto unverändert neben dem Board: ein Klick auf ein Bauteil im Foto wählt es auf dem Board aus und springt hin, das Bauteil unter dem Mauszeiger wird mit Namen angezeigt, und was auf dem Board ausgewählt ist (Bauteil, Pin, alle Pins eines Netzes), wird im Foto markiert.
 - **Inhaltssuche über die ganze Bibliothek** (Bibliothek → „Inhalt“): Schaltpläne werden nach Text durchsucht, Boardviews nach Bauteilen und Netzen. Alles wird einmal indiziert; ein Klick auf einen Treffer öffnet Board und Schaltplan und springt zur Fundstelle.
 
+**Neu in 0.9.43**
+- **Ein Auswahlverlauf für alle Wege:** ⌘← / ⌘→, ⌘[ / ⌘], das Menü „Zurück“/„Vor“, die Befehlspalette und die Seitentasten der Maus gehen jetzt durch dieselbe Liste. Bisher führten ⌘← / ⌘→ eine eigene: Wer mit ⌘← zurückging und dann im Menü „Vor“ wählte, bekam „Keine spätere Auswahl“. Der Verlauf gilt je Board und bleibt beim Reiterwechsel erhalten.
+- Intern: Der Verlauf ist ein Modul (`src/selectionHistory.ts`) mit Tests; der Browser-Test `history.mjs` prüft Tasten und Palette gemeinsam.
+
 **Neu in 0.9.42**
 - **Lineal und Markierung aus der Palette ein- und ausschalten:** In der Befehlspalette ⌘K schalten „Lineal“ und „Markierung setzen“ jetzt ein und wieder aus – wie das Menü und die Tasten L und M. Bisher startete die Palette das Lineal jedes Mal neu und schaltete die Markierung nur ein.
 

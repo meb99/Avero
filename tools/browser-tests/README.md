@@ -21,6 +21,7 @@ Mit `CHROMIUM=/pfad/zu/chromium` wird ein vorhandenes Chromium benutzt.
 | `tabs.mjs [board.json]` | Reiter öffnen, wechseln (⌃⇥), schließen; Auswahl bleibt je Reiter |
 | `commands.mjs [board.json]` | Palette zeigt eingestellte Tasten, Tasten lösen ihre Befehle aus |
 | `tools.mjs [board.json]` | Immer nur ein Werkzeug (Lineal, Markierung, Zeichnen, Verschieben); Enter schließt eine Fläche, Escape beendet das Werkzeug |
+| `history.mjs [board.json]` | Ein Auswahlverlauf: ⌘← / ⌘→ und Zurück/Vor aus der Palette gehen durch dieselbe Liste |
 
 Ein Board als JSON:
 

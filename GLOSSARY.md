@@ -30,6 +30,11 @@ _Vermeiden_: Aktion, Menüpunkt, Kommando
 Die eine Liste aller festen Befehle, aus der Menüleiste, Befehlspalette und Tastatur lesen.
 _Vermeiden_: Action-Map, Shortcut-Liste
 
+**Auswahlverlauf** (Code: `selectionHistory`):
+Was auf einem Board nacheinander ausgewählt war, zum Zurück- und Vorgehen wie im Browser. Je Board
+eine Liste; alle Wege (Tasten, Menü, Palette, Maustasten) gehen durch dieselbe.
+_Vermeiden_: History, Navigation
+
 **Werkzeug** (Code: `boardTool`):
 Was der nächste Klick aufs Board bedeutet: Zeichnen, Zeichnung verschieben, Lineal,
 Markierung setzen oder Foto ausrichten. Es ist immer höchstens ein Werkzeug aktiv.

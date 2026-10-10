@@ -59,6 +59,7 @@ import { commandForKey, paletteCommands as registerPalette, type CommandActions,
 import { mapSelection } from "./core/compare";
 import { alignedToA, alignedToB, alignOnParts, matchNets } from "./core/diff";
 import { search } from "./core/search";
+import { EMPTY_HISTORY, recordSelection, stepSelection, type SelectionHistory } from "./selectionHistory";
 import {
   BOARD_EXTENSIONS,
   loadDemo,
@@ -171,8 +172,6 @@ function isTyping(target: EventTarget | null): boolean {
 const isPdf = (path: string) => /\.pdf$/i.test(path);
 const fileName = (path: string) => path.split("/").pop() ?? path;
 
-const sameSelection = (a: Selection, b: Selection) => JSON.stringify(a) === JSON.stringify(b);
-
 /** A selection as text the search understands ("U3000", "U3000.21", "PP3V3"), for bookmarks and copying. */
 function selectionText(model: BoardModel, sel: Selection): string | undefined {
   switch (sel.kind) {
@@ -191,12 +190,6 @@ function selectionText(model: BoardModel, sel: Selection): string | undefined {
     default:
       return undefined;
   }
-}
-
-/** Back and forward through what was selected, per board. */
-interface NavHistory {
-  items: Selection[];
-  at: number;
 }
 
 /** The text the schematic should find for a board selection. */
@@ -1265,21 +1258,8 @@ export function App() {
     });
   };
 
-  // Where the selection was before, to go back and forth as in a browser (⌘[ / ⌘]).
-  const selectionRef = useRef(selection);
-  selectionRef.current = selection;
-  const history = useRef<{ back: Selection[]; forward: Selection[] }>({ back: [], forward: [] });
-  useEffect(() => {
-    history.current = { back: [], forward: [] };
-  }, [model]);
-
   const select = useCallback(
     (sel: Selection, zoom: boolean) => {
-      const before = selectionRef.current;
-      if (before.kind !== "none" && JSON.stringify(before) !== JSON.stringify(sel)) {
-        history.current.back = [...history.current.back.slice(-49), before];
-        history.current.forward = [];
-      }
       setSelection(sel);
       setTextQuery(null);
       if (!model) return;
@@ -1342,29 +1322,18 @@ export function App() {
     return () => setPdfPasswordPrompt(null);
   }, [t]);
 
-  // --- back / forward through the selections ------------------------------------
-  const histories = useRef(new WeakMap<BoardModel, NavHistory>());
-  const navigating = useRef(false);
+  // --- back / forward through the selections, one history per board (src/selectionHistory.ts) ---
+  const histories = useRef(new WeakMap<BoardModel, SelectionHistory>());
   useEffect(() => {
-    if (!model || selection.kind === "none") return;
-    let h = histories.current.get(model);
-    if (!h) histories.current.set(model, (h = { items: [], at: -1 }));
-    if (navigating.current) {
-      navigating.current = false;
-      return;
-    }
-    if (h.items[h.at] && sameSelection(h.items[h.at], selection)) return;
-    h.items = [...h.items.slice(0, h.at + 1), selection].slice(-200);
-    h.at = h.items.length - 1;
+    if (model) histories.current.set(model, recordSelection(histories.current.get(model) ?? EMPTY_HISTORY, selection));
   }, [model, selection]);
   const navigate = (step: -1 | 1) => {
-    const h = model && histories.current.get(model);
-    if (!h) return;
-    const at = h.at + step;
-    if (at < 0 || at >= h.items.length) return setToast(t(step < 0 ? "nav.noBack" : "nav.noForward"));
-    h.at = at;
-    navigating.current = true;
-    select(h.items[at], true);
+    if (!model) return;
+    const h = stepSelection(histories.current.get(model) ?? EMPTY_HISTORY, step);
+    if (!h) return setToast(t(step < 0 ? "nav.noBack" : "nav.noForward"));
+    // Recording the selection stepped to keeps this place.
+    histories.current.set(model, h);
+    select(h.items[h.at], true);
   };
 
   // --- CSV lists for spreadsheets ---------------------------------------------------
@@ -2361,16 +2330,7 @@ export function App() {
       const step = e.key === "[" || e.key === "ArrowLeft" ? -1 : e.key === "]" || e.key === "ArrowRight" ? 1 : 0;
       if (mod && step && !e.shiftKey && !isTyping(e.target) && model) {
         e.preventDefault();
-        const h = history.current;
-        const [from, to] = step < 0 ? [h.back, h.forward] : [h.forward, h.back];
-        const target = from.pop();
-        if (!target) return;
-        const back = h.back;
-        const forward = h.forward;
-        select(target, true);
-        // select() records the step as new; going through the history keeps both lists instead.
-        history.current = { back, forward };
-        if (selectionRef.current.kind !== "none") to.push(selectionRef.current);
+        navigateRef.current(step);
         return;
       }
       if (mod && key === "z" && !editingText()) {
