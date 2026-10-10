@@ -74,6 +74,19 @@ lokal das Plugin `mattpocock-skills` deshalb nicht zusätzlich installieren.
 - `/prototype` – Varianten zum Anklicken, bevor gebaut wird.
 - `/handoff` – Übergabe an die nächste Sitzung.
 
+Daneben liegen vier Skills aus [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail)
+(MIT, siehe `.claude/skills/LICENSE-ponytail`, Stand `9b58c1f`). Übernommen sind nur die Skill-Texte,
+nicht die Hooks des Plugins; lokal das Plugin `ponytail` deshalb ebenfalls nicht zusätzlich installieren.
+
+- **Ponytail gilt bei Code-Aufgaben immer in Stufe full** (kleinste vollständige Änderung, Antwort
+  endet mit dem, was nicht geprüft wurde). `/ponytail lite|ultra` wechselt, „stop ponytail“ schaltet ab.
+- `/ponytail-review` – Änderung prüfen: Fehler, Sicherheit, Last, fehlende Tests, Tempo, was weg kann.
+- `/ponytail-audit` – dasselbe für das ganze Repository, nach Wichtigkeit geordnet.
+- `/ponytail-debt` – alle `shortcut:`-Kommentare als Liste.
+
+Für alle Skills gilt: Berichte auf Deutsch, die festen Regeln oben haben Vorrang (der XZZ-Converter
+bleibt z. B. auch bei einem „Lean“-Fund unangetastet).
+
 `GLOSSARY.md` (im Wurzelordner) und Entscheidungsnotizen in `docs/adr/` auf Deutsch schreiben.
 Updates der Skills holt man bei Bedarf neu aus dem Original-Repository.
 
