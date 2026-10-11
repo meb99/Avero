@@ -16,13 +16,21 @@ const click = async (x, y) => {
   await view.click({ position: { x, y } });
   await page.waitForTimeout(250);
 };
-/** Which tool the screen shows: its hint and the drawing menu. */
+/** Which tool the screen shows: its hint over the board. */
 const shown = async () => ({
   ruler: await page.locator(".ruler-hint").count(),
   placing: await page.locator(".placing-hint:not(.drawing-hint)").count(),
   drawing: await page.locator(".drawing-hint:not(.ruler-hint)").count(),
-  menu: await page.locator(".draw-select").inputValue(),
 });
+/** A command from the palette (⌘K), where the drawing tools are since the toolbar went FlexBV's way. */
+const palette = async (query) => {
+  await page.keyboard.press("Meta+k");
+  await page.waitForTimeout(300);
+  await page.keyboard.type(query);
+  await page.waitForTimeout(300);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(300);
+};
 const drawings = async () => (await savedNotes()).flatMap((n) => n.drawings ?? []);
 
 await click(5, 5);
@@ -30,14 +38,13 @@ await click(5, 5);
 await step("one tool at a time", async () => {
   await key("l");
   let s = await shown();
-  if (!s.ruler || s.menu !== "ruler") throw new Error(`L: no ruler ${JSON.stringify(s)}`);
+  if (!s.ruler) throw new Error(`L: no ruler ${JSON.stringify(s)}`);
   await key("m");
   s = await shown();
-  if (s.ruler || !s.placing || s.menu !== "") throw new Error(`M kept the ruler ${JSON.stringify(s)}`);
-  await page.locator(".draw-select").selectOption("line");
-  await page.waitForTimeout(250);
+  if (s.ruler || !s.placing) throw new Error(`M kept the ruler ${JSON.stringify(s)}`);
+  await palette("Linie (z. B.");
   s = await shown();
-  if (s.placing || !s.drawing || s.menu !== "line") throw new Error(`line kept the marker ${JSON.stringify(s)}`);
+  if (s.placing || !s.drawing) throw new Error(`line kept the marker ${JSON.stringify(s)}`);
   await key("l");
   s = await shown();
   if (s.drawing || !s.ruler) throw new Error(`L kept the drawing ${JSON.stringify(s)}`);
@@ -54,7 +61,7 @@ await step("clicks go to the tool", async () => {
   if ((await shown()).ruler) throw new Error("Escape kept the ruler");
 
   const before = (await drawings()).length;
-  await page.locator(".draw-select").selectOption("line");
+  await palette("Linie (z. B.");
   await click(300, 400);
   await click(450, 420);
   await page.waitForTimeout(500);
@@ -62,7 +69,7 @@ await step("clicks go to the tool", async () => {
   if (lines.length !== before + 1 || lines.at(-1).kind !== "line") throw new Error(`line not drawn (${lines.length})`);
   if ((await shown()).drawing) throw new Error("the line tool stayed after its two points");
 
-  await page.locator(".draw-select").selectOption("area");
+  await palette("Fläche (z. B.");
   for (const [x, y] of [[250, 250], [350, 250], [350, 330]]) await click(x, y);
   await key("Enter");
   await page.waitForTimeout(500);
@@ -104,14 +111,6 @@ await step("Escape ends the tool first", async () => {
 });
 
 await step("palette switches ruler and marker", async () => {
-  const palette = async (query) => {
-    await page.keyboard.press("Meta+k");
-    await page.waitForTimeout(300);
-    await page.keyboard.type(query);
-    await page.waitForTimeout(300);
-    await page.keyboard.press("Enter");
-    await page.waitForTimeout(300);
-  };
   await palette("Lineal");
   if (!(await shown()).ruler) throw new Error("palette: no ruler");
   await palette("Lineal");

@@ -115,14 +115,15 @@ export interface Settings {
 /**
  * Current settings revision. 2: sides are kept apart (no ghosting) by default.
  * 3: the schematic takes 40 % beside the board instead of half, as in FlexBV.
+ * 4: the light appearance (FlexBV's grey frame) instead of following the system.
  */
-const REVISION = 3;
+const REVISION = 4;
 
 export const DEFAULT_SETTINGS: Settings = {
   revision: REVISION,
   uiLevel: "view",
   language: "auto",
-  theme: "system",
+  theme: "light",
   units: "mm",
   scroll: "pan",
   ghostOtherSide: false,
@@ -183,6 +184,7 @@ export function migrate(s: Settings): Settings {
   if ((out.revision ?? 1) < 2) out.ghostOtherSide = false;
   // The old default only; a split dragged to another width stays.
   if ((out.revision ?? 1) < 3 && out.schematicShare === 0.5) out.schematicShare = 0.4;
+  if ((out.revision ?? 1) < 4 && out.theme === "system") out.theme = "light";
   out.revision = REVISION;
   return out;
 }

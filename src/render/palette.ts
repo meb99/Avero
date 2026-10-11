@@ -17,6 +17,8 @@ export interface Palette {
   pinPower: RGBA;
   pinGround: RGBA;
   pinUnconnected: RGBA;
+  /** Pin 1 of a part with more than two pins, as FlexBV marks it. */
+  pinFirst: RGBA;
   pinOfSelectedPart: RGBA;
   pinHighlight: RGBA;
   pinSelected: RGBA;
@@ -48,41 +50,43 @@ export interface Palette {
 }
 
 /**
- * Dark, after FlexBV: a near-black board, light grey part outlines on solid
- * grey bodies, grey-green pins, red power pins, the highlighted net in
- * warm yellow with white connection lines, part names in lavender.
+ * The board as FlexBV draws it ("olive"): a dark olive board, grey part bodies and pins,
+ * pin 1 of a chip in red, part names in orange, the highlighted net in lavender with
+ * lavender connection lines, test points as gold dots, the selected part outlined in red.
+ * Power pins are grey like the rest: colour is kept for what is selected.
  */
-export const DARK: Palette = {
-  background: [6, 7, 9, 255],
-  boardFill: [27, 28, 31, 255],
-  boardEdge: [168, 170, 176, 255],
-  partFill: [64, 67, 74, 150],
-  partOutline: [150, 155, 164, 255],
-  partSelectedFill: [190, 90, 255, 70],
-  partSelectedOutline: [214, 120, 255, 255],
-  partOnNetOutline: [255, 212, 64, 255],
-  pinSignal: [140, 162, 142, 255],
-  pinPower: [236, 64, 64, 255],
-  pinGround: [92, 100, 96, 255],
-  pinUnconnected: [58, 62, 64, 255],
-  pinOfSelectedPart: [214, 120, 255, 255],
-  pinHighlight: [255, 212, 64, 255],
-  pinSelected: [255, 255, 255, 255],
-  ratsnest: [255, 255, 255, 190],
-  nail: [255, 160, 30, 255],
-  via: [130, 140, 150, 255],
+const OLIVE = {
+  boardFill: [39, 37, 28, 255],
+  boardEdge: [92, 88, 70, 255],
+  partFill: [58, 58, 58, 235],
+  partOutline: [122, 122, 122, 255],
+  // Only the red outline marks the selected part, as in FlexBV.
+  partSelectedFill: [224, 30, 30, 0],
+  partSelectedOutline: [224, 30, 30, 255],
+  partOnNetOutline: [212, 196, 74, 255],
+  pinSignal: [114, 114, 114, 255],
+  pinPower: [114, 114, 114, 255],
+  pinGround: [95, 111, 96, 255],
+  pinUnconnected: [74, 74, 74, 255],
+  pinFirst: [214, 64, 64, 255],
+  pinOfSelectedPart: [150, 150, 150, 255],
+  pinHighlight: [169, 156, 247, 255],
+  pinSelected: [222, 214, 255, 255],
+  ratsnest: [138, 124, 240, 230],
+  nail: [184, 150, 46, 255],
+  via: [95, 110, 105, 255],
   trace: [196, 128, 64, 150],
-  markerChip: [235, 235, 240, 255],
+  markerChip: [200, 200, 200, 255],
   packageFill: {
-    passive: [176, 140, 88, 230],
-    inductor: [118, 124, 134, 235],
-    diode: [92, 92, 100, 240],
-    crystal: [180, 186, 194, 230],
-    ic: [52, 55, 62, 245],
-    connector: [200, 204, 210, 70],
+    passive: [106, 74, 58, 235],
+    inductor: [76, 76, 76, 240],
+    diode: [53, 80, 168, 240],
+    crystal: [189, 189, 168, 230],
+    ic: [38, 38, 38, 245],
+    connector: [90, 90, 90, 110],
   },
-  padMark: [214, 184, 110, 255],
-  markerSmall: [176, 190, 197, 230],
+  padMark: [138, 138, 106, 255],
+  markerSmall: [138, 138, 138, 230],
   layerTop: [239, 83, 80, 255],
   layerBottom: [66, 133, 244, 255],
   layerInner: [
@@ -95,70 +99,20 @@ export const DARK: Palette = {
     [240, 98, 146, 255],
     [121, 134, 203, 255],
   ],
-  label: "#e4e8ee",
-  labelChip: "#c9b8ff",
-  labelHalo: "rgba(0, 0, 0, 0.9)",
-  labelPin: "#0a0b0d",
-  labelNetBg: "#ffd440",
+  label: "#e8963a",
+  labelChip: "#e8963a",
+  labelHalo: "rgba(0, 0, 0, 0.55)",
+  labelPin: "#f2f2f2",
+  labelNetBg: "#a99cf7",
   labelNetText: "#111111",
   selectionRing: "#ffffff",
-};
+} as const satisfies Omit<Palette, "background">;
 
-/**
- * Light, with the same contrast: a white board, dark outlines and pins,
- * and the highlighted net in strong magenta instead of a pale yellow.
- */
-export const LIGHT: Palette = {
-  background: [214, 217, 222, 255],
-  boardFill: [252, 252, 250, 255],
-  boardEdge: [40, 44, 52, 255],
-  partFill: [150, 156, 166, 120],
-  partOutline: [46, 52, 62, 255],
-  partSelectedFill: [0, 98, 230, 55],
-  partSelectedOutline: [0, 98, 230, 255],
-  partOnNetOutline: [214, 0, 120, 255],
-  pinSignal: [52, 78, 104, 255],
-  pinPower: [214, 0, 0, 255],
-  pinGround: [120, 128, 138, 255],
-  pinUnconnected: [184, 190, 198, 255],
-  pinOfSelectedPart: [0, 98, 230, 255],
-  pinHighlight: [230, 0, 130, 255],
-  pinSelected: [0, 0, 0, 255],
-  ratsnest: [200, 0, 115, 210],
-  nail: [222, 90, 0, 255],
-  via: [100, 116, 128, 255],
-  trace: [176, 96, 30, 160],
-  markerChip: [25, 25, 25, 255],
-  packageFill: {
-    passive: [184, 132, 62, 235],
-    inductor: [86, 94, 104, 240],
-    diode: [60, 60, 68, 240],
-    crystal: [138, 146, 156, 240],
-    ic: [36, 40, 48, 240],
-    connector: [80, 86, 96, 60],
-  },
-  padMark: [150, 112, 30, 255],
-  markerSmall: [70, 96, 110, 235],
-  layerTop: [200, 30, 30, 255],
-  layerBottom: [15, 90, 190, 255],
-  layerInner: [
-    [214, 130, 0, 255],
-    [36, 120, 44, 255],
-    [130, 30, 160, 255],
-    [0, 120, 130, 255],
-    [200, 60, 16, 255],
-    [120, 110, 16, 255],
-    [180, 20, 84, 255],
-    [50, 66, 160, 255],
-  ],
-  label: "#111418",
-  labelChip: "#3b1f9e",
-  labelHalo: "rgba(255, 255, 255, 0.92)",
-  labelPin: "#ffffff",
-  labelNetBg: "#d60082",
-  labelNetText: "#ffffff",
-  selectionRing: "#000000",
-};
+/** Olive on a dark grey ground, for the dark appearance. */
+export const DARK: Palette = { ...OLIVE, background: [30, 30, 30, 255] };
+
+/** Olive on FlexBV's light grey ground: the standard look with the light appearance. */
+export const LIGHT: Palette = { ...OLIVE, background: [214, 214, 214, 255] };
 
 /** Colors for nets pinned at the same time, in pinning order. */
 export const PIN_COLORS: readonly RGBA[] = [
@@ -191,6 +145,7 @@ export const EDITABLE_COLORS = [
   "pinSignal",
   "pinPower",
   "pinGround",
+  "pinFirst",
   "pinHighlight",
   "partOnNetOutline",
   "ratsnest",

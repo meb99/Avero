@@ -108,6 +108,13 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
           <option value="pan">{t("settings.scroll.pan")}</option>
           <option value="zoom">{t("settings.scroll.zoom")}</option>
         </select>
+
+        <label htmlFor="set-sides">{t("sides.mode")}</label>
+        <select id="set-sides" value={settings.bothSidesMode} title={t("sides.modeHint")} onChange={(e) => set("bothSidesMode", e.target.value as Settings["bothSidesMode"])}>
+          <option value="together">{t("sides.together")}</option>
+          <option value="separate">{t("sides.separate")}</option>
+          <option value="synced">{t("sides.synced")}</option>
+        </select>
       </div>
       <h3>{t("ui.level")}</h3>
       <div className="form-grid">

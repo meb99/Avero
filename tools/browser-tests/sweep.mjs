@@ -56,8 +56,13 @@ await step("palette", async () => {
   await page.keyboard.press("Escape");
 });
 await step("settings", async () => {
-  await page.getByRole("button", { name: "Einstellungen" }).click();
+  // From the palette: the toolbar carries only the view's symbols since it went FlexBV's way.
+  await page.keyboard.press("Meta+k");
+  await page.waitForTimeout(300);
+  await page.keyboard.type("Einstellungen");
+  await page.keyboard.press("Enter");
   await page.waitForTimeout(500);
+  if (!(await page.locator(".dialog, dialog[open]").count())) throw new Error("no settings dialog");
   await page.keyboard.press("Escape");
 });
 await step("help", async () => {

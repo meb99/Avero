@@ -35,7 +35,6 @@ import {
   NO_TOOL,
   openArea,
   rulerPoint,
-  rulerTool,
   takesClicks,
   toggleMarker,
   toggleRuler,
@@ -245,13 +244,6 @@ export function App() {
   const splitViewsRef = useRef(splitViews);
   splitViewsRef.current = splitViews;
   const setBothSides = (on: boolean) => setSettings((old) => (old.bothSides === on ? old : { ...old, bothSides: on }));
-  /** Oben / Unten are switched on and off on their own; at least one stays on. */
-  const toggleSide = (clicked: ViewSide) => {
-    if (bothSides) {
-      setBothSides(false);
-      setSide(clicked === "top" ? "bottom" : "top");
-    } else if (side !== clicked) setBothSides(true);
-  };
   /** The other side alone. */
   const flipSide = () => {
     setBothSides(false);
@@ -2228,7 +2220,7 @@ export function App() {
         const own = layouts.find((l) => `own:${l.name}` === id);
         if (own) {
           applyLayout(own);
-          setLayoutName(own.name);
+          setToast(t("status.layout", { name: own.name }));
         }
       }
     },
@@ -2257,8 +2249,11 @@ export function App() {
     if (settings.updateCheck) void checkUpdates(false);
   }, []);
 
+  // A message is new for a few seconds, then stays in the status bar until the next one.
+  const [lastMessage, setLastMessage] = useState<string | null>(null);
   useEffect(() => {
     if (!toast) return;
+    setLastMessage(toast);
     const id = setTimeout(() => setToast(null), TOAST_MS);
     return () => clearTimeout(id);
   }, [toast]);
@@ -2292,7 +2287,7 @@ export function App() {
           label: t("layout.apply", { name: l.name }),
           run: () => {
             applyLayout(l);
-            setLayoutName(l.name);
+            setToast(t("status.layout", { name: l.name }));
           },
         })),
       ],
@@ -2480,8 +2475,6 @@ export function App() {
 
   // --- layouts: panes, their sizes and the sidebar, kept as shares ----------
   const layouts = useMemo(() => parseLayouts(settings.layouts), [settings.layouts]);
-  // The layout last chosen, named in the status bar.
-  const [layoutName, setLayoutName] = useState<string | null>(null);
   const applyLayout = (layout: SavedLayout & { compare?: boolean }) => {
     setSidebarFolded(false);
     setShare(layout.share);
@@ -2515,7 +2508,7 @@ export function App() {
   };
   const applyPreset = (id: PresetId) => {
     applyLayout(PRESETS[id]);
-    setLayoutName(t(`layout.${id}`));
+    setToast(t("status.layout", { name: t(`layout.${id}`) }));
   };
   /** The arrangement on screen now, under a name. */
   const currentLayout = (name: string): SavedLayout => ({
@@ -2552,34 +2545,30 @@ export function App() {
       <div className={`app${tabs.length > 1 ? " has-tabs" : ""}`}>
         <Toolbar
           model={model}
-          side={side}
           hasSchematic={schematic !== null}
           schematicVisible={showSchematic}
-          sidebarVisible={settings.showSidebar}
-          onOpen={() => void openDialog()}
-          onClose={closeBoard}
-          onToggleSide={toggleSide}
-          onFlip={flipSide}
-          bothSides={bothSides}
-          bothSidesMode={settings.bothSidesMode}
-          onBothSidesMode={(mode) => setSettings((old) => ({ ...old, bothSidesMode: mode }))}
-          onRotate={() => setRotation((r) => (r + 1) & 3)}
-          onFit={() => viewRef.current?.fit()}
-          onZoom={(f) => viewRef.current?.zoomBy(f)}
           onSchematic={() => void toggleSchematic()}
-          onLibrary={() => setDialog("library")}
-          onSidebar={() => setSettings((s) => ({ ...s, showSidebar: !s.showSidebar }))}
-          onSettings={() => setDialog("settings")}
-          onHelp={() => setDialog("help")}
-          onEditor={() => {setEditorBlank(!model);setDialog("editor");}}
+          onZoom={(f) => viewRef.current?.zoomBy(f)}
+          onRotate={(step) => setRotation((r) => (r + step + 4) & 3)}
+          onFlip={(axis) => {
+            flipSide();
+            // Top and bottom swapped: the other side turned half a turn.
+            if (axis === "v") setRotation((r) => (r + 2) & 3);
+          }}
+          onFit={() => viewRef.current?.fit()}
+          bothSides={bothSides}
+          onBothSides={() => setBothSides(!bothSides)}
+          onClear={() => {
+            setMultiParts([]);
+            setSelection(NONE);
+          }}
+          mechanicalHidden={settings.hideMechanical}
+          onMechanical={() => setSettings((s) => ({ ...s, hideMechanical: !s.hideMechanical }))}
+          ratsnest={settings.ratsnest}
+          onRatsnest={() => setSettings((s) => ({ ...s, ratsnest: !s.ratsnest }))}
+          onScreenshot={() => void exportImage()}
           onPick={(sel) => select(sel, true)}
           searchRef={searchRef}
-          placingMarker={placingMarker}
-          onMarker={() => switchTool(toggleMarker(toolRef.current))}
-          drawing={ruler ? "ruler" : (drawing?.kind ?? null)}
-          onDraw={(kind) => switchTool(kind === "ruler" ? rulerTool(side) : kind ? drawTool(kind, side) : NO_TOOL)}
-          ui={settings}
-          onUiLevel={(level) => setSettings((old) => ({ ...old, uiLevel: level }))}
         />
 
         {tabs.length > 1 && <TabBar tabs={tabInfos} active={activeTab} onSwitch={switchTab} onClose={closeTab} onNew={newTab} />}
@@ -3146,11 +3135,6 @@ export function App() {
               )}
             </div>
           )}
-          {toast && (
-            <div className="toast" role="status">
-              {toast}
-            </div>
-          )}
 
           {dragOver && <div className="drop-overlay">{t(dialog === "library" ? "library.dropHere" : "drop.hint")}</div>}
         </main>
@@ -3158,15 +3142,13 @@ export function App() {
         <StatusBar
           model={model}
           source={source}
-          schematic={schematic}
+          selection={selection}
           loading={loading}
           settings={settings}
+          message={toast ? { text: toast, fresh: true } : lastMessage ? { text: lastMessage, fresh: false } : null}
           scope={scope}
-          context={{
-            caseTitle: notesForModel ? (activeCase(notesForModel)?.title ?? null) : undefined,
-            side: bothSides ? "both" : side,
-            layout: layoutName,
-          }}
+          side={bothSides ? "both" : side}
+          caseTitle={notesForModel ? (activeCase(notesForModel)?.title ?? null) : null}
           onReport={() => setDialog("report")}
         />
         {dialog === "report" && model && <ImportReport model={model} source={source} scope={scope ?? []} onClose={() => setDialog(null)} />}

@@ -10,7 +10,7 @@ import type { Palette, RGBA } from "../render/palette";
 import { BoardRenderer, type RenderView } from "../render/renderer";
 import { computeStyle } from "../render/style";
 import type { Settings } from "../settings";
-import { formatLength } from "../format";
+import { setBoardCursor } from "../cursorStore";
 import type { NetStatus } from "../workbench/notes";
 import { photoCorners, type Affine, type Homography } from "../workbench/photo";
 
@@ -225,7 +225,6 @@ export function BoardView({
     highlightedNet: undefined as number | undefined,
   });
   const [hover, setHover] = useState<Hover | null>(null);
-  const [cursor, setCursor] = useState<Point | null>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
 
   /**
@@ -839,8 +838,9 @@ export function BoardView({
 
     const at = placeAt(p);
     const world = at.world;
-    setCursor(world);
     const st = stateRef.current;
+    const o = st.origin;
+    setBoardCursor({ x: world.x - (o?.x ?? 0), y: world.y - (o?.y ?? 0), side: at.side, fromOrigin: !!o });
     st.cursorWorld = world;
     st.cursorSide = at.side;
     if (st.draft) requestDraw();
@@ -963,7 +963,7 @@ export function BoardView({
       onPointerCancel={onPointerUp}
       onPointerLeave={() => {
         setHover(null);
-        setCursor(null);
+        setBoardCursor(null);
         stateRef.current.cursorWorld = null;
         stateRef.current.cursorSide = null;
         placeGhost();
@@ -981,6 +981,8 @@ export function BoardView({
     >
       <canvas ref={glRef} className="board-canvas" />
       <canvas ref={labelRef} className="board-labels" />
+      {/* Thin lines through the middle of the view, as FlexBV draws them. */}
+      <div className="centerlines" aria-hidden="true" />
       <canvas
         ref={overviewRef}
         className="board-overview"
@@ -1001,12 +1003,6 @@ export function BoardView({
       {hover && (
         <div className="board-tooltip" style={{ left: hover.x + 14, top: hover.y + 16 }}>
           {hover.text}
-        </div>
-      )}
-      {cursor && (
-        <div className="board-cursor">
-          {origin ? "Δ " : ""}
-          {formatLength(cursor.x - (origin?.x ?? 0), settings.units)} · {formatLength(cursor.y - (origin?.y ?? 0), settings.units)}
         </div>
       )}
       <div ref={ghostRef} className="board-ghost-cursor" aria-hidden="true" />

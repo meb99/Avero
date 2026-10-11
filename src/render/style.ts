@@ -47,6 +47,12 @@ function put(out: Uint8Array, i: number, c: RGBA, alpha = 1): void {
   out[i * 4 + 3] = Math.round(c[3] * alpha);
 }
 
+/** Pin 1 of a part with more than two pins: FlexBV draws it red to show the orientation. */
+function firstPin(model: BoardModel, pin: number): boolean {
+  const p = model.pins[pin];
+  return (p.number === "1" || p.number === "A1") && model.parts[p.part].pinCount > 2;
+}
+
 function pinBase(p: Palette, kind: NetKind): RGBA {
   switch (kind) {
     case "power":
@@ -96,9 +102,9 @@ export function computeStyle(
     } else if (options.pinnedNets?.has(pin.net)) {
       put(pinColors, i, options.pinnedNets.get(pin.net)!, near ? 1 : farHighlight);
     } else if (selectedPart === pin.part) {
-      put(pinColors, i, palette.pinOfSelectedPart, near ? 1 : farGhost);
+      put(pinColors, i, firstPin(model, i) ? palette.pinFirst : palette.pinOfSelectedPart, near ? 1 : farGhost);
     } else if (near) {
-      put(pinColors, i, pinBase(palette, nets[pin.net].kind), dim);
+      put(pinColors, i, firstPin(model, i) ? palette.pinFirst : pinBase(palette, nets[pin.net].kind), dim);
     } else {
       put(pinColors, i, pinBase(palette, nets[pin.net].kind), farGhost);
     }

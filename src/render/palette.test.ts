@@ -11,7 +11,7 @@ describe("own colours", () => {
   });
 
   it("show any palette colour as #rrggbb", () => {
-    expect(colorHex(DARK, "pinPower")).toBe("#ec4040");
+    expect(colorHex(DARK, "pinFirst")).toBe("#d64040");
     expect(colorHex(DARK, "label")).toMatch(/^#[0-9a-f]{6}$/);
   });
 });

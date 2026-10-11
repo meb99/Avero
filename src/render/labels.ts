@@ -108,19 +108,26 @@ export function drawLabels(
       count++;
       const showNet = options.netNames && r >= 15;
       const net = model.nets[pin.net];
-      // Ground and unconnected pads are dark in the dark theme (and light in
-      // the light theme), so their text uses the regular label color.
-      const quietPad = (net.kind === "ground" || net.kind === "unconnected") && pin.net !== highlightedNet;
-      ctx.fillStyle = quietPad ? palette.label : palette.labelPin;
+      // All pads are grey (FlexBV's way), so every pin number is light.
+      ctx.fillStyle = palette.labelPin;
       if (options.pinNumbers) {
         const size = Math.min(Math.max(r * 0.75, 7), 14);
         ctx.font = `600 ${size}px ${MONO}`;
         ctx.fillText(fitText(ctx, pin.number, r * 1.8), p.x, showNet ? p.y - size * 0.45 : p.y);
       }
       if (showNet) {
+        // The net name on a grey tag under the number, as FlexBV shows it.
         const size = Math.min(Math.max(r * 0.42, 7), 11);
         ctx.font = `500 ${size}px ${FONT}`;
-        ctx.fillText(fitText(ctx, net.name, r * 1.9), p.x, p.y + size * 0.75);
+        const text = fitText(ctx, net.name, r * 1.9);
+        const tw = ctx.measureText(text).width;
+        const ty = p.y + size * 0.75;
+        ctx.fillStyle = "rgba(150, 150, 150, 0.92)";
+        ctx.beginPath();
+        ctx.roundRect(p.x - tw / 2 - 3, ty - size / 2 - 1.5, tw + 6, size + 3, 2);
+        ctx.fill();
+        ctx.fillStyle = "#151515";
+        ctx.fillText(text, p.x, ty);
       }
       occupied.tryPlace({ x0: p.x - r, y0: p.y - r, x1: p.x + r, y1: p.y + r });
     });
@@ -161,11 +168,12 @@ export function drawLabels(
       const c = camera.toScreen({ x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 });
       // Big chips get big names, as in FlexBV.
       let size = Math.min(Math.max(Math.min(w, h) * 0.32, 9), 34);
-      ctx.font = `600 ${size}px ${FONT}`;
+      // Part names in a monospaced face, as FlexBV writes them.
+      ctx.font = `500 ${size}px ${MONO}`;
       let tw = ctx.measureText(part.name).width;
       if (tw > w * 1.15 && size > 9) {
         size = Math.max(9, (size * w * 1.15) / tw);
-        ctx.font = `600 ${size}px ${FONT}`;
+        ctx.font = `500 ${size}px ${MONO}`;
         tw = ctx.measureText(part.name).width;
       }
       // Try the middle of the part first, then just above and below it.
@@ -199,7 +207,7 @@ export function drawLabels(
       const valueText = (values?.get(i) ?? part.device)?.trim();
       if (valueText && inside && y === spots[0] && size >= 10 && h >= size * 2.7) {
         const small = Math.max(8, size * 0.55);
-        ctx.font = `500 ${small}px ${FONT}`;
+        ctx.font = `500 ${small}px ${MONO}`;
         let value = valueText;
         while (value.length > 3 && ctx.measureText(value).width > w * 0.92) value = value.slice(0, -2);
         if (value !== valueText) value = `${value}…`;
@@ -217,7 +225,7 @@ export function drawLabels(
   }
 
   if (measured && measured.size > 0) drawMeasured(ctx, model, camera, view, visible, measured);
-  if (padValues) drawPadValues(ctx, model, camera, view, visible, padValues, occupied, palette, selection);
+  if (padValues) drawPadValues(ctx, model, camera, view, visible, padValues, occupied, selection);
   drawSelectionRing(ctx, model, camera, selection, palette);
 }
 
@@ -234,7 +242,6 @@ function drawPadValues(
   visible: ReturnType<Camera["visibleBounds"]>,
   values: PadValues,
   occupied: Occupancy,
-  palette: Palette,
   selection: Selection,
 ): void {
   const s = camera.scale;
@@ -292,8 +299,9 @@ function drawPadValues(
       if (!first) continue;
       at = spots[0];
     }
-    const color = v.status ? STATUS_COLOR[v.status] : palette.label;
-    ctx.fillStyle = "rgba(16, 18, 22, 0.86)";
+    // A white tag with dark figures, as FlexBV shows its values; the border tells the status.
+    const color = v.status ? STATUS_COLOR[v.status] : "#9a9a9a";
+    ctx.fillStyle = "rgba(248, 248, 248, 0.96)";
     ctx.strokeStyle = color;
     ctx.lineWidth = first ? 2 : 1.2;
     ctx.beginPath();
@@ -301,11 +309,11 @@ function drawPadValues(
     ctx.fill();
     ctx.stroke();
     ctx.font = `600 ${size}px ${MONO}`;
-    ctx.fillStyle = v.status === "reference" ? "#c9d1d9" : color === palette.label ? "#ffffff" : color;
+    ctx.fillStyle = v.status === "deviation" || v.status === "mismatch" ? color : "#151515";
     ctx.fillText(v.text, at.x0 + 4, at.y0 + 3 + size / 2);
     if (v.sub) {
       ctx.font = `500 ${subSize}px ${MONO}`;
-      ctx.fillStyle = "#aab4be";
+      ctx.fillStyle = "#5a5a5a";
       ctx.fillText(v.sub, at.x0 + 4, at.y0 + 3 + size + 2 + subSize / 2);
     }
   }

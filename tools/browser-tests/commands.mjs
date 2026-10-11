@@ -30,7 +30,7 @@ await step("palette shows the set key", async () => {
   console.log("palette:", `${flip.label} ${flip.key}`, "·", `${fit.label} ${fit.key}`, "·", `${open.label} ${open.key}`);
 });
 await step("keys run their commands", async () => {
-  const side = () => page.locator(".toolbar .segmented [aria-pressed=true]").first().innerText();
+  const side = () => page.locator(".status-side").first().innerText();
   const before = await side();
   await page.locator(".board-view").first().click({ position: { x: 5, y: 5 } });
   await page.keyboard.press("x");

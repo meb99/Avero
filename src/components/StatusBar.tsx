@@ -1,113 +1,110 @@
-import { useEffect, useState } from "react";
-import type { BoardModel } from "../core/board";
+import type { BoardModel, ViewSide } from "../core/board";
 import type { BoardSource } from "../core/loader";
-import type { SchematicDocument } from "../schematic/document";
-import { formatSize } from "../format";
+import type { Selection } from "../core/types";
+import { useBoardCursor } from "../cursorStore";
 import { useI18n, type MessageKey } from "../i18n";
 import type { ScopeRow } from "../core/dataScope";
 import type { Settings } from "../settings";
+import { MILS_PER_MM } from "../core/types";
 
 interface Props {
   model: BoardModel | null;
   source: BoardSource | null;
-  schematic: SchematicDocument | null;
+  selection: Selection;
   loading: string | null;
   settings: Settings;
+  /** The last message; `fresh` while it is new (it used to float over the board as a toast). */
+  message: { text: string; fresh: boolean } | null;
   /** What the board's data holds (see dataScope). */
   scope?: ScopeRow[] | null;
-  /** What is active: the repair case (null: reference only), the side, the layout chosen. */
-  context?: { caseTitle?: string | null; side: string; layout?: string | null };
+  /** The side in view, or both. */
+  side: ViewSide | "both";
+  /** The repair case being worked on, if any. */
+  caseTitle?: string | null;
   onReport(): void;
 }
 
-/** Whether the Mac has a network connection (for the status bar only; nothing depends on it). */
-function useOnline(): boolean {
-  const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
-  useEffect(() => {
-    const on = () => setOnline(true);
-    const off = () => setOnline(false);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => {
-      window.removeEventListener("online", on);
-      window.removeEventListener("offline", off);
-    };
-  }, []);
-  return online;
+/** The selection as FlexBV's status bar writes it: "U1000", "C7782:1(PP3V3)" or the net. */
+export function selectionLabel(model: BoardModel, sel: Selection): string | null {
+  switch (sel.kind) {
+    case "part":
+      return model.parts[sel.part].name;
+    case "pin": {
+      const pin = model.pins[sel.pin];
+      return `${model.parts[pin.part].name}:${pin.number}(${model.nets[pin.net].name})`;
+    }
+    case "net":
+      return model.nets[sel.net].name;
+    case "testPoint": {
+      const tp = model.testPoints[sel.testPoint];
+      return `${tp.name ?? tp.probe ?? "TP"}(${model.nets[tp.net].name})`;
+    }
+    case "none":
+      return null;
+  }
 }
 
-/** Copper first: whether the board has it, hidden, added by Avero, or none in the file. */
-function copperChip(scope: ScopeRow[] | null | undefined): ScopeRow | undefined {
-  return scope?.find((r) => r.id === "traces");
-}
-
-export function StatusBar({ model, source, schematic, loading, settings, scope, context, onReport }: Props) {
+/** Where the mouse is: side, inches and millimetres, as FlexBV shows it. */
+function CursorReadout() {
   const { t } = useI18n();
-  const online = useOnline();
+  const c = useBoardCursor();
+  if (!c) return <span className="status-cursor muted">–</span>;
+  const inch = (v: number) => (v / 1000).toFixed(3);
+  const mm = (v: number) => (v / MILS_PER_MM).toFixed(2);
+  return (
+    <span className="status-cursor" title={c.fromOrigin ? t("status.fromOrigin") : undefined}>
+      {c.fromOrigin ? "Δ " : ""}
+      {t(c.side === "bottom" ? "status.sideBottom" : "status.sideTop")} {inch(c.x)}, {inch(c.y)}″ ({mm(c.x)}, {mm(c.y)} mm)
+    </span>
+  );
+}
+
+/**
+ * The bar under the board, laid out like FlexBV's: version, the last message, the
+ * selection, the mouse position, and the file at the right end. What the file holds and
+ * what Avero derived from it stays one click away (import report).
+ */
+export function StatusBar({ model, source, selection, loading, settings, message, scope, side, caseTitle, onReport }: Props) {
+  const { t } = useI18n();
   const b = model?.board;
+  const copper = scope?.find((r) => r.id === "traces");
+  const derived = scope?.some((r) => r.state === "derived" || r.state === "estimated");
   return (
     <footer className="statusbar">
-      {loading && <span className="status-loading">{t("status.loading", { name: loading })}</span>}
-      {!loading && b && source && (
+      <span className="muted">Avero {__APP_VERSION__}</span>
+      <span className={`status-message${message?.fresh ? " fresh" : ""}`} role="status" title={message?.text}>
+        {loading ? t("status.loading", { name: loading }) : (message?.text ?? "")}
+      </span>
+      {b && (
         <>
-          <span className="status-file" title={source.path ?? source.name}>
-            {source.name}
-          </span>
-          <span className="muted">{b.formatName}</span>
-          <span>{formatSize(b.bounds.maxX - b.bounds.minX, b.bounds.maxY - b.bounds.minY, settings.units)}</span>
-          <span>{t("status.parts", { n: b.parts.length })}</span>
-          <span>{t("status.pins", { n: b.pins.length })}</span>
-          <span>{t("status.nets", { n: b.nets.length })}</span>
-          {(() => {
-            const c = copperChip(scope);
-            if (!c) return null;
-            const derived = scope?.some((r) => r.state === "derived" || r.state === "estimated");
-            return (
-              <button className={`link status-scope scope-state-${c.state}`} onClick={onReport} title={t("scope.statusHint")}>
-                {t(`scope.status.${c.state}` as MessageKey, { n: c.n ?? 0, m: c.m ?? 0 })}
-                {derived && c.state !== "derived" ? ` · ${t("scope.status.reconstructed")}` : ""}
-              </button>
-            );
-          })()}
+          <span className="status-selection">{(model && selectionLabel(model, selection)) ?? t("status.noSelection")}</span>
+          <CursorReadout />
+          <span className="status-side">{t(`status.side.${side}` as MessageKey)}</span>
+          {copper && (
+            <button className={`link status-scope scope-state-${copper.state}`} onClick={onReport} title={t("scope.statusHint")}>
+              {t(`scope.status.${copper.state}` as MessageKey, { n: copper.n ?? 0, m: copper.m ?? 0 })}
+              {derived && copper.state !== "derived" ? ` · ${t("scope.status.reconstructed")}` : ""}
+            </button>
+          )}
           {b.warnings.length > 0 && (
             <span className="status-warn" title={b.warnings.join("\n")}>
               {t("status.warnings", { n: b.warnings.length })}
             </span>
           )}
-          <button className="link status-report" onClick={onReport} title={t("quality.hint")}>
-            {t("quality.button")}
-          </button>
+          {caseTitle && <span className="status-case">{t("status.case", { title: caseTitle })}</span>}
         </>
       )}
-      {!loading && schematic && (
-        <span className="status-file muted" title={schematic.path ?? schematic.name}>
-          {t("schematic.title")}: {schematic.name} · {schematic.pageCount} {t("schematic.pages")}
-        </span>
-      )}
       <span className="status-spacer" />
-      {!loading && b && context && (
-        <span className="status-context" title={t("status.contextHint")}>
-          {context.caseTitle !== undefined && (
-            <span className={context.caseTitle ? "status-case" : "muted"}>
-              {context.caseTitle ? t("status.case", { title: context.caseTitle }) : t("status.referenceOnly")}
-            </span>
-          )}
-          <span>{t(`status.side.${context.side}` as MessageKey)}</span>
-          {context.layout && <span className="muted">{t("status.layout", { name: context.layout })}</span>}
-        </span>
-      )}
-      {settings.localMode ? (
+      {settings.localMode && (
         <span className="status-local" title={t("local.statusHint")}>
           {t("local.status")}
         </span>
-      ) : (
-        !online && (
-          <span className="muted" title={t("local.offlineHint")}>
-            {t("local.offline")}
-          </span>
-        )
       )}
-      <span className="muted">Avero {__APP_VERSION__}</span>
+      {source && (
+        <span className="status-file" title={source.path ?? source.name}>
+          {source.name}
+        </span>
+      )}
     </footer>
   );
 }

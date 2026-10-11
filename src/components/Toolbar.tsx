@@ -1,186 +1,58 @@
-import type { DrawingKind } from "../workbench/notes";
 import type { Ref } from "react";
-import type { BoardModel, ViewSide } from "../core/board";
+import type { BoardModel } from "../core/board";
 import type { Selection } from "../core/types";
-import { useI18n } from "../i18n";
-import {
-  CloseIcon,
-  FitIcon,
-  FlagIcon,
-  FlipIcon,
-  HelpIcon,
-  LibraryIcon,
-  OpenIcon,
-  RotateIcon,
-  SchematicIcon,
-  SettingsIcon,
-  SidebarIcon,
-  ZoomInIcon,
-  ZoomOutIcon,
-} from "./Icons";
+import { useI18n, type MessageKey } from "../i18n";
 import { SearchBox } from "./SearchBox";
-import { showsExtra, type Settings, type UiLevel } from "../settings";
+import { Sym, type SymbolName } from "./Symbols";
 
 interface Props {
   model: BoardModel | null;
-  side: ViewSide;
   hasSchematic: boolean;
   schematicVisible: boolean;
-  sidebarVisible: boolean;
-  onOpen(): void;
-  onClose(): void;
-  /** Oben / Unten switch on and off on their own; at least one stays on. */
-  onToggleSide(side: ViewSide): void;
-  onFlip(): void;
-  bothSides: boolean;
-  bothSidesMode: "together" | "separate" | "synced";
-  onBothSidesMode(mode: "together" | "separate" | "synced"): void;
-  onRotate(): void;
-  onFit(): void;
-  onZoom(factor: number): void;
   onSchematic(): void;
-  onLibrary(): void;
-  onSidebar(): void;
-  onSettings(): void;
-  onHelp(): void;
-  onEditor?(): void;
+  /** Zoom by a factor: big steps (×2) and small ones (×1.25), as in FlexBV. */
+  onZoom(factor: number): void;
+  /** A quarter turn: 1 clockwise, -1 counter-clockwise. */
+  onRotate(step: 1 | -1): void;
+  /** The other side, mirrored left-right ("h") or top-bottom ("v"). */
+  onFlip(axis: "h" | "v"): void;
+  onFit(): void;
+  bothSides: boolean;
+  onBothSides(): void;
+  onClear(): void;
+  /** Shields and frames kept out of sight. */
+  mechanicalHidden: boolean;
+  onMechanical(): void;
+  ratsnest: boolean;
+  onRatsnest(): void;
+  onScreenshot(): void;
   onPick(selection: Selection): void;
   searchRef: Ref<HTMLInputElement>;
-  /** Next click on the board places a note. */
-  placingMarker: boolean;
-  onMarker(): void;
-  /** Drawing tool in use, and starting or stopping one. */
-  drawing: DrawingKind | "ruler" | null;
-  onDraw(kind: DrawingKind | "ruler" | null): void;
-  /** View or workshop, and the workshop parts shown in view as well. */
-  ui: Pick<Settings, "uiLevel" | "uiShow">;
-  onUiLevel(level: UiLevel): void;
 }
 
+/**
+ * The bar above the board, laid out like FlexBV's: one row of symbols for the view, the
+ * search at the end. Files, settings and the workshop are in the menu bar and the
+ * command palette (⌘K). The bar doubles as the macOS title bar: empty areas drag the window.
+ */
 export function Toolbar(p: Props) {
   const { t } = useI18n();
   const board = p.model !== null;
+  const tool = (symbol: SymbolName, label: MessageKey, run: () => void, on?: boolean) => (
+    <button
+      className={`tool icon-only${on ? " active" : ""}`}
+      onClick={run}
+      title={t(label)}
+      aria-label={t(label)}
+      aria-pressed={on}
+      disabled={!board}
+    >
+      <Sym name={symbol} />
+    </button>
+  );
   return (
-    // The toolbar doubles as the macOS title bar: empty areas drag the window.
     <header className="toolbar" data-tauri-drag-region>
-      <div className="toolbar-group" data-tauri-drag-region>
-        <div className="brand" aria-label="Avero" data-tauri-drag-region>
-          <img src={`${import.meta.env.BASE_URL}avero.svg`} alt="" width={22} height={22} />
-          <span>Avero</span>
-        </div>
-        <button className="tool" onClick={p.onOpen} title={`${t("toolbar.open")} (⌘O)`}>
-          <OpenIcon />
-          <span className="tool-label">{t("toolbar.open")}</span>
-        </button>
-        {p.onEditor && showsExtra(p.ui, "editor") && (
-          <button className="tool" onClick={p.onEditor} title={t("toolbar.editorHint")}>
-            {t("toolbar.editor")}
-          </button>
-        )}
-        {board && (
-          <button className="tool icon-only" onClick={p.onClose} title={t("toolbar.close")} aria-label={t("toolbar.close")}>
-            <CloseIcon />
-          </button>
-        )}
-      </div>
-
-      {board && (
-        <>
-          <div className="toolbar-group">
-            <div className="segmented" role="group" aria-label={t("toolbar.sides")} title={t("toolbar.sidesHint")}>
-              {(["top", "bottom"] as const).map((s) => {
-                const on = p.bothSides || p.side === s;
-                return (
-                  <button key={s} aria-pressed={on} className={on ? "on" : ""} onClick={() => p.onToggleSide(s)}>
-                    {t(s === "top" ? "toolbar.top" : "toolbar.bottom")}
-                  </button>
-                );
-              })}
-            </div>
-            {p.bothSides && (
-              <select
-                className="tool sides-mode"
-                value={p.bothSidesMode}
-                title={t("sides.modeHint")}
-                aria-label={t("sides.mode")}
-                onChange={(e) => p.onBothSidesMode(e.target.value as "together" | "separate" | "synced")}
-              >
-                <option value="together">{t("sides.together")}</option>
-                <option value="separate">{t("sides.separate")}</option>
-                <option value="synced">{t("sides.synced")}</option>
-              </select>
-            )}
-            <div className="tool-cluster" role="group" aria-label={t("toolbar.viewTools")}>
-            <button className="tool icon-only" onClick={p.onFlip} title={t("toolbar.flip")} aria-label={t("toolbar.flip")}>
-              <FlipIcon />
-            </button>
-            <button className="tool icon-only" onClick={p.onRotate} title={t("toolbar.rotate")} aria-label={t("toolbar.rotate")}>
-              <RotateIcon />
-            </button>
-            <button className="tool icon-only" onClick={p.onFit} title={t("toolbar.fit")} aria-label={t("toolbar.fit")}>
-              <FitIcon />
-            </button>
-            {/* "Ansehen" zooms with trackpad, wheel and ⌘+/⌘−; the buttons belong to the workshop. */}
-            {p.ui.uiLevel === "workshop" && (
-              <>
-                <button className="tool icon-only" onClick={() => p.onZoom(1 / 1.5)} title={`${t("toolbar.zoomOut")} (⌘−)`} aria-label={t("toolbar.zoomOut")}>
-                  <ZoomOutIcon />
-                </button>
-                <button className="tool icon-only" onClick={() => p.onZoom(1.5)} title={`${t("toolbar.zoomIn")} (⌘+)`} aria-label={t("toolbar.zoomIn")}>
-                  <ZoomInIcon />
-                </button>
-              </>
-            )}
-            </div>
-            {(showsExtra(p.ui, "draw") || p.placingMarker || p.drawing) && (
-              <div className="tool-cluster" role="group" aria-label={t("draw.title")}>
-                <button
-                  className={`tool icon-only${p.placingMarker ? " active" : ""}`}
-                  onClick={p.onMarker}
-                  title={`${t("marker.place")} (M)`}
-                  aria-label={t("marker.place")}
-                  aria-pressed={p.placingMarker}
-                >
-                  <FlagIcon />
-                </button>
-                <select
-                  className={`tool draw-select${p.drawing ? " active" : ""}`}
-                  value={p.drawing ?? ""}
-                  title={t("draw.title")}
-                  aria-label={t("draw.title")}
-                  onChange={(e) => p.onDraw((e.target.value || null) as DrawingKind | "ruler" | null)}
-                >
-                  <option value="">✎ {t("draw.title")}</option>
-                  <option value="line">{t("draw.line")}</option>
-                  <option value="arrow">{t("draw.arrow")}</option>
-                  <option value="rect">{t("draw.rect")}</option>
-                  <option value="circle">{t("draw.circle")}</option>
-                  <option value="area">{t("draw.area")}</option>
-                  <option value="text">{t("draw.textTool")}</option>
-                  <option value="jumper">{t("draw.jumper")}</option>
-                  <option value="ruler">{t("ruler.title")} (L)</option>
-                </select>
-              </div>
-            )}
-          </div>
-          <div className="toolbar-search">
-            <SearchBox model={p.model!} onPick={p.onPick} inputRef={p.searchRef} />
-          </div>
-        </>
-      )}
-
-      <div className="toolbar-spacer" data-tauri-drag-region />
-      <div className="toolbar-group">
-        <div className="segmented ui-level" role="group" aria-label={t("ui.level")} title={t("ui.levelHint")}>
-          {(["view", "workshop"] as const).map((level) => (
-            <button key={level} aria-pressed={p.ui.uiLevel === level} className={p.ui.uiLevel === level ? "on" : ""} onClick={() => p.onUiLevel(level)}>
-              {t(`ui.${level}`)}
-            </button>
-          ))}
-        </div>
-        <button className="tool icon-only" onClick={p.onLibrary} title={t("library.toggle")} aria-label={t("library.toggle")}>
-          <LibraryIcon />
-        </button>
+      <div className="toolbar-group symbols" role="toolbar" aria-label={t("toolbar.viewTools")}>
         <button
           className={`tool icon-only${p.schematicVisible ? " active" : ""}`}
           onClick={p.onSchematic}
@@ -188,26 +60,29 @@ export function Toolbar(p: Props) {
           aria-label={p.hasSchematic ? t("schematic.toggle") : t("schematic.open")}
           aria-pressed={p.schematicVisible}
         >
-          <SchematicIcon />
+          <Sym name="split" />
         </button>
-        {board && (
-          <button
-            className={`tool icon-only${p.sidebarVisible ? " active" : ""}`}
-            onClick={p.onSidebar}
-            title={t("toolbar.sidebar")}
-            aria-label={t("toolbar.sidebar")}
-            aria-pressed={p.sidebarVisible}
-          >
-            <SidebarIcon />
-          </button>
-        )}
-        <button className="tool icon-only" onClick={p.onHelp} title={t("toolbar.help")} aria-label={t("toolbar.help")}>
-          <HelpIcon />
-        </button>
-        <button className="tool icon-only" onClick={p.onSettings} title={t("toolbar.settings")} aria-label={t("toolbar.settings")}>
-          <SettingsIcon />
-        </button>
+        {tool("zoomOut", "toolbar.zoomOut", () => p.onZoom(1 / 2))}
+        {tool("zoomIn", "toolbar.zoomIn", () => p.onZoom(2))}
+        {tool("stepOut", "toolbar.stepOut", () => p.onZoom(1 / 1.25))}
+        {tool("stepIn", "toolbar.stepIn", () => p.onZoom(1.25))}
+        {tool("rotateLeft", "toolbar.rotateLeft", () => p.onRotate(-1))}
+        {tool("flipVertical", "toolbar.flipVertical", () => p.onFlip("v"))}
+        {tool("flipHorizontal", "toolbar.flipHorizontal", () => p.onFlip("h"))}
+        {tool("rotateRight", "toolbar.rotateRight", () => p.onRotate(1))}
+        {tool("fit", "toolbar.fit", p.onFit)}
+        {tool(p.bothSides ? "panel" : "bothSides", p.bothSides ? "toolbar.oneSide" : "toolbar.bothSides", p.onBothSides, p.bothSides)}
+        {tool("clear", "toolbar.clear", p.onClear)}
+        {tool(p.mechanicalHidden ? "hidden" : "visible", p.mechanicalHidden ? "mechanical.show" : "mechanical.hide", p.onMechanical)}
+        {tool("lines", "menu.ratsnest", p.onRatsnest, p.ratsnest)}
+        {tool("camera", "toolbar.screenshot", p.onScreenshot)}
       </div>
+      <div className="toolbar-spacer" data-tauri-drag-region />
+      {board && (
+        <div className="toolbar-search">
+          <SearchBox model={p.model!} onPick={p.onPick} inputRef={p.searchRef} />
+        </div>
+      )}
     </header>
   );
 }

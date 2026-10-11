@@ -40,7 +40,7 @@ await step("right-click on a body finds the part", async () => {
   await rightClickCenter();
   if ((await title()) !== part) throw new Error(`right-click on ${part} selected ${await title()}`);
   // The mocked app has no schematic: it says how to open one.
-  const toast = await page.locator(".toast").first().innerText().catch(() => "");
+  const toast = await page.locator(".status-message").first().innerText().catch(() => "");
   if (!/⌘E/.test(toast)) throw new Error(`no hint without schematic (${toast})`);
 });
 await step("right-click on a pin finds its net", async () => {
@@ -50,7 +50,7 @@ await step("right-click on a pin finds its net", async () => {
   console.log(`right-click: body → ${part}, pin → ${net}`);
 });
 await step("middle-click flips the board", async () => {
-  const side = () => page.locator(".toolbar .segmented [aria-pressed=true]").first().innerText();
+  const side = () => page.locator(".status-side").first().innerText();
   const before = await side();
   const box = await view.boundingBox();
   await page.mouse.click(box.x + 20, box.y + box.height - 20, { button: "middle" });

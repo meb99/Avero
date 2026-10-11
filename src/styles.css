@@ -2,7 +2,7 @@
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
   --mono: "SF Mono", ui-monospace, Menlo, monospace;
   --radius: 6px;
-  --toolbar-h: 48px;
+  --toolbar-h: 38px;
   --status-h: 26px;
   --tabs-h: 30px;
   --sidebar-w: 340px;
@@ -22,19 +22,28 @@
   --ground: #7b8794;
   --signal: #8fa3b8;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  /* Bars above and below the board, and the head of a section. */
+  --bar: var(--surface);
+  --section-head: var(--surface-3);
+  --fresh: rgba(79, 195, 247, 0.22);
   color-scheme: dark;
 }
 
+/* The light appearance in FlexBV's manner: grey bars, white panels, light blue section heads. */
 :root[data-theme="light"] {
-  --bg: #eef0f3;
+  --radius: 3px;
+  --bg: #d6d6d6;
   --surface: #ffffff;
-  --surface-2: #f5f6f8;
-  --surface-3: #e8ebef;
-  --border: #d6dbe1;
-  --text: #1c2530;
-  --text-muted: #5f6b78;
-  --accent: #0277bd;
+  --surface-2: #ececec;
+  --surface-3: #dcdcdc;
+  --border: #a9a9a9;
+  --text: #111111;
+  --text-muted: #555b62;
+  --accent: #2d7be0;
   --accent-text: #ffffff;
+  --bar: #d9d9d9;
+  --section-head: #bcd4f2;
+  --fresh: #fff1a8;
   --highlight: #f59e0b;
   --danger: #c62828;
   --power: #c62828;
@@ -240,10 +249,26 @@ kbd {
   align-items: center;
   gap: 14px;
   /* Room for the window's traffic-light buttons on the left. */
-  padding: 0 10px 0 84px;
-  background: var(--surface);
+  padding: 0 8px 0 84px;
+  background: var(--bar);
   border-bottom: 1px solid var(--border);
   min-width: 0;
+}
+
+/* One row of symbols, as in FlexBV's bar. */
+.toolbar .symbols {
+  gap: 2px;
+}
+
+.toolbar .symbols .tool.icon-only {
+  padding: 4px;
+  color: var(--text);
+  border-radius: var(--radius);
+}
+
+.toolbar .symbols .tool.active {
+  background: var(--section-head);
+  color: var(--text);
 }
 
 .toolbar-group {
@@ -433,6 +458,16 @@ kbd {
 
 .board-labels {
   pointer-events: none;
+}
+
+/* A thin cross through the middle of the view, as in FlexBV. */
+.centerlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(140, 140, 140, 0.35), rgba(140, 140, 140, 0.35)) center / 1px 100% no-repeat,
+    linear-gradient(rgba(140, 140, 140, 0.35), rgba(140, 140, 140, 0.35)) center / 100% 1px no-repeat;
 }
 
 .board-tooltip {
@@ -992,12 +1027,34 @@ button.net-chip {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 0 10px;
+  padding: 0 8px;
   font-size: 12px;
-  background: var(--surface);
+  background: var(--bar);
   border-top: 1px solid var(--border);
   white-space: nowrap;
   overflow: hidden;
+}
+
+/* The last message, marked while it is new (it used to float over the board). */
+.status-message {
+  min-width: 0;
+  max-width: 34%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 1px 6px;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+}
+
+.status-message.fresh {
+  background: var(--fresh);
+  color: var(--text);
+}
+
+.status-selection,
+.status-cursor {
+  font-family: var(--mono);
+  font-size: 11.5px;
 }
 
 .status-file {

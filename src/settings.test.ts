@@ -5,7 +5,7 @@ describe("settings migration", () => {
   it("turns ghosting of the other side off once for older settings", () => {
     const old = { ...DEFAULT_SETTINGS, revision: undefined, ghostOtherSide: true };
     expect(migrate(old).ghostOtherSide).toBe(false);
-    expect(migrate(old).revision).toBe(3);
+    expect(migrate(old).revision).toBe(4);
   });
 
   it("migrates settings stored by older versions, which have no revision", () => {
@@ -23,6 +23,13 @@ describe("settings migration", () => {
     expect(fromStored({ revision: 2, schematicShare: 0.5 }).schematicShare).toBe(0.4);
     expect(fromStored({ revision: 2, schematicShare: 0.62 }).schematicShare).toBe(0.62);
     expect(fromStored({ revision: 3, schematicShare: 0.5 }).schematicShare).toBe(0.5);
+  });
+
+  it("starts in FlexBV's light frame, unless an appearance was chosen", () => {
+    expect(DEFAULT_SETTINGS.theme).toBe("light");
+    expect(fromStored({ revision: 3, theme: "system" }).theme).toBe("light");
+    expect(fromStored({ revision: 3, theme: "dark" }).theme).toBe("dark");
+    expect(fromStored({ revision: 4, theme: "system" }).theme).toBe("system");
   });
 
   it("hides shields and frames from the start", () => {
