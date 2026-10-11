@@ -111,6 +111,8 @@ export function findNames(
     const part = model.findPart(pinRef[1]);
     const pin = part === undefined ? undefined : model.findPin(part, pinRef[2]);
     if (pin !== undefined) out.push({ selection: { kind: "pin", pin }, label: model.pinLabel(pin), detail: model.nets[model.pins[pin].net].name, kind: "pin" });
+    // No such pin (a BGA names its balls A1, B2 …): offer the part.
+    else if (part !== undefined) out.push({ selection: { kind: "part", part }, label: model.parts[part].name, detail: model.parts[part].device ?? "", kind: "part" });
   }
   const named: SearchResult[] = [];
   if (options.parts)

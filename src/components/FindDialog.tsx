@@ -122,6 +122,10 @@ export function FindDialog({
                 if (e.key === "Enter") {
                   e.preventDefault();
                   commit();
+                } else if (e.key === "Escape") {
+                  // Esc closes at once, as in FlexBV (a search field would first clear its text).
+                  e.preventDefault();
+                  onClose();
                 }
               }}
             />

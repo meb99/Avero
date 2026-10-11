@@ -51,6 +51,14 @@ await step("a click shows the hit, the second entry adds a part", async () => {
   if (!head.includes("(2)")) throw new Error(`second entry: ${head}`);
   console.log(`${first} selected by a click, ${second} added: ${head}`);
 });
+await step("Esc closes at once, also with text typed", async () => {
+  await type(0, "ZZZ_NOTHING");
+  await page.locator("#find-0").press("Escape");
+  await page.waitForTimeout(300);
+  if (await page.locator(".find-dialog").count()) throw new Error("Esc left the dialog open");
+  await page.locator(".toolbar button[aria-label^='Bauteil oder Netz suchen']").click();
+  await page.waitForSelector(".find-dialog #find-0", { timeout: 5000 });
+});
 await step("Enter takes the hit and closes", async () => {
   await type(0, second);
   await page.locator("#find-0").press("Enter");

@@ -34,6 +34,12 @@ describe("search for component / network", () => {
     expect(hit?.detail).toBe("I2C_SDA");
   });
 
+  it("offers the part when it has no such pin (a BGA names its balls A1, B2 …)", () => {
+    const [hit] = findNames(model, "U10.B7", { ...both, mode: "substring" });
+    expect(hit?.kind).toBe("part");
+    expect(hit?.label).toBe("U10");
+  });
+
   it("leaves out unconnected nets", () => {
     expect(names("UNCONNECTED", { ...both, mode: "strict" })).toEqual([]);
   });
