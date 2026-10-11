@@ -22,6 +22,7 @@ Mit `CHROMIUM=/pfad/zu/chromium` wird ein vorhandenes Chromium benutzt.
 | `commands.mjs [board.json]` | Palette zeigt eingestellte Tasten, Tasten lösen ihre Befehle aus |
 | `tools.mjs [board.json]` | Immer nur ein Werkzeug (Lineal, Markierung, Zeichnen, Verschieben); Enter schließt eine Fläche, Escape beendet das Werkzeug |
 | `calm-start.mjs [board.json]` | Ruhiger Start: Seitenleiste eingeklappt bis zur ersten Auswahl, Rechtsklick sucht Bauteil oder Netz im Schaltplan, Mittelklick dreht |
+| `find.mjs [board.json]` | Suchmaske ⌘F: Bauteile/Netze, Teilwort/Anfang/Ganz, Klick zeigt, zweites Feld ergänzt, Enter schließt |
 | `history.mjs [board.json]` | Ein Auswahlverlauf: ⌘← / ⌘→ und Zurück/Vor aus der Palette gehen durch dieselbe Liste |
 
 Ein Board als JSON:

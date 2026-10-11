@@ -12,6 +12,7 @@ import { computeStyle } from "../render/style";
 import type { Settings } from "../settings";
 import { setBoardCursor } from "../cursorStore";
 import type { NetStatus } from "../workbench/notes";
+import type { HoverDetails } from "../workbench/tooltip";
 import { photoCorners, type Affine, type Homography } from "../workbench/photo";
 
 /** A decoded photo with its alignment (photo units: pixels / image width). */
@@ -101,6 +102,8 @@ interface Props {
   onSchematicPick?(selection: Selection): void;
   /** A middle-click: the other side, as in FlexBV. */
   onFlip?(): void;
+  /** The tooltip's tables for what the mouse rests on; without it a line of text. */
+  describeHit?(hit: Hit): HoverDetails | null;
   /** Parts selected together with the selection (multiple selection). */
   extraParts?: ReadonlySet<number>;
   ref?: Ref<BoardViewHandle>;
@@ -114,7 +117,56 @@ interface SideView extends RenderView {
 interface Hover {
   x: number;
   y: number;
-  text: string;
+  text?: string;
+  details?: HoverDetails | null;
+}
+
+/** How long the mouse rests on something before its tooltip shows (FlexBV: 0.7 s). */
+const HOVER_DELAY = 500;
+
+/** The tooltip as FlexBV draws it: a table per object, then the readings with a red head. */
+function TooltipTable({ details }: { details: HoverDetails }) {
+  const { t } = useI18n();
+  return (
+    <>
+      {details.rows.map((group, i) => (
+        <table key={i} className="tip-table">
+          <tbody>
+            {group.map(([label, value]) => (
+              <tr key={label}>
+                <th>{label}</th>
+                <td>{value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ))}
+      {details.readings.length > 0 && (
+        <table className="tip-table tip-readings">
+          <thead>
+            <tr>
+              <th>{t("tip.condition")}</th>
+              <th>D</th>
+              <th>V</th>
+              <th>R</th>
+              <th>{t("tip.note")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {details.readings.map((r, i) => (
+              <tr key={i}>
+                <td>{r.condition}</td>
+                <td>{r.d}</td>
+                <td>{r.v}</td>
+                <td>{r.r}</td>
+                <td>{r.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </>
+  );
 }
 
 const NO_LAYERS: ReadonlySet<number> = new Set();
@@ -183,6 +235,7 @@ export function BoardView({
   onAddPart,
   onSchematicPick,
   onFlip,
+  describeHit,
   extraParts,
   ref,
 }: Props) {
@@ -225,6 +278,15 @@ export function BoardView({
     highlightedNet: undefined as number | undefined,
   });
   const [hover, setHover] = useState<Hover | null>(null);
+  // What the mouse rests on and the timer that shows its tooltip.
+  const hoverWait = useRef<{ key: string; timer: number }>({ key: "", timer: 0 });
+  const describeHitRef = useRef(describeHit);
+  describeHitRef.current = describeHit;
+  const endHover = () => {
+    window.clearTimeout(hoverWait.current.timer);
+    hoverWait.current.key = "";
+    setHover(null);
+  };
   const ghostRef = useRef<HTMLDivElement>(null);
 
   /**
@@ -830,7 +892,7 @@ export function BoardView({
       if (d.moved) {
         cam.pan(p.x - d.last.x, p.y - d.last.y);
         d.last = p;
-        setHover(null);
+        endHover();
         requestDraw();
         return;
       }
@@ -847,8 +909,21 @@ export function BoardView({
     else placeGhost();
     onCursorRef.current?.(world);
     if (e.pointerType === "mouse") {
-      const text = describe(hitAt(p));
-      setHover(text ? { x: p.x, y: p.y, text } : null);
+      // The tooltip shows once the mouse rests on one thing; it follows the mouse there.
+      const hit = hitAt(p);
+      const key = hit ? JSON.stringify(hit) : "";
+      if (key === hoverWait.current.key) {
+        setHover((old) => (old ? { ...old, x: p.x, y: p.y } : old));
+        return;
+      }
+      endHover();
+      if (!hit) return;
+      hoverWait.current.key = key;
+      hoverWait.current.timer = window.setTimeout(() => {
+        const details = describeHitRef.current?.(hit) ?? null;
+        const text = details ? undefined : (describe(hit) ?? undefined);
+        if (details || text) setHover({ x: p.x, y: p.y, text, details });
+      }, HOVER_DELAY);
     }
   };
 
@@ -962,7 +1037,7 @@ export function BoardView({
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
       onPointerLeave={() => {
-        setHover(null);
+        endHover();
         setBoardCursor(null);
         stateRef.current.cursorWorld = null;
         stateRef.current.cursorSide = null;
@@ -1001,8 +1076,12 @@ export function BoardView({
         onWheel={(e) => e.stopPropagation()}
       />
       {hover && (
-        <div className="board-tooltip" style={{ left: hover.x + 14, top: hover.y + 16 }}>
-          {hover.text}
+        <div
+          className={`board-tooltip${hover.details ? " tip" : ""}`}
+          // Kept inside the view near its right and bottom edges.
+          style={{ left: Math.max(4, Math.min(hover.x + 14, cameraRef.current.width - 340)), top: Math.max(4, Math.min(hover.y + 16, cameraRef.current.height - 260)) }}
+        >
+          {hover.details ? <TooltipTable details={hover.details} /> : hover.text}
         </div>
       )}
       <div ref={ghostRef} className="board-ghost-cursor" aria-hidden="true" />

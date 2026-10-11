@@ -84,3 +84,46 @@ export function search(model: BoardModel, query: string, limit = 50): SearchResu
   }
   return results;
 }
+
+/** How a name must match, as in FlexBV's search: anywhere, at its start, or all of it. */
+export type SearchMode = "substring" | "prefix" | "strict";
+
+/**
+ * The search for component / network: parts and nets (as chosen) whose name holds the query
+ * in the given way, in name order, a part before a net of the same name. `U10.A3` finds that
+ * pin first. Unconnected nets are left out.
+ */
+export function findNames(
+  model: BoardModel,
+  query: string,
+  options: { parts: boolean; nets: boolean; mode: SearchMode; limit?: number },
+): SearchResult[] {
+  const q = query.trim().toUpperCase();
+  if (!q) return [];
+  const limit = options.limit ?? 500;
+  const matches = (name: string) => {
+    const n = name.toUpperCase();
+    return options.mode === "strict" ? n === q : options.mode === "prefix" ? n.startsWith(q) : n.includes(q);
+  };
+  const out: SearchResult[] = [];
+  const pinRef = /^([^\s.:]+)[.:\s]+([^\s.:]+)$/.exec(q);
+  if (pinRef && options.parts) {
+    const part = model.findPart(pinRef[1]);
+    const pin = part === undefined ? undefined : model.findPin(part, pinRef[2]);
+    if (pin !== undefined) out.push({ selection: { kind: "pin", pin }, label: model.pinLabel(pin), detail: model.nets[model.pins[pin].net].name, kind: "pin" });
+  }
+  const named: SearchResult[] = [];
+  if (options.parts)
+    for (const i of model.sortedParts) {
+      const p = model.parts[i];
+      if (matches(p.name)) named.push({ selection: { kind: "part", part: i }, label: p.name, detail: p.device ?? "", kind: "part" });
+    }
+  if (options.nets)
+    for (const i of model.sortedNets) {
+      const n = model.nets[i];
+      if (n.kind !== "unconnected" && matches(n.name)) named.push({ selection: { kind: "net", net: i }, label: n.name, detail: String(n.pins.length), kind: "net" });
+    }
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+  named.sort((a, b) => collator.compare(a.label, b.label) || (a.kind === "part" ? -1 : 1));
+  return [...out, ...named].slice(0, limit);
+}

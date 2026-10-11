@@ -340,71 +340,6 @@ kbd {
   font-weight: 600;
 }
 
-.toolbar-search {
-  flex: 1 1 460px;
-  max-width: 460px;
-  min-width: 160px;
-}
-
-/* Search */
-
-.search {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0 8px;
-  color: var(--text-muted);
-}
-
-.search:focus-within {
-  border-color: var(--accent);
-}
-
-.search input {
-  flex: 1;
-  border: 0;
-  background: transparent;
-  padding: 7px 0;
-  color: var(--text);
-  outline: none;
-  min-width: 0;
-}
-
-.search-results {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  max-height: 420px;
-  overflow-y: auto;
-  margin: 0;
-  padding: 4px;
-  list-style: none;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  z-index: 20;
-  color: var(--text);
-}
-
-.search-results li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.search-results li.active {
-  background: var(--surface-3);
-}
-
 .search-empty {
   color: var(--text-muted);
   cursor: default !important;
@@ -5695,4 +5630,117 @@ p.pt-conflict,
 /* The schematic on FlexBV's muted violet, which sets the white page off. */
 :root[data-theme="light"] .schematic-canvas {
   background: #4c4c7f;
+}
+
+/* The search for part / net, laid out like FlexBV's: buttons, options, two entries with their hits. */
+.find-dialog {
+  width: min(760px, calc(100vw - 32px));
+}
+
+.find-bar,
+.find-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-bottom: 8px;
+}
+
+.find-bar button {
+  padding: 3px 10px;
+  border-radius: 2px;
+}
+
+.find-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 560px) {
+  .find-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.find-column {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.find-column input {
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.find-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  height: 260px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.find-hit {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 2px 6px;
+  text-align: left;
+}
+
+.find-hit:hover,
+.find-hit:focus-visible {
+  background: var(--section-head);
+}
+
+/* The tooltip as a table, as FlexBV shows it: label right-aligned, value beside it, readings with a red head. */
+.board-tooltip.tip {
+  font-family: var(--font);
+  padding: 3px;
+  max-width: 340px;
+  white-space: normal;
+}
+
+.tip-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  background: var(--surface);
+}
+
+.tip-table + .tip-table {
+  margin-top: 3px;
+}
+
+.tip-table th,
+.tip-table td {
+  border: 1px solid var(--border);
+  padding: 1px 5px;
+}
+
+.tip-table th {
+  text-align: right;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.tip-table tbody tr:nth-child(even) {
+  background: var(--surface-2);
+}
+
+.tip-readings thead th {
+  background: #2a2a2a;
+  color: #ff4d4d;
+  text-align: left;
 }

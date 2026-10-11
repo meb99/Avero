@@ -104,11 +104,19 @@ export async function openApp(boardJson, { level = "workshop", notes = null, vie
       logs.push(`step ${name}: ${String(e).split("\n")[0]}`);
     }
   };
+  /** Searches with the search for part / net (⌘F) and takes the hit Enter takes. */
   const find = async (q) => {
-    const s = page.getByRole("searchbox").first();
+    if (!(await page.locator(".find-dialog").count())) {
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.keyboard.press("Meta+f");
+      await page.waitForSelector(".find-dialog #find-0", { timeout: 5000 });
+    }
+    const s = page.locator(".find-dialog #find-0");
     await s.fill(q);
     await s.press("Enter");
     await page.waitForTimeout(700);
+    // No hit leaves the dialog open: close it like the user would.
+    if (await page.locator(".find-dialog").count()) await page.keyboard.press("Escape");
   };
   /** Opens a section of the info panel by its title (the panel's former tabs are sections now). */
   const tab = async (name) => {

@@ -50,6 +50,19 @@ await step("right-click on a pin finds its net", async () => {
   if ((await title()) !== net) throw new Error(`right-click on ${part}.${pin.number} selected ${await title()}, not ${net}`);
   console.log(`right-click: body → ${part}, pin → ${net}`);
 });
+await step("the tooltip is a table", async () => {
+  // Resting on a pin shows its net and part in tables, as in FlexBV.
+  await find(`${part}.${pin.number}`);
+  await page.evaluate(() => document.activeElement?.blur());
+  const box = await view.boundingBox();
+  await page.mouse.move(box.x + box.width / 2 + 1, box.y + box.height / 2 + 1);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(900);
+  const tip = await page.locator(".board-tooltip.tip").first().innerText().catch(() => "");
+  if (!tip.includes(net) || !tip.includes(part)) throw new Error(`tooltip: ${tip.replace(/\s+/g, " ")}`);
+  await shot("calm-start-tooltip");
+  console.log("tooltip:", tip.replace(/\s+/g, " ").slice(0, 120));
+});
 await step("middle-click flips the board", async () => {
   const side = () => page.locator(".status-side").first().innerText();
   const before = await side();

@@ -20,6 +20,7 @@ import { connectMeter, meterState, METER_VALUE_EVENT, readStable } from "./workb
 import type { Quantity } from "./workbench/measure";
 import { newDatasheetId, parseDatasheets, partNumbers, type Datasheet } from "./workbench/datasheets";
 import { CommandPalette } from "./components/CommandPalette";
+import { FindDialog } from "./components/FindDialog";
 import { HelpDialog, SettingsDialog } from "./components/Dialogs";
 import { LibraryDialog, type LibraryDrop } from "./components/Library";
 import type { SpatialHit } from "./workbench/spatialSearch";
@@ -50,7 +51,8 @@ import { Toolbar } from "./components/Toolbar";
 import { Dialog } from "./components/Dialogs";
 import { setProjectPrompt, pickProjectFolder, type ProjectMember } from "./core/loader";
 import { Welcome } from "./components/Welcome";
-import { BoardModel, netSides, visibleFrom, type ViewSide } from "./core/board";
+import { BoardModel, netSides, visibleFrom, type Hit, type ViewSide } from "./core/board";
+import { hoverDetails } from "./workbench/tooltip";
 import { findPoint } from "./core/points";
 import { padValueSource } from "./workbench/padValues";
 import type { Command } from "./core/commands";
@@ -262,7 +264,7 @@ export function App() {
   const [error, setError] = useState<{ name: string; path?: string; error: LoadError } | null>(null);
   // A file that failed for lack of an XZZ key, reopened once the key is set.
   const retryPath = useRef<string | null>(null);
-  const [dialog, setDialog] = useState<"settings" | "help" | "library" | "palette" | "report" | "project" | "editor" | null>(null);
+  const [dialog, setDialog] = useState<"settings" | "help" | "library" | "palette" | "report" | "project" | "editor" | "find" | null>(null);
   const [editorBlank, setEditorBlank] = useState(false);
   const [projectChoice,setProjectChoice]=useState<{name:string;choices:ProjectMember[];resolve:(id:string|null)=>void}|null>(null);
   useEffect(()=>{setProjectPrompt((name,choices)=>new Promise((resolve)=>setProjectChoice({name,choices,resolve})));return()=>setProjectPrompt(null);},[]);
@@ -311,7 +313,6 @@ export function App() {
   const docViewRef = useRef<SchematicViewHandle>(null);
   // What each document last highlighted, kept while another one is shown.
   const docFocus = useRef(new WeakMap<SchematicDocument, SchematicFocus | null>());
-  const searchRef = useRef<HTMLInputElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const focusNonce = useRef(0);
   // Set while a click in the schematic changes the board selection, so the
@@ -2189,10 +2190,7 @@ export function App() {
     exportPdf: () => void exportPdf(),
     exportCsv: (what) => void exportCsv(what),
     settings: () => setDialog("settings"),
-    search: () => {
-      searchRef.current?.focus();
-      searchRef.current?.select();
-    },
+    search: () => model && setDialog("find"),
     searchSchematic: () => {
       if (schematic && !schematicVisible) setSchematicVisible(true);
       // After the pane is shown.
@@ -2396,7 +2394,7 @@ export function App() {
       switch (e.key) {
         case "/":
           e.preventDefault();
-          searchRef.current?.focus();
+          if (model) setDialog("find");
           break;
         case "Escape":
           // Moving a drawing ends first, then the isolation, then any other tool.
@@ -2552,6 +2550,19 @@ export function App() {
 
   const welcome = !model && !schematic;
 
+  /** The tooltip's tables for what the mouse rests on (FlexBV's layout, see tooltip.ts). */
+  const describeHit = (hit: Hit) =>
+    model
+      ? hoverDetails(model, hit, {
+          t,
+          lang,
+          units: settings.units,
+          reference: notesForModel?.reference,
+          obdata: boardObdata?.obdata ?? null,
+          value: (i) => partValues.get(i),
+        })
+      : null;
+
   return (
     <I18nContext.Provider value={i18n}>
       <div className={`app${tabs.length > 1 ? " has-tabs" : ""}`}>
@@ -2579,8 +2590,7 @@ export function App() {
           ratsnest={settings.ratsnest}
           onRatsnest={() => setSettings((s) => ({ ...s, ratsnest: !s.ratsnest }))}
           onScreenshot={() => void exportImage()}
-          onPick={(sel) => select(sel, true)}
-          searchRef={searchRef}
+          onFind={() => setDialog("find")}
         />
 
         {tabs.length > 1 && <TabBar tabs={tabInfos} active={activeTab} onSwitch={switchTab} onClose={closeTab} onNew={newTab} />}
@@ -2648,6 +2658,7 @@ export function App() {
                     onAddPart={addPartToSelection}
                     onSchematicPick={showInSchematic}
                     onFlip={flipSide}
+                    describeHit={describeHit}
                     extraParts={multiSet}
                   >
                     {placingMarker && <div className="placing-hint">{t("marker.placing")}</div>}
@@ -2778,6 +2789,7 @@ export function App() {
                       onAddPart={addPartToSelection}
                       onSchematicPick={showInSchematic}
                       onFlip={flipSide}
+                      describeHit={describeHit}
                       extraParts={multiSet}
                       onViewChange={settings.bothSidesMode === "synced" ? (v) => viewRef.current?.setViewState(v) : undefined}
                       onCursor={(p) => viewRef.current?.showGhost(p)}
@@ -3276,6 +3288,24 @@ export function App() {
               setDialog(null);
               setPaletteQuery("");
             }}
+          />
+        )}
+        {dialog === "find" && model && (
+          <FindDialog
+            model={model}
+            onPick={(sel) => {
+              setMultiParts([]);
+              select(sel, true);
+            }}
+            onPickSecond={(sel) => {
+              // The second entry adds to the first: a part to the parts selected, a net in its own colour.
+              if (sel.kind === "part") addPartToSelection(sel.part);
+              else {
+                const net = model.selectedNet(sel);
+                if (net !== undefined && !pinnedList.includes(net)) togglePinned(net);
+              }
+            }}
+            onClose={() => setDialog(null)}
           />
         )}
         {dialog === "library" && <LibraryDialog drop={libraryDrop} onOpen={openLibraryEntry} onOpenText={(e, f, q, spot) => void openLibraryText(e, f, q, spot)} onClose={() => setDialog(null)} />}
