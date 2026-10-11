@@ -5,7 +5,7 @@ import { boardArg, openApp } from "./common.mjs";
 
 const board = boardArg();
 const part = process.argv[3] ?? board.model.parts.find((p) => p.pinCount >= 8)?.name ?? board.model.parts[0].name;
-const { page, step, find, shot, finish } = await openApp(board.json, { level: "view", viewport: { width: 1600, height: 900 } });
+const { page, step, find, tab, shot, finish } = await openApp(board.json, { level: "view", viewport: { width: 1600, height: 900 } });
 
 /** The interface level from the palette, as the toolbar no longer carries it. */
 const setLevel = async (name) => {
@@ -22,7 +22,8 @@ const look = async (level) => {
   await shot(`ui-${level}-board`);
   await find(part);
   await shot(`ui-${level}-part`);
-  console.log(level, "| toolbar controls:", await page.locator(".toolbar button:not([disabled]), .toolbar select").count(), "| tabs:", (await page.locator(".sidebar [role=tab]").allInnerTexts()).join(", "));
+  console.log(level, "| toolbar controls:", await page.locator(".toolbar button:not([disabled]), .toolbar select").count(), "| sections:", (await page.locator(".info-section .section-head").allInnerTexts()).join(", "));
+  await tab("Details");
   console.log(level, "| part details:", (await page.locator(".details h3, .details summary").allInnerTexts()).filter(Boolean).join(" | "));
   await page.keyboard.press("Escape");
 };
@@ -44,7 +45,7 @@ await step("history", async () => {
   const net = board.model.nets.find((n) => n.kind === "power")?.name ?? board.model.nets[0].name;
   await find(part);
   await find(net);
-  const title = () => page.locator(".details h2").first().innerText();
+  const title = () => page.locator(".status-selection").first().innerText();
   await page.keyboard.press("Meta+ArrowLeft");
   await page.waitForTimeout(300);
   if ((await title()) !== part) throw new Error(`back: ${await title()}`);

@@ -6,25 +6,22 @@ import { boardArg, openApp } from "./common.mjs";
 const board = boardArg();
 const level = process.argv[3] === "view" ? "view" : "workshop";
 const t0 = Date.now();
-const { page, step, find, shot, finish } = await openApp(board.json, { level });
+const { page, step, find, tab, shot, finish } = await openApp(board.json, { level });
 const model = board.model;
 const pick = (arr, n) => arr.filter((_, i) => i % Math.max(1, Math.floor(arr.length / n)) === 0).slice(0, n);
 
 for (const q of [...pick(model.parts.map((p) => p.name), 6), ...pick(model.nets.filter((n) => n.kind !== "unconnected").map((n) => n.name), 6), `${model.parts[0].name}.1`])
   await step(`search ${q}`, () => find(q));
 
-for (const name of ["Details", "Bauteile", "Netze", "Lagen", "Wissen", "Messen", "Fehlersuche"])
-  await step(`tab ${name}`, async () => {
-    const t = page.getByRole("tab", { name: new RegExp(`^${name}`) });
-    if (await t.count()) {
-      await t.first().click({ timeout: 3000 });
-      await page.waitForTimeout(300);
-    }
+// Every section of the info panel the level shows (the former sidebar tabs).
+for (const name of ["Auswahlverlauf", "Netz", "Lesezeichen", "Bauteile gewählt", "Details", "Bauteile (", "Netze (", "Lagen", "Wissen", "Messen", "Fehlersuche"])
+  await step(`section ${name}`, async () => {
+    if (await page.locator(".info-section .section-head", { hasText: name }).count()) await tab(name);
   });
 
 if (level === "workshop")
   await step("guides", async () => {
-    await page.getByRole("tab", { name: /^Fehlersuche/ }).click();
+    await tab("Fehlersuche");
     const options = await page.locator(".diag-pick select option").evaluateAll((os) => os.map((o) => o.value));
     for (const v of options) {
       await page.locator(".diag-pick select").selectOption(v);
@@ -79,7 +76,7 @@ await step("bga", async () => {
   const bga = model.parts.find((p) => p.pinCount > 100);
   if (!bga) return;
   await find(bga.name);
-  await page.getByRole("tab", { name: /^Details/ }).click();
+  await tab("Details");
   const b = page.getByRole("button", { name: "BGA-Ansicht öffnen" });
   if (await b.count()) {
     await b.click();

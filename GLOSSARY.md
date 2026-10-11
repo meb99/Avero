@@ -14,8 +14,13 @@ _Vermeiden_: Tab (im Gespräch), Fenster, Ansicht
 Alle Reiter einschließlich des aktiven, als ein Modul mit einem Interface.
 _Vermeiden_: Tab-Liste, live-Tab
 
+**Infoleiste** (Code: `Sidebar`, `InfoSections`):
+Die Leiste rechts vom Board, wie bei FlexBV aus aufklappbaren Abschnitten: Auswahlverlauf, Netz,
+Lesezeichen, Wissen, gewählte Bauteile, dann Averos Werkzeuge (Details, Listen, Messen, Fehlersuche).
+_Vermeiden_: Seitenleiste mit Reitern, Sidebar (im Gespräch)
+
 **Board-Sitzung**:
-Was die Seitenleiste über das aktive Board wissen und tun kann: Board, Auswahl, Notizen,
+Was die Infoleiste über das aktive Board wissen und tun kann: Board, Auswahl, Notizen,
 Einstellungen und die Sprünge (Schaltplan, Lesezeichen, Markierungen).
 _Vermeiden_: Kontext, Session-State
 

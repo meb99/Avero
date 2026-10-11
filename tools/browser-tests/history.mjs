@@ -7,7 +7,8 @@ const board = boardArg();
 const [a, b, c] = board.model.parts.filter((p) => p.pinCount >= 2).map((p) => p.name);
 const { page, step, find, finish } = await openApp(board.json);
 
-const title = () => page.locator(".details h2").first().innerText();
+// What is selected, as the status bar names it (FlexBV's way).
+const title = () => page.locator(".status-selection").first().innerText();
 const off = () => page.evaluate(() => document.activeElement?.blur());
 const key = async (k) => {
   await off();

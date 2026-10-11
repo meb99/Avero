@@ -106,6 +106,7 @@ if (bga)
 if (notes && shorted >= 0)
   await step("hints", async () => {
     await find(m.nets[shorted].name);
+    await tab("Details");
     await page.locator(".net-hint-box").first().scrollIntoViewIfNeeded();
     await shot("feature-hint-net", ".sidebar");
     await tab("Fehlersuche");

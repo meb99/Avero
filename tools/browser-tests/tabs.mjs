@@ -17,7 +17,8 @@ const openRecent = async (name) => {
 };
 
 const tabs = () => page.locator(".tab-bar [role=tab]").allInnerTexts();
-const title = () => page.locator(".details h2").first().innerText();
+// What is selected, as the status bar names it (FlexBV's way).
+const title = () => page.locator(".status-selection").first().innerText();
 const activeName = () => page.locator(".tab-bar [aria-selected=true]").first().innerText();
 
 await step("three tabs", async () => {

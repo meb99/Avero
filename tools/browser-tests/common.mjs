@@ -110,7 +110,12 @@ export async function openApp(boardJson, { level = "workshop", notes = null, vie
     await s.press("Enter");
     await page.waitForTimeout(700);
   };
-  const tab = (name) => page.locator(".sidebar [role=tab]", { hasText: name }).first().click();
+  /** Opens a section of the info panel by its title (the panel's former tabs are sections now). */
+  const tab = async (name) => {
+    const head = page.locator(".info-section .section-head", { hasText: name }).first();
+    if ((await head.getAttribute("aria-expanded")) !== "true") await head.click();
+    await page.waitForTimeout(250);
+  };
   const shot = async (name, selector) => {
     await page.evaluate(() => document.activeElement?.blur());
     const path = join(OUT, `${name}.png`);

@@ -31,6 +31,10 @@ The XinZhiZao reader follows the format description in OpenBoardView's
 XZZPCBFile (credited there to @huertas, @inflex and @MuertoGB). DES itself
 comes from the RustCrypto `des` crate (MIT/Apache-2.0).
 
+The toolbar symbols are Material Symbols by Google (outlined, weight 400, taken
+from the @material-symbols/svg-400 package), licensed under the Apache License
+2.0; the license text is in licenses/material-symbols-Apache-2.0.txt.
+
 The schematic viewer bundles PDF.js (pdfjs-dist), Copyright Mozilla
 Foundation and contributors, licensed under the Apache License 2.0
 (https://www.apache.org/licenses/LICENSE-2.0). Its license and the licenses

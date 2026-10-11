@@ -12,7 +12,8 @@ const net = board.model.nets[pin.net].name;
 const { page, step, find, shot, finish } = await openApp(board.json, { viewport: { width: 1400, height: 860 } });
 
 const view = page.locator(".board-view").first();
-const title = () => page.locator(".details h2").first().innerText();
+// What is selected, as the status bar names it (FlexBV's way).
+const title = () => page.locator(".status-selection").first().innerText();
 const rightClickCenter = async () => {
   await page.evaluate(() => document.activeElement?.blur());
   await page.keyboard.press("Escape");

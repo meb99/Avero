@@ -26,6 +26,10 @@ export interface BoardSession {
   updateNotes(change: (n: BoardNotes) => BoardNotes): void;
   onTolerance(t: number): void;
   onSelect(selection: Selection, zoom: boolean): void;
+  /** Selects and moves the view there without zooming (FlexBV's "View"). */
+  onCenter(selection: Selection): void;
+  /** What was selected on this board before, newest first (the selection history). */
+  history: readonly Selection[];
   palette: Palette;
   hiddenLayers: ReadonlySet<number>;
   onHiddenLayers(hidden: ReadonlySet<number>): void;

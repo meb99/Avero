@@ -20,6 +20,10 @@ Avero, Code nicht.
 
 | FlexBV / NexusBV | Avero |
 | --- | --- |
+| Symbolleiste aus Material Symbols, Menüs Darstellung · Suchen · Board · Werkstatt | ab 0.9.45 |
+| Board in Oliv, Pin 1 rot, Namen orange, Netz lila, Werte als weiße Schildchen, Mittellinien | ab 0.9.45 |
+| Infoleiste mit aufklappbaren Abschnitten (Verlauf, Netz, Bauteile mit View · Z · Schematic · Prefix) | ab 0.9.45 |
+| Statuszeile mit Auswahl und Mausposition in Zoll und mm | ab 0.9.45 |
 | Board 60 % neben dem Schaltplan | ab 0.9.44 (vorher 50 %) |
 | Infoleiste stört beim Öffnen nicht | ab 0.9.44: Seitenleiste eingeklappt bis zur ersten Auswahl |
 | Mechanische Teile ausgeblendet | ab 0.9.44: Abschirmungen und Rahmen ohne Körper, Pads bleiben; abschaltbar |
@@ -46,7 +50,8 @@ Ohne Dateien machbar, als nächste Schritte:
 
 - **Mycelium-Stufen:** das gewählte Netz automatisch über Verbindungsteile erweitern (Stufe 1–3),
   Verbindungsteile mit Raute markiert, verbundene Netze in eigenen Farben.
-- **Auswahlverlauf sichtbar** in der Seitenleiste („Inspection History“).
-- **Tooltip mit Messwerten** (Referenz, OBData) am Pin.
+- **Suchmaske ⌘F** wie FlexBVs „Search for Component / Network“: Bauteile und Netze, Teilwort,
+  Anfang oder ganzer Name, zwei Suchfelder.
+- **Tooltip als Tabelle** (Pin, Netz, Seite, Lage; Bauteil, Wert; Messwerte) am Pin.
 - **Netweb** als zweite Linienart (Stern vom gewählten Pin aus).
 - **Zoom-Ring** um den Mauszeiger beim Zoomen.

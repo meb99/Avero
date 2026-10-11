@@ -56,7 +56,7 @@ export interface Palette {
  * Power pins are grey like the rest: colour is kept for what is selected.
  */
 const OLIVE = {
-  boardFill: [39, 37, 28, 255],
+  boardFill: [37, 34, 28, 255],
   boardEdge: [92, 88, 70, 255],
   partFill: [58, 58, 58, 235],
   partOutline: [122, 122, 122, 255],

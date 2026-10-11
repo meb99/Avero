@@ -5508,3 +5508,191 @@ p.pt-conflict,
 .details-actions .pin-toggle {
   margin-top: 0;
 }
+
+/* Info panel, laid out like FlexBV's: sections with light blue heads, one under the other. */
+.info-panel {
+  font-size: 12.5px;
+}
+
+.info-fold {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 2;
+  padding: 2px;
+}
+
+.info-sections {
+  padding: 4px 4px 12px;
+}
+
+.info-section + .info-section {
+  margin-top: 2px;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 26px 3px 6px;
+  border: 0;
+  border-radius: 0;
+  background: var(--section-head);
+  color: var(--text);
+  text-align: left;
+  font-weight: 500;
+}
+
+.section-head:hover {
+  background: var(--section-head);
+  filter: brightness(0.97);
+}
+
+.section-head::before,
+.info-disclosure::before {
+  content: "▶";
+  font-size: 9px;
+  width: 10px;
+  color: var(--text);
+}
+
+.section-head[aria-expanded="true"]::before,
+.info-disclosure[aria-expanded="true"]::before {
+  content: "▼";
+}
+
+.section-pill {
+  padding: 0 6px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.08);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section-body {
+  padding: 4px 4px 8px;
+}
+
+.info-empty {
+  margin: 4px 2px;
+}
+
+.info-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.info-list li {
+  padding: 1px 2px;
+}
+
+.info-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.info-table th {
+  text-align: right;
+  font-weight: 400;
+  color: var(--text-muted);
+  padding: 2px 6px;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.info-table td {
+  padding: 2px 4px;
+  vertical-align: top;
+}
+
+.info-chip {
+  margin: 1px 2px 1px 0;
+  padding: 0 6px;
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+
+.info-pins {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.info-pins li,
+.info-list button {
+  font-size: 12px;
+}
+
+.info-part + .info-part {
+  margin-top: 4px;
+}
+
+.info-part-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+
+.info-disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  padding: 2px 4px 2px 0;
+  font-weight: 600;
+}
+
+.info-panel button.small {
+  padding: 1px 7px;
+  border-radius: 2px;
+}
+
+.info-pin-table {
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.info-pin-table tbody tr:nth-child(even) {
+  background: var(--surface-2);
+}
+
+.info-pin-table tbody tr {
+  cursor: pointer;
+}
+
+/* The row of the selected net, green as in FlexBV. */
+.info-pin-table tbody tr.on-net {
+  background: #7fd27f;
+  color: #0b0b0b;
+}
+
+.section-list {
+  height: 380px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-strip {
+  writing-mode: vertical-rl;
+  margin-top: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 6px 2px;
+}
+
+/* The schematic on FlexBV's muted violet, which sets the white page off. */
+:root[data-theme="light"] .schematic-canvas {
+  background: #4c4c7f;
+}

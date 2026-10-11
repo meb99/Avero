@@ -1335,6 +1335,18 @@ export function App() {
     select(h.items[h.at], true);
   };
 
+  /** Selects and brings it to the middle of the view at the zoom there is (FlexBV's "View"). */
+  const centerOn = (sel: Selection) => {
+    if (!model) return;
+    select(sel, false);
+    const b = model.selectionBounds(sel);
+    // After a side switch has reached the view.
+    requestAnimationFrame(() => {
+      const v = viewRef.current?.viewState();
+      if (b && v) viewRef.current?.setViewState({ ...v, centerX: (b.minX + b.maxX) / 2, centerY: (b.minY + b.maxY) / 2 });
+    });
+  };
+
   // --- CSV lists for spreadsheets ---------------------------------------------------
   const exportCsv = async (what: "parts" | "nets" | "readings" | "annotations") => {
     if (!model) return;
@@ -2962,6 +2974,8 @@ export function App() {
                     updateNotes,
                     onTolerance: (tolerance) => setSettings((s) => ({ ...s, tolerance })),
                     onSelect: select,
+                    onCenter: centerOn,
+                    history: (model ? recordSelection(histories.current.get(model) ?? EMPTY_HISTORY, selection).items : []).slice().reverse(),
                     palette,
                     hiddenLayers,
                     onHiddenLayers: (hidden) => setLayerChoice({ model, hidden }),
