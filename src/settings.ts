@@ -69,6 +69,11 @@ export interface Settings {
   netNames: boolean;
   /** Connection lines between the pins of the highlighted net. */
   ratsnest: boolean;
+  /**
+   * How far the selected net is followed through link parts (coils, fuses, 0 Ω …), as
+   * FlexBV's levels: 1 the net alone, 2 one link part further, 3 two.
+   */
+  linkDepth: 1 | 2 | 3;
   /** Small map of the whole board in a corner while zoomed in. */
   overview: boolean;
   /** Shields and frames without their bodies, as in FlexBV (see mechanicalParts). */
@@ -137,6 +142,7 @@ export const DEFAULT_SETTINGS: Settings = {
   pinNumbers: true,
   netNames: true,
   ratsnest: true,
+  linkDepth: 2,
   overview: true,
   hideMechanical: true,
   updateCheck: true,

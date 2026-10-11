@@ -243,7 +243,7 @@ export class BoardRenderer {
   /** Photo of the real board, drawn between the board area and the parts. */
   private photo?: { texture: WebGLTexture; vao: WebGLVertexArrayObject; buffer: WebGLBuffer; opacity: number };
   /** Lines drawn above everything else, such as the ratsnest. */
-  private overlay?: { set: InstanceSet; buffers: WebGLBuffer[]; vaos: WebGLVertexArrayObject[] };
+  private overlay?: { sets: InstanceSet[]; buffers: WebGLBuffer[]; vaos: WebGLVertexArrayObject[] };
   private buffers: WebGLBuffer[] = [];
   private vaos: WebGLVertexArrayObject[] = [];
 
@@ -567,16 +567,15 @@ export class BoardRenderer {
     this.photo = undefined;
   }
 
-  /** Replaces the overlay lines: `segments` holds x1, y1, x2, y2 per line. */
-  setOverlay(segments: Float32Array, color: readonly number[], width: number): void {
+  /** Replaces the overlay lines, a group per colour: `segments` holds x1, y1, x2, y2 per line. */
+  setOverlay(groups: readonly { segments: Float32Array; color: readonly number[] }[], width: number): void {
     this.clearOverlay();
-    const count = segments.length / 4;
-    if (count === 0) return;
     const buffers = this.buffers.length;
     const vaos = this.vaos.length;
-    const set = this.lineSet(segments, count, color, width, 1);
+    const sets = groups.filter((g) => g.segments.length >= 4).map((g) => this.lineSet(g.segments, g.segments.length / 4, g.color, width, 1));
+    if (sets.length === 0) return;
     // Kept apart from the board buffers so they can be swapped on their own.
-    this.overlay = { set, buffers: this.buffers.splice(buffers), vaos: this.vaos.splice(vaos) };
+    this.overlay = { sets, buffers: this.buffers.splice(buffers), vaos: this.vaos.splice(vaos) };
   }
 
   private clearOverlay(): void {
@@ -615,8 +614,10 @@ export class BoardRenderer {
       const line = this.lineProgram;
       gl.useProgram(line.program);
       this.cameraUniforms(line, overlayCamera, dpr);
-      gl.bindVertexArray(this.overlay.set.slots[0].vao);
-      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.overlay.set.count);
+      for (const set of this.overlay.sets) {
+        gl.bindVertexArray(set.slots[0].vao);
+        gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, set.count);
+      }
     }
     gl.bindVertexArray(null);
   }

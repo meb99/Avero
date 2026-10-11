@@ -229,6 +229,30 @@ export function drawLabels(
   drawSelectionRing(ctx, model, camera, selection, palette);
 }
 
+/** A green diamond across each link part on the way, as FlexBV marks them. */
+export function drawLinkParts(ctx: CanvasRenderingContext2D, model: BoardModel, camera: Camera, view: ViewSide, parts: ReadonlySet<number>, dpr: number): void {
+  if (parts.size === 0) return;
+  ctx.save();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.strokeStyle = "#3ecf5a";
+  ctx.lineWidth = 2;
+  for (const i of parts) {
+    const part = model.parts[i];
+    if (!visibleFrom(part.side, view) || model.partHidden(i)) continue;
+    const b = part.bounds;
+    const c = camera.toScreen({ x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 });
+    const r = Math.max(6, (Math.min(b.maxX - b.minX, b.maxY - b.minY) * camera.scale) / 2);
+    ctx.beginPath();
+    ctx.moveTo(c.x, c.y - r);
+    ctx.lineTo(c.x + r, c.y);
+    ctx.lineTo(c.x, c.y + r);
+    ctx.lineTo(c.x - r, c.y);
+    ctx.closePath();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 /**
  * Numbers at pads: the reading in its status color with the reference under
  * it, beside the pad so the pad stays visible. Shown from a zoom where they

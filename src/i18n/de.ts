@@ -176,6 +176,7 @@ export const de: Record<MessageKey, string> = {
   "toolbar.bothSides": "Beide Seiten (B)",
   "toolbar.oneSide": "Eine Seite (B)",
   "toolbar.clear": "Auswahl aufheben (Esc)",
+  "toolbar.linkDepth": "Verbundene Netze, Stufe {n} – 1: nur das Netz, 2: über ein Verbindungsteil (Spule, Sicherung, 0 Ω), 3: über zwei",
   "toolbar.screenshot": "Bildschirmfoto der Ansicht speichern",
   "toolbar.settings": "Einstellungen",
   "toolbar.editor": "Editor",

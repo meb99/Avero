@@ -61,6 +61,7 @@ import { mapSelection } from "./core/compare";
 import { alignedToA, alignedToB, alignOnParts, matchNets } from "./core/diff";
 import { search } from "./core/search";
 import { mechanicalParts } from "./core/hideGroups";
+import { linkedNets } from "./core/links";
 import { EMPTY_HISTORY, recordSelection, stepSelection, type SelectionHistory } from "./selectionHistory";
 import {
   BOARD_EXTENSIONS,
@@ -81,7 +82,7 @@ import { emitTo, listen } from "@tauri-apps/api/event";
 import { I18nContext, systemLanguage, translator, type MessageKey } from "./i18n";
 import { installMenu, menuOwnsKey } from "./menu";
 import { closeSchematicWindow, LINK, openSchematicWindow, type LinkedDoc } from "./schematic/link";
-import { DARK, LIGHT, withColors } from "./render/palette";
+import { DARK, LIGHT, linkColor, withColors } from "./render/palette";
 import { setPdfPasswordPrompt, type SchematicDocument } from "./schematic/document";
 import { activeTab as activeOf, findTab, initialTabs, releasedOnClose, tabOfFile, tabsReducer, type Tab } from "./tabs";
 import { readSchematicFacts, type SchematicFacts } from "./schematic/partInfo";
@@ -152,6 +153,7 @@ import { loadNotes, saveAllNotes, useBoardNotes } from "./workbench/store";
 
 const NONE: Selection = { kind: "none" };
 const NO_NETS: number[] = [];
+const NO_PART_SET: ReadonlySet<number> = new Set();
 const DEMO_SCHEMATIC = `${import.meta.env.BASE_URL}demo/avero-demo-schematic.pdf`;
 const WEBSITE = "https://github.com/meb99/Avero";
 const TOAST_MS = 4000;
@@ -2550,6 +2552,20 @@ export function App() {
 
   const welcome = !model && !schematic;
 
+  // The nets linked to the selected one through link parts, in the level chosen (FlexBV's levels).
+  const selectedNetNow = model?.selectedNet(selection);
+  const links = useMemo(
+    () => (model && selectedNetNow !== undefined && settings.linkDepth > 1 ? linkedNets(model, selectedNetNow, settings.linkDepth) : null),
+    [model, selectedNetNow, settings.linkDepth],
+  );
+  const linkColors = useMemo(
+    () => new Map([...(links?.nets.keys() ?? [])].map((net) => [net, linkColor(model!.nets[net].name)] as const)),
+    // namesRevision: own net names change the model's names in place.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [links, namesRevision],
+  );
+  const linkPartSet = links?.parts ?? NO_PART_SET;
+
   /** The tooltip's tables for what the mouse rests on (FlexBV's layout, see tooltip.ts). */
   const describeHit = (hit: Hit) =>
     model
@@ -2587,8 +2603,8 @@ export function App() {
           }}
           mechanicalHidden={settings.hideMechanical}
           onMechanical={() => setSettings((s) => ({ ...s, hideMechanical: !s.hideMechanical }))}
-          ratsnest={settings.ratsnest}
-          onRatsnest={() => setSettings((s) => ({ ...s, ratsnest: !s.ratsnest }))}
+          linkDepth={settings.linkDepth}
+          onLinkDepth={() => setSettings((s) => ({ ...s, linkDepth: ((s.linkDepth % 3) + 1) as 1 | 2 | 3 }))}
           onScreenshot={() => void exportImage()}
           onFind={() => setDialog("find")}
         />
@@ -2659,6 +2675,8 @@ export function App() {
                     onSchematicPick={showInSchematic}
                     onFlip={flipSide}
                     describeHit={describeHit}
+                    linkedNets={linkColors}
+                    linkParts={linkPartSet}
                     extraParts={multiSet}
                   >
                     {placingMarker && <div className="placing-hint">{t("marker.placing")}</div>}
@@ -2790,6 +2808,8 @@ export function App() {
                       onSchematicPick={showInSchematic}
                       onFlip={flipSide}
                       describeHit={describeHit}
+                      linkedNets={linkColors}
+                      linkParts={linkPartSet}
                       extraParts={multiSet}
                       onViewChange={settings.bothSidesMode === "synced" ? (v) => viewRef.current?.setViewState(v) : undefined}
                       onCursor={(p) => viewRef.current?.showGhost(p)}

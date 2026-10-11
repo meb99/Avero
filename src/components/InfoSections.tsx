@@ -5,7 +5,8 @@
  */
 import { useState } from "react";
 import type { BoardModel } from "../core/board";
-import { traceNet } from "../core/trace";
+import { traceNet, type TraceKind } from "../core/trace";
+import { linkColor } from "../render/palette";
 import type { Selection } from "../core/types";
 import { useI18n } from "../i18n";
 import { netReadings } from "../knowledge/obdata";
@@ -15,6 +16,7 @@ import { useBoardSession } from "./BoardSession";
 import { selectionLabel } from "./StatusBar";
 
 const SIDE: Record<string, string> = { top: "T", bottom: "B", both: "TB" };
+const THROUGH: ReadonlySet<TraceKind> = new Set(["through"]);
 
 /** "D: 0,45 V  V: 3,30 V  R: –" from a reading, as FlexBV's Measure line. */
 function measureLine(r: Reading | undefined, lang: string): string {
@@ -52,7 +54,8 @@ export function NetSection({ net }: { net: number }) {
   const n = model.nets[net];
   const reference = notes?.reference[n.name];
   const obd = obdata ? netReadings(obdata, n.name).rows : [];
-  const linked = traceNet(model, net).filter((l) => l.depth === 1).slice(0, 16);
+  // FlexBV's "Associated": the nets behind link parts (coils, fuses, jumpers, 0 Ω), each in its colour.
+  const linked = traceNet(model, net, THROUGH).filter((l) => l.depth === 1).slice(0, 16);
   return (
     <table className="info-table">
       <tbody>
@@ -74,6 +77,7 @@ export function NetSection({ net }: { net: number }) {
             {linked.length === 0 && <span className="muted">–</span>}
             {linked.map((l) => (
               <button key={l.net} className="info-chip" title={t("info.via", { part: model.parts[l.via].name })} onClick={() => onSelect({ kind: "net", net: l.net }, true)}>
+                <span className="info-swatch" style={{ background: `rgb(${linkColor(model.nets[l.net].name).slice(0, 3).join(",")})` }} />
                 {model.nets[l.net].name}
               </button>
             ))}

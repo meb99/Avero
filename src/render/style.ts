@@ -11,6 +11,8 @@ export interface DisplayOptions {
   hiddenLayers?: ReadonlySet<number>;
   /** Nets pinned in their own colors. */
   pinnedNets?: ReadonlyMap<number, RGBA>;
+  /** Nets linked to the selected one through link parts, each in its colour (FlexBV's levels). */
+  linkedNets?: ReadonlyMap<number, RGBA>;
   /** Fade everything that is not part of the current selection. */
   dimUnselected: boolean;
   /** Parts selected together with the selection. */
@@ -101,6 +103,8 @@ export function computeStyle(
       put(pinColors, i, palette.pinHighlight, near ? 1 : farHighlight);
     } else if (options.pinnedNets?.has(pin.net)) {
       put(pinColors, i, options.pinnedNets.get(pin.net)!, near ? 1 : farHighlight);
+    } else if (options.linkedNets?.has(pin.net)) {
+      put(pinColors, i, options.linkedNets.get(pin.net)!, near ? 1 : farHighlight);
     } else if (selectedPart === pin.part) {
       put(pinColors, i, firstPin(model, i) ? palette.pinFirst : palette.pinOfSelectedPart, near ? 1 : farGhost);
     } else if (near) {
@@ -130,6 +134,8 @@ export function computeStyle(
       put(testPointColors, i, palette.pinHighlight, near ? 1 : farHighlight);
     } else if (options.pinnedNets?.has(t.net) && (shown || near)) {
       put(testPointColors, i, options.pinnedNets.get(t.net)!, near ? 1 : farHighlight);
+    } else if (options.linkedNets?.has(t.net) && (shown || near)) {
+      put(testPointColors, i, options.linkedNets.get(t.net)!, near ? 1 : farHighlight);
     } else if (!shown) {
       put(testPointColors, i, base, 0);
     } else {
@@ -155,6 +161,8 @@ export function computeStyle(
       put(traceColors, i, palette.pinHighlight, 1);
     } else if (options.pinnedNets?.has(t.net)) {
       put(traceColors, i, options.pinnedNets.get(t.net)!, 1);
+    } else if (options.linkedNets?.has(t.net)) {
+      put(traceColors, i, options.linkedNets.get(t.net)!, 1);
     } else if (t.side === view) {
       put(traceColors, i, color, 0.9 * traceDim);
     } else if (t.side === "both") {

@@ -5,7 +5,7 @@ import { drawGrid, drawOrigin } from "../render/grid";
 import { bottomCamera, boundsToLayout, dualLayout, fromLayout, sideAt, toLayout, type DualLayout } from "../core/dualView";
 import type { Bounds, Point, Selection } from "../core/types";
 import { useI18n } from "../i18n";
-import { drawDrawings, drawLabels, drawMarkers, markerAt, type DrawingMark, type MarkerMark, type PadValues } from "../render/labels";
+import { drawDrawings, drawLabels, drawLinkParts, drawMarkers, markerAt, type DrawingMark, type MarkerMark, type PadValues } from "../render/labels";
 import type { Palette, RGBA } from "../render/palette";
 import { BoardRenderer, type RenderView } from "../render/renderer";
 import { computeStyle } from "../render/style";
@@ -64,6 +64,9 @@ interface Props {
   namesRevision?: number;
   /** Nets pinned in their own colors. */
   pinnedNets?: ReadonlyMap<number, RGBA>;
+  /** Nets linked to the selected one, each in its colour, and the link parts between (FlexBV's levels). */
+  linkedNets?: ReadonlyMap<number, RGBA>;
+  linkParts?: ReadonlySet<number>;
   /** Notes pinned to spots on the board. */
   markers?: readonly MarkerMark[];
   activeMarker?: string | null;
@@ -170,6 +173,7 @@ function TooltipTable({ details }: { details: HoverDetails }) {
 }
 
 const NO_LAYERS: ReadonlySet<number> = new Set();
+const NO_PARTS: ReadonlySet<number> = new Set();
 const NO_PINS: ReadonlyMap<number, RGBA> = new Map();
 const NO_MARKERS: readonly MarkerMark[] = [];
 const NO_DRAWINGS: readonly DrawingMark[] = [];
@@ -216,6 +220,8 @@ export function BoardView({
   hiddenLayers = NO_LAYERS,
   namesRevision = 0,
   pinnedNets = NO_PINS,
+  linkedNets = NO_PINS,
+  linkParts = NO_PARTS,
   markers = NO_MARKERS,
   activeMarker = null,
   onMarkerClick,
@@ -276,6 +282,7 @@ export function BoardView({
     ghost: null as Point | null,
     origin: null as Point | null,
     highlightedNet: undefined as number | undefined,
+    linkParts: NO_PARTS as ReadonlySet<number>,
   });
   const [hover, setHover] = useState<Hover | null>(null);
   // What the mouse rests on and the timer that shows its tooltip.
@@ -466,6 +473,7 @@ export function BoardView({
         s.padValues,
       ),
     );
+    for (const v of views) drawLinkParts(labels, s.model, v.camera, v.side, s.linkParts, dprRef.current);
     // Grid and origin; with both sides in one view the grid would cross from one into the other.
     if (s.settings.grid && !s.dual) drawGrid(labels, views[0].camera, s.settings.units, s.origin, s.palette.background[0] < 128, dprRef.current);
     if (s.origin) for (const v of views) drawOrigin(labels, s.dual ? v.camera : cameraRef.current, s.origin, dprRef.current);
@@ -711,19 +719,20 @@ export function BoardView({
           showTraces: settings.showTraces,
           hiddenLayers,
           pinnedNets,
+          linkedNets,
           dimUnselected: settings.dimUnselected,
           extraParts,
         },
         palette,
       );
     const style = styleFor(dual ? "top" : side);
-    Object.assign(stateRef.current, { model, side, dual, selection, settings, palette, hiddenLayers, highlightedNet: style.highlightedNet });
+    Object.assign(stateRef.current, { model, side, dual, selection, settings, palette, hiddenLayers, highlightedNet: style.highlightedNet, linkParts });
     // pinnedNets: colors of pins and tracks.
     rendererRef.current?.setStyle(style, palette, 0);
     if (dual) rendererRef.current?.setStyle(styleFor("bottom"), palette, 1);
     requestDraw();
     // namesRevision: net names live in the model and are drawn as labels.
-  }, [model, side, dual, selection, settings, palette, hiddenLayers, pinnedNets, namesRevision, requestDraw, rendererVersion, extraParts]);
+  }, [model, side, dual, selection, settings, palette, hiddenLayers, pinnedNets, linkedNets, linkParts, namesRevision, requestDraw, rendererVersion, extraParts]);
 
   useEffect(() => {
     Object.assign(stateRef.current, { markers, activeMarker });
@@ -760,22 +769,29 @@ export function BoardView({
     // Sides kept apart: only the lines between pins of the side in view.
     // Both sides shown: lines run between them, each pin where its side is drawn.
     const view = dual || settings.ghostOtherSide ? undefined : side;
-    const edges =
-      ratsnestNet === undefined || model.nets[ratsnestNet].kind === "ground" ? [] : model.ratsnest(ratsnestNet, 2500, view);
     const layout = dualLayout(model.board.bounds);
     const at = (pin: number) => {
       const p = model.pins[pin];
       return dual ? toLayout(p, p.side === "bottom" ? "bottom" : "top", layout) : p;
     };
-    const segs = new Float32Array(edges.length * 4);
-    edges.forEach(([a, b], i) => {
-      const p = at(a);
-      const q = at(b);
-      segs.set([p.x, p.y, q.x, q.y], i * 4);
-    });
-    renderer.setOverlay(segs, palette.ratsnest, 1.4);
+    const segments = (net: number) => {
+      const edges = model.nets[net].kind === "ground" ? [] : model.ratsnest(net, 2500, view);
+      const segs = new Float32Array(edges.length * 4);
+      edges.forEach(([a, b], i) => {
+        const p = at(a);
+        const q = at(b);
+        segs.set([p.x, p.y, q.x, q.y], i * 4);
+      });
+      return segs;
+    };
+    // The selected net's lines, then those of the nets linked to it, each in its colour.
+    const groups =
+      ratsnestNet === undefined
+        ? []
+        : [{ segments: segments(ratsnestNet), color: palette.ratsnest }, ...[...linkedNets].map(([net, color]) => ({ segments: segments(net), color }))];
+    renderer.setOverlay(groups, 1.4);
     requestDraw();
-  }, [model, ratsnestNet, palette, requestDraw, rendererVersion, side, dual, settings.ghostOtherSide]);
+  }, [model, ratsnestNet, linkedNets, palette, requestDraw, rendererVersion, side, dual, settings.ghostOtherSide]);
 
   useEffect(() => {
     stateRef.current.measured = measured;

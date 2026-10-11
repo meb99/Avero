@@ -174,6 +174,7 @@ export const en = {
   "toolbar.bothSides": "Both sides (B)",
   "toolbar.oneSide": "One side (B)",
   "toolbar.clear": "Clear selection (Esc)",
+  "toolbar.linkDepth": "Linked nets, level {n} – 1: the net alone, 2: through one link part (coil, fuse, 0 Ω), 3: through two",
   "toolbar.screenshot": "Save a screenshot of the view",
   "toolbar.settings": "Settings",
   "toolbar.editor": "Editor",

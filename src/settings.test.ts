@@ -32,6 +32,10 @@ describe("settings migration", () => {
     expect(fromStored({ revision: 4, theme: "system" }).theme).toBe("system");
   });
 
+  it("follows the selected net one link part further, as FlexBV's level 2", () => {
+    expect(fromStored({ revision: 4 }).linkDepth).toBe(2);
+  });
+
   it("hides shields and frames from the start", () => {
     expect(fromStored({ revision: 2 }).hideMechanical).toBe(true);
   });

@@ -34,5 +34,6 @@ node "$here/tools.mjs" "$here/out/demo.json" || status=1
 node "$here/history.mjs" "$here/out/demo.json" || status=1
 node "$here/calm-start.mjs" "$here/out/demo.json" || status=1
 node "$here/find.mjs" "$here/out/demo.json" || status=1
+node "$here/links.mjs" "$here/out/demo.json" || status=1
 echo "Screenshots: $here/out"
 exit $status

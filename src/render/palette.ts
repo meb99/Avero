@@ -114,6 +114,22 @@ export const DARK: Palette = { ...OLIVE, background: [30, 30, 30, 255] };
 /** Olive on FlexBV's light grey ground: the standard look with the light appearance. */
 export const LIGHT: Palette = { ...OLIVE, background: [214, 214, 214, 255] };
 
+/** Colours of nets linked to the selected one, picked by name so a net keeps its colour (FlexBV's hash colours). */
+const LINK_COLORS: readonly RGBA[] = [
+  [110, 200, 255, 255],
+  [255, 170, 90, 255],
+  [140, 220, 140, 255],
+  [240, 140, 200, 255],
+  [255, 225, 110, 255],
+  [120, 230, 220, 255],
+];
+
+export function linkColor(name: string): RGBA {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return LINK_COLORS[h % LINK_COLORS.length];
+}
+
 /** Colors for nets pinned at the same time, in pinning order. */
 export const PIN_COLORS: readonly RGBA[] = [
   [236, 72, 153, 255],

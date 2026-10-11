@@ -33,7 +33,7 @@ Avero, Code nicht.
 | Mittelklick → andere Seite | ab 0.9.44 |
 | Constellation (Verbindungslinien mit wenig Ästen) | Verbindungslinien als minimaler Spannbaum |
 | Butterfly / Dual View | beide Seiten nebeneinander, getrennt oder gekoppelt |
-| Netz über 0-Ω, Spulen, Sicherungen verfolgen (Mycelium) | „Weiter über“ |
+| Netz über 0-Ω, Spulen, Sicherungen verfolgen (Mycelium), Stufen 1–3, Raute auf Verbindungsteilen, Farben je Netz | ab 0.9.47 |
 | Multisearch (gemeinsame Netze mehrerer Bauteile) | Mehrfachauswahl mit gemeinsamen Netzen |
 | Part Find in einer PDF-Sammlung | Inhaltssuche der Bibliothek, auch mit Bereich |
 | OBData, Multimeter, Minimap, Text nach Größe, Tooltips | vorhanden |
@@ -50,7 +50,6 @@ Ohne Beispieldateien (Formate brauchen nach den Regeln des Projekts echte Dateie
 
 Ohne Dateien machbar, als nächste Schritte:
 
-- **Mycelium-Stufen:** das gewählte Netz automatisch über Verbindungsteile erweitern (Stufe 1–3),
-  Verbindungsteile mit Raute markiert, verbundene Netze in eigenen Farben.
+- **Widerstände bis 1 Ω** als Verbindungsteile (FlexBV nimmt sie dazu; Avero bisher nur 0 Ω).
 - **Netweb** als zweite Linienart (Stern vom gewählten Pin aus).
 - **Zoom-Ring** um den Mauszeiger beim Zoomen.

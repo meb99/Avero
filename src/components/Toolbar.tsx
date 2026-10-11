@@ -20,8 +20,9 @@ interface Props {
   /** Shields and frames kept out of sight. */
   mechanicalHidden: boolean;
   onMechanical(): void;
-  ratsnest: boolean;
-  onRatsnest(): void;
+  /** How far the selected net is followed through link parts (1–3); a click goes to the next level. */
+  linkDepth: 1 | 2 | 3;
+  onLinkDepth(): void;
   onScreenshot(): void;
   /** Opens the search for component / network (⌘F). */
   onFind(): void;
@@ -72,7 +73,16 @@ export function Toolbar(p: Props) {
         {tool(p.bothSides ? "panel" : "bothSides", p.bothSides ? "toolbar.oneSide" : "toolbar.bothSides", p.onBothSides, p.bothSides)}
         {tool("clear", "toolbar.clear", p.onClear)}
         {tool(p.mechanicalHidden ? "hidden" : "visible", p.mechanicalHidden ? "mechanical.show" : "mechanical.hide", p.onMechanical)}
-        {tool("lines", "menu.ratsnest", p.onRatsnest, p.ratsnest)}
+        <button
+          className="tool icon-only link-depth"
+          onClick={p.onLinkDepth}
+          title={t("toolbar.linkDepth", { n: p.linkDepth })}
+          aria-label={t("toolbar.linkDepth", { n: p.linkDepth })}
+          disabled={!board}
+        >
+          <Sym name="lines" />
+          <span className="link-depth-n">{p.linkDepth}</span>
+        </button>
         {tool("camera", "toolbar.screenshot", p.onScreenshot)}
       </div>
       <div className="toolbar-spacer" data-tauri-drag-region />
