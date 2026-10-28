@@ -70,6 +70,11 @@ export interface Settings {
   /** Connection lines between the pins of the highlighted net. */
   ratsnest: boolean;
   /**
+   * With a pin selected, the lines run from it to every other pin of its net (the net web of
+   * OpenBoardView and FlexBV) instead of joining each pin to its nearest.
+   */
+  netWeb: boolean;
+  /**
    * How far the selected net is followed through link parts (coils, fuses, 0 Ω …), as
    * FlexBV's levels: 1 the net alone, 2 one link part further, 3 two.
    */
@@ -142,6 +147,7 @@ export const DEFAULT_SETTINGS: Settings = {
   pinNumbers: true,
   netNames: true,
   ratsnest: true,
+  netWeb: false,
   linkDepth: 2,
   overview: true,
   hideMechanical: true,

@@ -462,12 +462,14 @@ mod tests {
         // Another Mac: other folders.
         let there = tmp("there");
         let opened = open(&out, &there.join("library"), &there.join("photos"), 7).unwrap();
-        assert!(!opened.notes.contains(&photo_path), "no path of the old Mac left");
-        let new_photo = there.join("photos/pkg-7-1700000000000-top.jpg");
-        assert!(opened.notes.contains(new_photo.to_string_lossy().as_ref()));
+        // Paths as JSON writes them (a Windows path's \ doubled).
+        let json = |p: &str| serde_json::to_string(p).unwrap();
+        assert!(!opened.notes.contains(&json(&photo_path)), "no path of the old computer left");
+        let new_photo = there.join("photos").join("pkg-7-1700000000000-top.jpg");
+        assert!(opened.notes.contains(&json(&new_photo.to_string_lossy())));
         assert_eq!(std::fs::read(&new_photo).unwrap(), b"JPEG");
         let b = opened.board.unwrap();
-        assert!(b.starts_with(there.join("library/Pakete/PS5 EDM-010").to_string_lossy().as_ref()));
+        assert!(std::path::Path::new(&b).starts_with(there.join("library/Pakete/PS5 EDM-010")));
         assert_eq!(std::fs::read(&b).unwrap(), b"BRDOUT");
         assert_eq!(opened.docs.len(), 1);
         assert_eq!(opened.manifest.extra["camera"]["side"], "top");
@@ -522,7 +524,7 @@ mod tests {
         };
         assert_eq!(name, "MacBook A2338");
         assert!(project.contains("\"links\""));
-        assert!(folder.ends_with("Pakete/MacBook A2338"));
+        assert!(std::path::Path::new(&folder).ends_with("Pakete/MacBook A2338"));
         assert_eq!(boards.len(), 2);
         assert_eq!(boards[0].id, "820-02016");
         let b0 = boards[0].unpacked.board.clone().unwrap();

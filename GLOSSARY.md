@@ -53,6 +53,16 @@ _Vermeiden_: Modus, Tool
 
 ## Board
 
+**Verbindungsteil** (Code: `passesThrough`):
+Ein Bauteil, das seine zwei Netze für die Netzverfolgung zu einem macht: Spule, Ferrit,
+Sicherung, Jumper und Widerstand bis 1 Ω (ab 0.9.48, wie FlexBV; vorher nur 0 Ω).
+_Vermeiden_: Brücke, Link-Part
+
+**Netweb** (Code: `netWeb`, Einstellung `netWeb`):
+Linien vom gewählten Pin zu allen anderen Pins seines Netzes, wie in OpenBoardView. Die
+Verbindungslinien dagegen verbinden jeden Pin des Netzes mit seinem nächsten.
+_Vermeiden_: Stern, Spinnennetz
+
 **Abschirmungen und Rahmen** (Code: `mechanicalParts`, Einstellung `hideMechanical`):
 Teile, die als Abschirmung oder Rahmen benannt sind, und Teile ab 25,4 mm nur an Masse oder an
 keinem Netz. Ihr Körper ist von Anfang an ausgeblendet, ihre Pads bleiben.

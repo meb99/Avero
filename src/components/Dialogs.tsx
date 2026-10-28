@@ -67,6 +67,7 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
     | "pinNumbers"
     | "netNames"
     | "ratsnest"
+    | "netWeb"
     | "overview"
     | "hideMechanical"
     | "autoSchematic"
@@ -150,6 +151,7 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
         {check("showVias", t("settings.vias"))}
         {check("showTraces", t("settings.traces"))}
         {check("ratsnest", t("settings.ratsnest"))}
+        {check("netWeb", t("settings.netWeb"))}
         {check("overview", t("settings.overview"))}
         {check("hideMechanical", t("settings.hideMechanical"))}
       </div>

@@ -40,6 +40,8 @@ export interface CommandState {
   grid: boolean;
   /** Shields and frames are kept out of sight (Settings.hideMechanical). */
   mechanical: boolean;
+  /** The lines run from the selected pin to its net's pins (Settings.netWeb). */
+  netWeb: boolean;
   uiLevel: UiLevel;
 }
 
@@ -83,6 +85,7 @@ export interface CommandActions {
   toggleSidebar(): void;
   toggleUiLevel(): void;
   toggleRatsnest(): void;
+  toggleNetWeb(): void;
   toggleGrid(): void;
   toggleMechanical(): void;
   addPhoto(): void;
@@ -180,6 +183,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   { id: "rotate-back", label: (t) => t("menu.rotateBack"), key: "⇧R", keys: [{ key: "R" }], enabled: (s) => s.board, run: (a) => a.rotateBack() },
   { id: "fit", label: (t) => t("menu.fit"), bench: "fit", accelerator: "CmdOrCtrl+0", enabled: (s) => s.board, run: (a) => a.fit() },
   { id: "ratsnest", label: (t) => t("menu.ratsnest"), key: "⇧⌘R", accelerator: "CmdOrCtrl+Shift+R", enabled: (s) => s.board, run: (a) => a.toggleRatsnest() },
+  { id: "net-web", label: (t, s) => t(s.netWeb ? "menu.netWebOff" : "menu.netWebOn"), enabled: (s) => s.board, run: (a) => a.toggleNetWeb() },
   { id: "schematic", label: (t) => t("menu.schematic"), key: "⌘E", accelerator: "CmdOrCtrl+E", keys: [{ mod: true, key: "e" }], run: (a) => a.toggleSchematic() },
   {
     id: "schematic-search",

@@ -1,9 +1,11 @@
 # Vergleich mit FlexBV und NexusBV
 
-Stand Oktober 2026. Grundlage sind nur öffentliche Quellen, keine zerlegten Programme:
-das [FlexBV-5-Handbuch](https://pldaniels.com/flexbv5/manual/) und die
-[NexusBV-Seite](https://nexusbv.net/) mit Changelog (v0.9). Ideen und Bedienkonzepte übernimmt
-Avero, Code nicht.
+Stand Oktober 2026. Grundlage sind öffentliche Quellen: das
+[FlexBV-5-Handbuch](https://pldaniels.com/flexbv5/manual/), die
+[NexusBV-Seite](https://nexusbv.net/) mit Changelog (v0.9) und der offene Quellcode von
+[OpenBoardView](https://github.com/OpenBoardView/OpenBoardView) (MIT, Stand `cc76e69`).
+Ideen und Bedienkonzepte übernimmt Avero, Code nicht. FlexBV und NexusBV sind bisher nicht
+zerlegt worden (siehe „Programmanalyse“ unten).
 
 ## Was FlexBV einfach macht
 
@@ -38,6 +40,25 @@ Avero, Code nicht.
 | Part Find in einer PDF-Sammlung | Inhaltssuche der Bibliothek, auch mit Bereich |
 | OBData, Multimeter, Minimap, Text nach Größe, Tooltips | vorhanden |
 | NexusBV: Reiter, Notizen, Lesezeichen, Board-Editor, Tasten- und Farbeditor, MCP, dunkle PDF-Seiten | vorhanden |
+| Netweb (Linien vom gewählten Pin zu seinem Netz; OpenBoardView, FlexBV) | ab 0.9.48 |
+| Widerstände bis 1 Ω als Verbindungsteile (FlexBV) | ab 0.9.48 |
+| Suche mit Wert und Typ (OpenBoardView „Including details“) | ab 0.9.48 |
+| FlexBV und NexusBV laufen auf Windows | Avero ab 0.9.48 auch |
+
+## OpenBoardView
+
+Aus dem Quellcode (`src/openboardview/FileFormats`, `BoardView.cpp`, `Searcher.cpp`):
+
+| Format in OpenBoardView | Avero |
+| --- | --- |
+| ASC, BDV, BRD, BRD2, BVR, BVR3, CAD (Panel), CAE, CST, FZ, GenCAD, XZZ `.pcb` | vorhanden |
+| `ADFile` (Altium ASCII, `\|KIND=Protel_Advanced_PCB`) | vorhanden (`altium.rs`), dazu Altium binär |
+| Allegro (`BRDAllegroFile.h`) | vorhanden, eigener Leser für 16.0–17.4 |
+
+Alle Formate von OpenBoardView liest Avero also schon. Bei den Funktionen fehlten Netweb und
+die Suche in den Bauteildetails; beide sind ab 0.9.48 da. Alles andere aus den Menüs
+(Annotationen, Hintergrundbild, Bauteil- und Netzliste, Infoleiste, Drehen, Spiegeln,
+Mausposition, Zoom aufs Netz, Groß-/Kleinschreibung, ganzes Wort) hat Avero in eigener Form.
 
 ## Noch offen
 
@@ -48,8 +69,22 @@ Ohne Beispieldateien (Formate brauchen nach den Regeln des Projekts echte Dateie
 - **Teboview TVW** – Leser vorhanden, aber an keiner echten Datei abgenommen; damit auch kein
   Silkscreen (FlexBV zeigt ihn nur bei TVW).
 
-Ohne Dateien machbar, als nächste Schritte:
+Ohne Dateien machbar, als nächster Schritt:
 
-- **Widerstände bis 1 Ω** als Verbindungsteile (FlexBV nimmt sie dazu; Avero bisher nur 0 Ω).
-- **Netweb** als zweite Linienart (Stern vom gewählten Pin aus).
 - **Zoom-Ring** um den Mauszeiger beim Zoomen.
+
+## Programmanalyse von FlexBV und NexusBV
+
+Bisher nicht gemacht. Eine Analyse der Programme (etwa mit Ghidra und einem
+Reverse-Engineering-MCP wie REA/ReVa) läuft dort, wo Programme und Werkzeuge liegen, also in
+einer Claude-Sitzung auf dem eigenen Rechner. Eine Cloud-Sitzung erreicht weder den Rechner noch
+dessen MCP-Server. Dafür braucht es:
+
+- die installierten Programmordner (FlexBV 5 und NexusBV, mit `.exe`, `.dll` und Ressourcen)
+  und eine gültige eigene Lizenz;
+- echte Beispieldateien der Formate, die Avero noch fehlen (F2B, A3P, FAZ, BVRE, ASR, Allegro
+  ab 18, TVW). Nur damit lässt sich ein Leser bauen und abnehmen.
+
+Grenzen: Kein fremder Code wird übernommen, Lizenzprüfungen und Schlüssel werden nicht umgangen
+oder ausgelesen (für XZZ gilt die feste Regel des Projekts). Ziel einer Analyse sind
+Dateiformate (Interoperabilität) und Funktionsumfang; gebaut wird eigenständig.

@@ -9,6 +9,7 @@ import { drawDrawings, drawLabels, drawLinkParts, drawMarkers, markerAt, type Dr
 import type { Palette, RGBA } from "../render/palette";
 import { BoardRenderer, type RenderView } from "../render/renderer";
 import { computeStyle } from "../render/style";
+import { netWeb } from "../core/netWeb";
 import type { Settings } from "../settings";
 import { setBoardCursor } from "../cursorStore";
 import type { NetStatus } from "../workbench/notes";
@@ -774,8 +775,14 @@ export function BoardView({
       const p = model.pins[pin];
       return dual ? toLayout(p, p.side === "bottom" ? "bottom" : "top", layout) : p;
     };
+    const web = settings.netWeb && selection.kind === "pin" ? selection.pin : undefined;
     const segments = (net: number) => {
-      const edges = model.nets[net].kind === "ground" ? [] : model.ratsnest(net, 2500, view);
+      const edges =
+        web !== undefined && model.pins[web].net === net
+          ? netWeb(model, web, view)
+          : model.nets[net].kind === "ground"
+            ? []
+            : model.ratsnest(net, 2500, view);
       const segs = new Float32Array(edges.length * 4);
       edges.forEach(([a, b], i) => {
         const p = at(a);
@@ -791,7 +798,7 @@ export function BoardView({
         : [{ segments: segments(ratsnestNet), color: palette.ratsnest }, ...[...linkedNets].map(([net, color]) => ({ segments: segments(net), color }))];
     renderer.setOverlay(groups, 1.4);
     requestDraw();
-  }, [model, ratsnestNet, linkedNets, palette, requestDraw, rendererVersion, side, dual, settings.ghostOtherSide]);
+  }, [model, ratsnestNet, linkedNets, palette, requestDraw, rendererVersion, side, dual, settings.ghostOtherSide, settings.netWeb, selection]);
 
   useEffect(() => {
     stateRef.current.measured = measured;

@@ -51,6 +51,22 @@ await step("a click shows the hit, the second entry adds a part", async () => {
   if (!head.includes("(2)")) throw new Error(`second entry: ${head}`);
   console.log(`${first} selected by a click, ${second} added: ${head}`);
 });
+await step("value and type find parts, as OpenBoardView's details", async () => {
+  // A part type no part or net is named after (U1000's "AV-SOC-1" on the demo board).
+  const m = board.model;
+  const all = [...m.parts.map((p) => p.name), ...m.nets.map((n) => n.name)].map((n) => n.toUpperCase());
+  const owner = m.parts.find((p) => (p.device ?? "").split(/[\s·_,;/]+/).some((w) => w.length >= 5 && !all.some((n) => n.includes(w.toUpperCase()))));
+  if (!owner) return console.log("(no part with a distinct type, skipped)");
+  const word = owner.device.split(/[\s·_,;/]+/).find((w) => w.length >= 5 && !all.some((n) => n.includes(w.toUpperCase())));
+  await option("Teilwort").check();
+  await type(0, word);
+  if ((await hits(0)).length) throw new Error(`${word} found ${await hits(0)} without details`);
+  await option("Wert und Typ").check();
+  const found = await hits(0);
+  await option("Wert und Typ").uncheck();
+  if (!found.some((h) => h.includes(owner.name))) throw new Error(`${word}: ${found.join(", ")}, not ${owner.name}`);
+  console.log(`value and type: ${word} → ${owner.name}`);
+});
 await step("Esc closes at once, also with text typed", async () => {
   await type(0, "ZZZ_NOTHING");
   await page.locator("#find-0").press("Escape");

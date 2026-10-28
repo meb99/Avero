@@ -40,6 +40,17 @@ describe("search for component / network", () => {
     expect(hit?.label).toBe("U10");
   });
 
+  it("finds parts by value and type with details, as OpenBoardView's \"Including details\"", () => {
+    expect(names("10K", { ...both, mode: "substring" })).toEqual([]);
+    expect(names("10K", { ...both, mode: "substring", details: true })).toEqual(["R1"]);
+    // Whole word of the type: "0402" in "0R 0402", not "040" (that is part of a word).
+    expect(names("0402", { ...both, mode: "strict", details: true })).toEqual(["R9"]);
+    expect(names("040", { ...both, mode: "strict", details: true })).toEqual([]);
+    expect(names("1u", { ...both, mode: "prefix", details: true })).toEqual(["L5"]);
+    // A name match is listed once, with or without details.
+    expect(names("R1", { ...both, mode: "strict", details: true })).toEqual(["R1"]);
+  });
+
   it("leaves out unconnected nets", () => {
     expect(names("UNCONNECTED", { ...both, mode: "strict" })).toEqual([]);
   });

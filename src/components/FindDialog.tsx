@@ -18,17 +18,21 @@ interface Options {
   parts: boolean;
   nets: boolean;
   mode: SearchMode;
+  /** Parts by value and type too (OpenBoardView's "Including details"). */
+  details: boolean;
 }
 
-/** The options last chosen, kept per Mac (a convenience; may be unavailable). */
+const DEFAULTS: Options = { parts: true, nets: true, mode: "substring", details: false };
+
+/** The options last chosen, kept per computer (a convenience; may be unavailable). */
 function loadOptions(): Options {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { parts: true, nets: true, mode: "substring", ...(JSON.parse(raw) as Partial<Options>) };
+    if (raw) return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Options>) };
   } catch {
     // Defaults then.
   }
-  return { parts: true, nets: true, mode: "substring" };
+  return DEFAULTS;
 }
 
 export function FindDialog({
@@ -96,6 +100,10 @@ export function FindDialog({
         <label className="check">
           <input type="checkbox" checked={options.nets} onChange={(e) => change({ ...options, nets: e.target.checked })} />
           {t("find.nets")}
+        </label>
+        <label className="check" title={t("find.detailsHint")}>
+          <input type="checkbox" checked={options.details} onChange={(e) => change({ ...options, details: e.target.checked })} />
+          {t("find.details")}
         </label>
         <span>{t("find.mode")}</span>
         {(["substring", "prefix", "strict"] as const).map((mode) => (

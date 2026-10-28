@@ -185,6 +185,7 @@ export async function installMenu(
         cmd("zoom-out"),
         SEP,
         cmd("ratsnest"),
+        cmd("net-web"),
         cmd("grid"),
         cmd("mechanical"),
         SEP,

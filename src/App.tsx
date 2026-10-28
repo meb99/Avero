@@ -2218,6 +2218,7 @@ export function App() {
     popOutSchematic: () => void popOutSchematic(),
     toggleSidebar: () => setSettings((s) => ({ ...s, showSidebar: !s.showSidebar })),
     toggleRatsnest: () => setSettings((s) => ({ ...s, ratsnest: !s.ratsnest })),
+    toggleNetWeb: () => setSettings((s) => ({ ...s, netWeb: !s.netWeb, ratsnest: true })),
     addPhoto: () => void addPhoto(),
     togglePhoto: () => setShowPhoto((v) => !v),
     compare: toggleCompare,
@@ -2288,6 +2289,7 @@ export function App() {
     bench,
     grid: settings.grid,
     mechanical: settings.hideMechanical,
+    netWeb: settings.netWeb,
     uiLevel: settings.uiLevel,
   });
 

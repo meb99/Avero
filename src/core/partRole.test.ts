@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isZeroOhm, kindLetters, partRole, passesThrough } from "./partRole";
+import { isLowOhm, isZeroOhm, kindLetters, ohms, partRole, passesThrough } from "./partRole";
 
 describe("part roles across naming schemes", () => {
   it("reads the kind past power and EMI section letters", () => {
@@ -39,11 +39,39 @@ describe("part roles across naming schemes", () => {
     for (const d of ["1R0", "R_0402", "10K_0402_5%", "0.1U_0402", "100R", "R0201", undefined]) expect([d, isZeroOhm(d)]).toEqual([d, false]);
   });
 
-  it("passes supplies through coils, jumpers and 0 Ω parts only", () => {
+  it("reads resistor values written in ohms, not packages or ratings", () => {
+    const cases: [string, number | undefined][] = [
+      ["1R0", 1],
+      ["0R1_0402", 0.1],
+      ["4R7", 4.7],
+      ["100R", 100],
+      ["0.01R", 0.01],
+      ["RES 1 OHM 1%", 1],
+      ["0.005_1%_0612", 0.005],
+      ["R_0.1_2512", 0.1],
+      ["5mR", 0.005],
+      ["10K_0402_5%", undefined],
+      ["R0402", undefined],
+      ["1/16W", undefined],
+      ["0.1U_0402", undefined],
+      ["0.1%", undefined],
+    ];
+    for (const [d, v] of cases) expect([d, ohms(d)]).toEqual([d, v]);
+    expect(isLowOhm("1R0")).toBe(true);
+    expect(isLowOhm("1R5")).toBe(false);
+    expect(isLowOhm(undefined)).toBe(false);
+  });
+
+  it("passes supplies through coils, jumpers and resistors up to 1 Ω only", () => {
     expect(passesThrough("PL1801", "MAG_MLV_2P", 2)).toBe(true);
     expect(passesThrough("PJ1501", "JUMP_43X79", 2)).toBe(true);
     expect(passesThrough("R12", "R0402_0OHM", 2)).toBe(true);
     expect(passesThrough("R12", "R_0402", 2)).toBe(false);
+    // Up to 1 Ω, as FlexBV: current-sense resistors join a supply to the rail behind them.
+    expect(passesThrough("R12", "1R0", 2)).toBe(true);
+    expect(passesThrough("PR7010", "0.005_1%_0612", 2)).toBe(true);
+    expect(passesThrough("R12", "4R7", 2)).toBe(false);
+    expect(passesThrough("C12", "0R1", 2)).toBe(false);
     expect(passesThrough("C12", undefined, 2)).toBe(false);
     expect(passesThrough("PL1", undefined, 3)).toBe(false);
     // Power coils with two pads per side: four pins on two nets.

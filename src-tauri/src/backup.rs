@@ -367,10 +367,9 @@ mod tests {
         assert_eq!(back.manifest.app, "0.9.20");
         assert_eq!(std::fs::read(new_library.join("Apple/A2338/820-02100.brd")).unwrap(), b"board");
         let notes = std::fs::read_to_string(new_data.join("boards/x.json")).unwrap();
-        assert!(
-            notes.contains(&new_data.join("photos/x-top-1.png").to_string_lossy().into_owned()),
-            "{notes}"
-        );
+        // As JSON writes it (a Windows path's \ doubled).
+        let moved = serde_json::to_string(&new_data.join("photos/x-top-1.png").to_string_lossy()).unwrap();
+        assert!(notes.contains(&moved), "{notes}");
         // The data folder as it was is kept beside it.
         assert_eq!(std::fs::read(root.join("new/data-before-restore-1/old.txt")).unwrap(), b"before");
         // A full restore is the backup's state: later files are set aside, not mixed in.

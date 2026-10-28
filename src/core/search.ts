@@ -91,12 +91,12 @@ export type SearchMode = "substring" | "prefix" | "strict";
 /**
  * The search for component / network: parts and nets (as chosen) whose name holds the query
  * in the given way, in name order, a part before a net of the same name. `U10.A3` finds that
- * pin first. Unconnected nets are left out.
+ * pin first. Unconnected nets are left out. `details` looks at a part's value and type, too.
  */
 export function findNames(
   model: BoardModel,
   query: string,
-  options: { parts: boolean; nets: boolean; mode: SearchMode; limit?: number },
+  options: { parts: boolean; nets: boolean; mode: SearchMode; limit?: number; details?: boolean },
 ): SearchResult[] {
   const q = query.trim().toUpperCase();
   if (!q) return [];
@@ -105,6 +105,10 @@ export function findNames(
     const n = name.toUpperCase();
     return options.mode === "strict" ? n === q : options.mode === "prefix" ? n.startsWith(q) : n.includes(q);
   };
+  // With details a part is found by its value and type too ("10K", "TPS62130"), word by word
+  // where the mode looks at the start or the whole.
+  const inDetails = (device: string | undefined) =>
+    !!options.details && !!device && (options.mode === "substring" ? matches(device) : device.split(/[\s·_,;/]+/).some(matches));
   const out: SearchResult[] = [];
   const pinRef = /^([^\s.:]+)[.:\s]+([^\s.:]+)$/.exec(q);
   if (pinRef && options.parts) {
@@ -118,7 +122,7 @@ export function findNames(
   if (options.parts)
     for (const i of model.sortedParts) {
       const p = model.parts[i];
-      if (matches(p.name)) named.push({ selection: { kind: "part", part: i }, label: p.name, detail: p.device ?? "", kind: "part" });
+      if (matches(p.name) || inDetails(p.device)) named.push({ selection: { kind: "part", part: i }, label: p.name, detail: p.device ?? "", kind: "part" });
     }
   if (options.nets)
     for (const i of model.sortedNets) {

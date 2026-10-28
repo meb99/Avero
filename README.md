@@ -74,7 +74,10 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
   - **Dateien per Doppelklick:** Das Setup verknüpft die Boardview-Endungen mit Avero. Ein Doppelklick öffnet die Datei, bei laufendem Avero im selben Fenster als neuen Reiter.
   - **Updates mit einem Klick** wie auf dem Mac: Avero lädt das neue Setup aus dem Release, startet es und kommt danach in der neuen Version wieder.
   - Gelöschte Bibliotheksdateien landen im Windows-Papierkorb. 7z und RAR entpackt das in Windows eingebaute `tar`. Allegro-Dateien liest derselbe eingebaute Leser wie auf dem Mac.
-- Auf dem Mac ändert sich nichts. Neu ist nur: Avero bietet ein Update erst an, wenn die Datei für das eigene System am Release hängt.
+- **Netweb wie in OpenBoardView und FlexBV** (Darstellung → „Netweb vom gewählten Pin“, auch in den Einstellungen): Bei gewähltem Pin laufen die Linien sternförmig von ihm zu allen Pins seines Netzes, statt jeden Pin mit seinem nächsten zu verbinden. Masse und offene Pins bekommen keines.
+- **Widerstände bis 1 Ω zählen als Verbindungsteile**, wie bei FlexBV: Ein Strommesswiderstand (`0.005_1%`, `1R0`, `5mR`) verbindet die Versorgung mit der Schiene dahinter, bei den verbundenen Netzen, in der Netzverfolgung und im Versorgungsbaum. Bisher galten nur 0-Ω-Widerstände.
+- **Suche nach Wert und Typ** (⌘F, Häkchen „Wert und Typ“) wie OpenBoardViews „Including details“: findet Bauteile auch über `10K`, `1uH` oder eine Teilenummer wie `TPS62130`.
+- Auf dem Mac ändert sich sonst nichts. Neu ist nur: Avero bietet ein Update erst an, wenn die Datei für das eigene System am Release hängt.
 
 **Neu in 0.9.47**
 - **Verbundene Netze in Stufen, wie FlexBVs „Mycelium“:** Das gewählte Netz wird über Verbindungsteile – Spulen, Ferrite, Sicherungen, Jumper, 0-Ω-Widerstände – weiterverfolgt. Stufe 1 zeigt nur das Netz, Stufe 2 (Standard, wie bei FlexBV) auch die Netze hinter einem Verbindungsteil, Stufe 3 die hinter zweien. Jedes verbundene Netz hat seine eigene Farbe, auch für seine Verbindungslinien, und die Verbindungsteile tragen eine grüne Raute. Das Linien-Symbol in der Leiste zeigt die Stufe und schaltet sie weiter; die Verbindungslinien selbst schaltet ⇧⌘R (Darstellung → Verbindungslinien).

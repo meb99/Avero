@@ -20,6 +20,7 @@ const state = (s: Partial<CommandState> = {}): CommandState => ({
   bench: false,
   grid: false,
   mechanical: true,
+  netWeb: false,
   uiLevel: "workshop",
   ...s,
 });

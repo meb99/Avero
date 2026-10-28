@@ -70,12 +70,39 @@ export function isZeroOhm(device: string | undefined): boolean {
 }
 
 /**
+ * A resistance written in ohms in a device text: "1R0", "0R1", "100R", "0.01R", "1 OHM",
+ * "5mR", or a plain decimal ("0.005_1%_0612"). Kilo- and megaohms, packages ("R0402") and
+ * ratings ("1/16W", "1%") give no value.
+ */
+export function ohms(device: string | undefined): number | undefined {
+  if (!device) return undefined;
+  const tokens = device.replace(/\s+(OHMS?|Ω)\b/gi, "$1").split(/[_\s,/]+/);
+  for (const t of tokens) {
+    let m = /^(\d+)R(\d*)$/i.exec(t);
+    if (m) return Number(`${m[1]}.${m[2] || "0"}`);
+    m = /^(\d+(?:\.\d+)?)(?:R|Ω|OHMS?)$/i.exec(t);
+    if (m) return Number(m[1]);
+    m = /^(\d+(?:\.\d+)?)m(?:R|Ω|OHMS?)$/.exec(t);
+    if (m) return Number(m[1]) / 1000;
+    if (/^\d*\.\d+$/.test(t)) return Number(t);
+  }
+  return undefined;
+}
+
+/** A resistor of at most 1 Ω, such as a current-sense shunt. */
+export function isLowOhm(device: string | undefined): boolean {
+  const v = ohms(device);
+  return v !== undefined && v <= 1;
+}
+
+/**
  * Parts that join their two nets into one for tracing a supply or signal:
- * coils, ferrites, fuses, jumpers and 0 Ω resistors.
+ * coils, ferrites, fuses, jumpers and resistors up to 1 Ω (as FlexBV does; a current-sense
+ * shunt joins a supply to the rail behind it).
  */
 export function passesThrough(name: string, device: string | undefined, pinCount: number, distinctNets?: number): boolean {
   // Two pins, or a power coil or fuse with two pads per side (4 pins on 2 nets).
   if (pinCount !== 2 && !(pinCount <= 4 && distinctNets === 2)) return false;
   const role = partRole(name, device, 2);
-  return role === "inductor" || role === "ferrite" || role === "fuse" || role === "jumper" || (role === "resistor" && isZeroOhm(device));
+  return role === "inductor" || role === "ferrite" || role === "fuse" || role === "jumper" || (role === "resistor" && (isZeroOhm(device) || isLowOhm(device)));
 }
