@@ -56,6 +56,9 @@ fn build_allegro() {
 /// Windows: the reader built with Visual Studio's cl.exe (found the way the
 /// cc crate finds it), the C++ runtime linked in so it runs on its own.
 /// Each source gets its own object name: two of them are called utils.cpp.
+/// The defines stand in for what the sources expect from a Unix compiler
+/// (M_PI) and keep windows.h, which winsock2.h brings in, from defining min
+/// and max. All sources are compiled before a failure is reported.
 fn build_allegro_msvc(target: &str, root: &std::path::Path, out: &std::path::Path) {
     use std::path::PathBuf;
     let manifest = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
@@ -64,22 +67,30 @@ fn build_allegro_msvc(target: &str, root: &std::path::Path, out: &std::path::Pat
     let tool = cc::windows_registry::find_tool(target, "cl.exe")
         .expect("Visual Studio C++ build tools are required for the local Allegro reader");
     let run = |cmd: &mut std::process::Command| {
-        let status = cmd.current_dir(dir).arg("/nologo").status().expect("cl.exe");
-        assert!(status.success(), "Failed to build the local Allegro reader");
+        cmd.current_dir(dir).arg("/nologo").status().expect("cl.exe").success()
     };
     let mut objects = Vec::new();
+    let mut failed = Vec::new();
     for (i, source) in SOURCES.iter().enumerate() {
         let object = dir.join(format!("allegro-{i}.obj"));
-        run(tool
+        let ok = run(tool
             .to_command()
             .args(["/c", "/std:c++20", "/O2", "/EHsc", "/MT", "/utf-8"])
+            .args(["/D_USE_MATH_DEFINES", "/DNOMINMAX", "/DWIN32_LEAN_AND_MEAN"])
             .arg("/I")
             .arg(root.join("vendor"))
             .arg(root.join(source))
             .arg(format!("/Fo{}", object.display())));
+        if !ok {
+            failed.push(*source);
+        }
         objects.push(object);
     }
+    assert!(failed.is_empty(), "Failed to build the local Allegro reader: {}", failed.join(", "));
     let exe = dir.join("avero-allegro-reader.exe");
-    run(tool.to_command().arg("/MT").args(&objects).arg(format!("/Fe{}", exe.display())));
+    assert!(
+        run(tool.to_command().arg("/MT").args(&objects).arg(format!("/Fe{}", exe.display()))),
+        "Failed to link the local Allegro reader"
+    );
     std::fs::copy(&exe, out).expect("Allegro reader");
 }
