@@ -7,7 +7,6 @@
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use serde::Serialize;
 
@@ -212,11 +211,13 @@ fn expand_zip(path: &Path, out: &mut Vec<Found>, result: &mut ImportResult) -> R
     Ok(())
 }
 
-/// libarchive's `bsdtar`, which reads 7z and RAR. macOS ships it as `tar`.
+/// libarchive's `bsdtar`, which reads 7z and RAR. macOS and Windows (10 and
+/// later) ship it as `tar`.
 fn bsdtar() -> Option<&'static str> {
-    let works = |tool: &str| Command::new(tool).arg("--version").output().is_ok_and(|o| o.status.success());
+    let works = |tool: &str| crate::quiet(tool).arg("--version").output().is_ok_and(|o| o.status.success());
     ["bsdtar", "/usr/bin/bsdtar"]
         .into_iter()
+        .chain(cfg!(windows).then_some(r"C:\Windows\System32\tar.exe"))
         .find(|tool| works(tool))
         .or(cfg!(target_os = "macos").then_some("/usr/bin/tar"))
 }
@@ -225,12 +226,12 @@ fn bsdtar() -> Option<&'static str> {
 /// usable files from it. bsdtar refuses absolute paths and `..` in archive
 /// entries; symbolic links from the archive are not followed either.
 fn expand_with_bsdtar(path: &Path, out: &mut Vec<Found>, result: &mut ImportResult) -> Result<(), String> {
-    let tool = bsdtar().ok_or("7z and RAR archives need bsdtar (part of macOS)")?;
+    let tool = bsdtar().ok_or("7z and RAR archives need bsdtar (part of macOS and Windows 10)")?;
     let stamp =
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     let tmp = std::env::temp_dir().join(format!("avero-unpack-{}-{stamp}", std::process::id()));
     std::fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
-    let unpacked = Command::new(tool)
+    let unpacked = crate::quiet(tool)
         .arg("-x")
         .arg("-f")
         .arg(path)
@@ -423,22 +424,30 @@ pub fn move_into(root: &Path, paths: &[PathBuf], folder: &str) -> Result<Vec<Pat
     Ok(moved)
 }
 
-/// Moves library files to `trash` (the user's Trash) instead of deleting
-/// them for good. Only files inside the library root; folders left empty
-/// are removed. Returns how many files were moved.
-pub fn trash(root: &Path, trash: &Path, paths: &[PathBuf]) -> Result<usize, String> {
+/// Moves library files to the folder `trash` (the user's Trash on macOS),
+/// or with `None` to the system's recycle bin (Windows), instead of
+/// deleting them for good. Only files inside the library root; folders left
+/// empty are removed. Returns how many files were moved.
+pub fn trash(root: &Path, trash: Option<&Path>, paths: &[PathBuf]) -> Result<usize, String> {
     let root = root.canonicalize().map_err(|e| format!("{}: {e}", root.display()))?;
-    std::fs::create_dir_all(trash).map_err(|e| format!("{}: {e}", trash.display()))?;
+    if let Some(trash) = trash {
+        std::fs::create_dir_all(trash).map_err(|e| format!("{}: {e}", trash.display()))?;
+    }
     let mut count = 0;
     for path in paths {
         let real = path.canonicalize().map_err(|e| format!("{}: {e}", path.display()))?;
         if !real.starts_with(&root) || !real.is_file() {
             return Err(format!("{}: only files in the Avero library can be deleted", path.display()));
         }
-        let name = real.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        let plain = trash.join(&name);
-        let dest = if plain.exists() { free_name(trash, &name) } else { plain };
-        std::fs::rename(&real, &dest).map_err(|e| format!("{}: {e}", real.display()))?;
+        match trash {
+            Some(trash) => {
+                let name = real.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let plain = trash.join(&name);
+                let dest = if plain.exists() { free_name(trash, &name) } else { plain };
+                std::fs::rename(&real, &dest).map_err(|e| format!("{}: {e}", real.display()))?;
+            }
+            None => recycle(&real)?,
+        }
         count += 1;
         let mut dir = real.parent().map(Path::to_path_buf);
         while let Some(d) = dir {
@@ -449,6 +458,23 @@ pub fn trash(root: &Path, trash: &Path, paths: &[PathBuf]) -> Result<usize, Stri
         }
     }
     Ok(count)
+}
+
+/// Windows' recycle bin, where Explorer can restore the file.
+/// The shell does not take `\\?\` paths, which `canonicalize` returns.
+#[cfg(windows)]
+fn recycle(path: &Path) -> Result<(), String> {
+    let text = path.to_string_lossy();
+    let plain = match text.strip_prefix(r"\\?\UNC\") {
+        Some(share) => format!(r"\\{share}"),
+        None => text.strip_prefix(r"\\?\").unwrap_or(&text).to_string(),
+    };
+    ::trash::delete(&plain).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+#[cfg(not(windows))]
+fn recycle(path: &Path) -> Result<(), String> {
+    Err(format!("{}: no recycle bin on this system", path.display()))
 }
 
 /// Folder for a file of an import: its board number, else the board number
@@ -834,10 +860,10 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("a.brd"), b"x").unwrap();
         std::fs::write(bin.join("a.brd"), b"older").unwrap();
-        assert_eq!(trash(&lib, &bin, &[dir.join("a.brd")]).unwrap(), 1);
+        assert_eq!(trash(&lib, Some(&bin), &[dir.join("a.brd")]).unwrap(), 1);
         assert!(!dir.exists() && !lib.join("Sony").exists(), "empty folders go too");
         assert!(bin.join("a (2).brd").exists());
-        assert!(trash(&lib, &bin, &[bin.join("a.brd")]).is_err(), "nothing outside the library");
+        assert!(trash(&lib, Some(&bin), &[bin.join("a.brd")]).is_err(), "nothing outside the library");
         std::fs::remove_dir_all(&lib).unwrap();
         std::fs::remove_dir_all(&bin).unwrap();
     }
@@ -870,7 +896,7 @@ mod tests {
         std::fs::write(content.join("J413 820-02100.pdf"), b"%PDF").unwrap();
         std::fs::write(content.join("readme.txt"), b"hi").unwrap();
         let archive = src.join("iPhone 13 Pro.7z");
-        let made = Command::new(tool)
+        let made = std::process::Command::new(tool)
             .args(["--format", "7zip", "-c", "-f"])
             .arg(&archive)
             .arg("-C")

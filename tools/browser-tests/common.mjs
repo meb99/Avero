@@ -26,7 +26,7 @@ export function boardArg(index = 2) {
  * reopened twice there: tests that count tabs start with no files and open them through
  * `recent` instead.
  */
-export async function openApp(boardJson, { level = "workshop", notes = null, viewport = { width: 1300, height: 820 }, files = ["/x/board.cad"], recent = [], settings = {} } = {}) {
+export async function openApp(boardJson, { level = "workshop", notes = null, viewport = { width: 1300, height: 820 }, files = ["/x/board.cad"], recent = [], settings = {}, os = "mac" } = {}) {
   // CHROMIUM: a Chromium binary to use instead of Playwright's own (npx playwright install chromium).
   const browser = await chromium.launch({
     ...(process.env.CHROMIUM && { executablePath: process.env.CHROMIUM }),
@@ -39,6 +39,8 @@ export async function openApp(boardJson, { level = "workshop", notes = null, vie
     if ((m.type() === "error" || m.type() === "warning") && !/404|Failed to load resource/.test(m.text())) logs.push(`console ${m.type()}: ${m.text().slice(0, 200)}`);
   });
   await page.route("https://api.github.com/**", (route) => route.fulfill({ status: 404, body: "" }));
+  // os: "windows" makes the app see Windows (Strg instead of ⌘, the window's own title bar).
+  if (os === "windows") await page.addInitScript(() => Object.defineProperty(Navigator.prototype, "platform", { get: () => "Win32" }));
   await page.addInitScript(
     ({ boardJson, level, notes, files, recent, settings }) => {
       try {

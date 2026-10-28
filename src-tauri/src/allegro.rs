@@ -2,7 +2,7 @@
 use avero_formats::{Board, FormatId, ParseError};
 use std::{
     path::Path,
-    process::{Command, Stdio},
+    process::Stdio,
     sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant},
 };
@@ -30,7 +30,7 @@ pub fn load(path: &Path) -> Result<Board, super::LoadError> {
         std::fs::set_permissions(&work.0, std::fs::Permissions::from_mode(0o700))
             .map_err(|e| fail(e.to_string()))?;
     }
-    let executable = work.0.join("reader");
+    let executable = work.0.join(format!("reader{}", std::env::consts::EXE_SUFFIX));
     let output = work.0.join("board.averoboard");
     std::fs::write(&executable, READER).map_err(|e| fail(e.to_string()))?;
     #[cfg(unix)]
@@ -41,7 +41,7 @@ pub fn load(path: &Path) -> Result<Board, super::LoadError> {
     }
     let errors = work.0.join("errors.txt");
     let log = std::fs::File::create(&errors).map_err(|e| fail(e.to_string()))?;
-    let mut child = Command::new(&executable)
+    let mut child = crate::quiet(&executable)
         .arg(path)
         .arg(&output)
         .stdin(Stdio::null())

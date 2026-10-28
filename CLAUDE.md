@@ -1,6 +1,6 @@
 # Avero – Arbeitsregeln für Claude
 
-Avero ist ein Boardviewer für macOS (Tauri 2, Rust, React/TypeScript), lokal und ohne Konto.
+Avero ist ein Boardviewer für macOS und Windows (Tauri 2, Rust, React/TypeScript), lokal und ohne Konto.
 Antworte dem Projektinhaber auf Deutsch.
 
 ## Feste Regeln
@@ -34,7 +34,8 @@ Antworte dem Projektinhaber auf Deutsch.
   (`[workspace.package]`) und `Cargo.lock` (`avero` und `avero-formats`).
 - Im `README.md` einen Abschnitt „**Neu in x.y.z**“ vor der vorigen Version einfügen.
 - `release.yml` baut nach grüner CI auf `main` automatisch, wenn es für die Version noch kein
-  Release gibt (DMG und `Avero_universal.app.tar.gz` für das Update).
+  Release gibt (DMG und `Avero_universal.app.tar.gz` für das Mac-Update, danach
+  `Avero_x.y.z_x64-setup.exe` für Windows und sein Update).
 - Auf `main` erst pushen, wenn das vorige Release fertig ist und `origin/main` ein Vorfahre ist.
   Danach CI und Release bis zu den hochgeladenen Dateien beobachten.
 

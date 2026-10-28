@@ -9,7 +9,7 @@ export interface RenameTarget {
   paths: string[];
 }
 
-const baseName = (path: string) => path.split("/").pop() ?? path;
+const baseName = (path: string) => path.split(/[\\/]/).pop() ?? path;
 
 /**
  * Renames library files, e.g. downloads called "download (3).pdf". Only

@@ -135,7 +135,7 @@ export function withOcrWords(index: PdfTextIndex, ocr: OcrPages | null): PdfText
 /** Adds recognised words of an open schematic to the library's index of that file. */
 export async function addOcrToLibraryIndex(path: string, ocr: OcrPages, pageCount: number): Promise<void> {
   const [size, modified] = await invoke<[number, number]>("file_stamp", { path });
-  const file = { path, name: path.split("/").pop() ?? path, size, modified };
+  const file = { path, name: path.split(/[\\/]/).pop() ?? path, size, modified };
   const base = (await cachedIndex(file)) ?? { v: 1 as const, pages: pageCount, words: {} };
   await storeIndex(file, withOcrWords(base, ocr));
 }

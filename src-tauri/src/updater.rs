@@ -1,17 +1,40 @@
-//! One-click updates on macOS.
+//! One-click updates on macOS and Windows.
 //!
-//! Every release carries `Avero_universal.app.tar.gz` (built by the release
-//! workflow). The update downloads it over HTTPS from this repository's
-//! releases (the same source as the DMG on the releases page), checks that
-//! the unpacked bundle is Avero in the expected version, swaps it for the
-//! running app bundle and starts the new version. Only macOS' own tools
-//! are used: curl, tar, plutil, ditto and open.
+//! Every release carries `Avero_universal.app.tar.gz` and
+//! `Avero_<version>_x64-setup.exe` (built by the release workflow). The
+//! update downloads the one for this system over HTTPS from this
+//! repository's releases (the same source as the downloads on the releases
+//! page).
+//!
+//! - macOS: checks that the unpacked bundle is Avero in the expected
+//!   version, swaps it for the running app bundle and starts the new
+//!   version. Only macOS' own tools are used: curl, tar, plutil, ditto and open.
+//! - Windows: starts the installer (with Windows' own curl) and quits; the
+//!   installer replaces the installed version and starts it again.
 
+#[cfg(target_os = "macos")]
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const REPO: &str = "meb99/Avero";
+#[cfg(target_os = "macos")]
 const BUNDLE_ID: &str = "dev.meb99.avero";
+
+/// The curl that comes with the system (Windows 10 and later have one, too).
+fn curl() -> Command {
+    crate::quiet(if cfg!(windows) { r"C:\Windows\System32\curl.exe" } else { "/usr/bin/curl" })
+}
+
+/// The release file this system installs; `None` where Avero has no update.
+fn asset_for(version: &str) -> Option<String> {
+    if cfg!(target_os = "macos") {
+        Some("Avero_universal.app.tar.gz".into())
+    } else if cfg!(windows) {
+        Some(format!("Avero_{version}_x64-setup.exe"))
+    } else {
+        None
+    }
+}
 
 fn run(cmd: &mut Command, what: &str) -> Result<String, String> {
     let out = cmd.output().map_err(|e| format!("{what}: {e}"))?;
@@ -54,16 +77,22 @@ pub fn parse_latest(json: &str, current: &str) -> Result<Option<Available>, Stri
     if !valid_version(&version) || !is_newer(&version, current) {
         return Ok(None);
     }
+    // Only once the file for this system is attached: the Mac and the Windows
+    // build reach the release one after the other.
+    let has = |name: &str| v["assets"].as_array().is_some_and(|a| a.iter().any(|x| x["name"] == name));
+    if !asset_for(&version).is_some_and(|name| has(&name)) {
+        return Ok(None);
+    }
     let url = v["html_url"].as_str().unwrap_or("https://github.com/meb99/Avero/releases").to_string();
     Ok(Some(Available { version, url }))
 }
 
-/// Asks GitHub for the latest release, with macOS' curl and a time limit,
-/// so the answer never depends on the web view.
+/// Asks GitHub for the latest release, with the system's curl and a time
+/// limit, so the answer never depends on the web view.
 pub fn check(current: &str) -> Result<Option<Available>, String> {
     let url = format!("https://api.github.com/repos/{REPO}/releases/latest");
     let out = run(
-        Command::new("/usr/bin/curl")
+        curl()
             .args(["-sS", "--proto", "=https", "--max-time", "20", "-w", "\n%{http_code}"])
             .args(["-H", "Accept: application/vnd.github+json", "-H", "User-Agent: Avero"])
             .arg(&url),
@@ -85,6 +114,7 @@ pub fn valid_version(v: &str) -> bool {
 }
 
 /// The `.app` bundle the running executable lives in.
+#[cfg(target_os = "macos")]
 fn running_bundle() -> Result<PathBuf, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     // Avero.app/Contents/MacOS/avero
@@ -95,6 +125,7 @@ fn running_bundle() -> Result<PathBuf, String> {
     Ok(bundle.to_path_buf())
 }
 
+#[cfg(target_os = "macos")]
 fn find_app(dir: &Path) -> Option<PathBuf> {
     std::fs::read_dir(dir)
         .ok()?
@@ -103,6 +134,7 @@ fn find_app(dir: &Path) -> Option<PathBuf> {
         .find(|p| p.extension().and_then(|e| e.to_str()) == Some("app") && p.is_dir())
 }
 
+#[cfg(target_os = "macos")]
 fn plist_value(app: &Path, key: &str) -> Result<String, String> {
     let plist = app.join("Contents/Info.plist");
     run(Command::new("/usr/bin/plutil").args(["-extract", key, "raw", "-o", "-"]).arg(&plist), "Info.plist")
@@ -110,21 +142,23 @@ fn plist_value(app: &Path, key: &str) -> Result<String, String> {
 
 /// Downloads and installs `version`, then restarts into it.
 pub fn install(app: &tauri::AppHandle, version: &str) -> Result<(), String> {
-    if !cfg!(target_os = "macos") {
-        return Err("updates are only installed on macOS".into());
-    }
     if !valid_version(version) {
         return Err(format!("invalid version {version}"));
     }
-    let target = running_bundle()?;
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or(0);
     let work = std::env::temp_dir().join(format!("avero-update-{stamp}"));
-    std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
-    let result = download_and_swap(version, &target, &work);
-    let _ = std::fs::remove_dir_all(&work);
+    install_in(app, version, &work)
+}
+
+#[cfg(target_os = "macos")]
+fn install_in(app: &tauri::AppHandle, version: &str, work: &Path) -> Result<(), String> {
+    let target = running_bundle()?;
+    std::fs::create_dir_all(work).map_err(|e| e.to_string())?;
+    let result = download_and_swap(version, &target, work);
+    let _ = std::fs::remove_dir_all(work);
     result?;
 
     // Start the new version once this one has quit.
@@ -138,14 +172,41 @@ pub fn install(app: &tauri::AppHandle, version: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Windows: the installer of the release, started passively (`/P`: progress
+/// only) with a restart of Avero afterwards (`/R`). It stays in the temporary
+/// folder, as it runs after Avero has quit.
+#[cfg(windows)]
+fn install_in(app: &tauri::AppHandle, version: &str, work: &std::path::Path) -> Result<(), String> {
+    let name = asset_for(version).ok_or("no installer for this system")?;
+    std::fs::create_dir_all(work).map_err(|e| e.to_string())?;
+    let setup = work.join(&name);
+    let url = format!("https://github.com/{REPO}/releases/download/v{version}/{name}");
+    run(
+        curl().args(["-fsSL", "--proto", "=https", "--max-time", "900", "-o"]).arg(&setup).arg(&url),
+        "download",
+    )?;
+    // A Windows program (MZ), not an error page.
+    let head = std::fs::read(&setup).map_err(|e| e.to_string())?;
+    if head.len() < 1_000_000 || !head.starts_with(b"MZ") {
+        let _ = std::fs::remove_dir_all(work);
+        return Err("the download is not an installer".into());
+    }
+    Command::new(&setup).args(["/P", "/R"]).spawn().map_err(|e| format!("installer: {e}"))?;
+    app.exit(0);
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
+fn install_in(_app: &tauri::AppHandle, _version: &str, _work: &std::path::Path) -> Result<(), String> {
+    Err("updates are installed on macOS and Windows".into())
+}
+
+#[cfg(target_os = "macos")]
 fn download_and_swap(version: &str, target: &Path, work: &Path) -> Result<(), String> {
     let url = format!("https://github.com/{REPO}/releases/download/v{version}/Avero_universal.app.tar.gz");
     let archive = work.join("update.tar.gz");
     run(
-        Command::new("/usr/bin/curl")
-            .args(["-fsSL", "--proto", "=https", "--max-time", "900", "-o"])
-            .arg(&archive)
-            .arg(&url),
+        curl().args(["-fsSL", "--proto", "=https", "--max-time", "900", "-o"]).arg(&archive).arg(&url),
         "download",
     )?;
     let unpacked = work.join("unpacked");
@@ -184,16 +245,31 @@ mod tests {
         assert!(!is_newer("0.4.9", "0.5.0"));
     }
 
+    /// A release answer with the file for this system attached (or not).
+    fn release(attached: bool) -> String {
+        let asset = asset_for("0.5.3").filter(|_| attached).unwrap_or_else(|| "other.zip".into());
+        format!(
+            r#"{{"tag_name":"v0.5.3","html_url":"https://x/r","draft":false,"prerelease":false,"assets":[{{"name":"{asset}"}}]}}"#
+        )
+    }
+
     #[test]
     fn reads_latest_release() {
-        let json = r#"{"tag_name":"v0.5.3","html_url":"https://x/r","draft":false,"prerelease":false}"#;
-        assert_eq!(
-            parse_latest(json, "0.5.2").unwrap(),
-            Some(Available { version: "0.5.3".into(), url: "https://x/r".into() })
-        );
-        assert_eq!(parse_latest(json, "0.5.3").unwrap(), None);
+        let json = release(true);
+        let offered =
+            asset_for("0.5.3").map(|_| Available { version: "0.5.3".into(), url: "https://x/r".into() });
+        assert_eq!(parse_latest(&json, "0.5.2").unwrap(), offered);
+        assert_eq!(parse_latest(&json, "0.5.3").unwrap(), None);
         assert_eq!(parse_latest(r#"{"tag_name":"v9.0.0","draft":true}"#, "0.5.2").unwrap(), None);
         assert!(parse_latest("not json", "0.5.2").is_err());
+    }
+
+    #[test]
+    fn waits_for_the_file_of_this_system() {
+        assert_eq!(parse_latest(&release(false), "0.5.2").unwrap(), None);
+        if cfg!(windows) {
+            assert_eq!(asset_for("0.9.48").as_deref(), Some("Avero_0.9.48_x64-setup.exe"));
+        }
     }
 
     #[test]

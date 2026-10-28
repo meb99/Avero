@@ -80,7 +80,8 @@ import {
 import type { LoadError, Point, Selection, Side } from "./core/types";
 import { emitTo, listen } from "@tauri-apps/api/event";
 import { I18nContext, systemLanguage, translator, type MessageKey } from "./i18n";
-import { installMenu, menuOwnsKey } from "./menu";
+import { installMenu, menuOwnsKey, menuTakesKeys } from "./menu";
+import { commandKey } from "./platform";
 import { closeSchematicWindow, LINK, openSchematicWindow, type LinkedDoc } from "./schematic/link";
 import { DARK, LIGHT, linkColor, withColors } from "./render/palette";
 import { setPdfPasswordPrompt, type SchematicDocument } from "./schematic/document";
@@ -174,7 +175,7 @@ function isTyping(target: EventTarget | null): boolean {
 }
 
 const isPdf = (path: string) => /\.pdf$/i.test(path);
-const fileName = (path: string) => path.split("/").pop() ?? path;
+const fileName = (path: string) => path.split(/[\\/]/).pop() ?? path;
 
 /** A selection as text the search understands ("U3000", "U3000.21", "PP3V3"), for bookmarks and copying. */
 function selectionText(model: BoardModel, sel: Selection): string | undefined {
@@ -2330,7 +2331,7 @@ export function App() {
         cycleTab(e.shiftKey ? -1 : 1);
         return;
       }
-      if (e.metaKey && !e.shiftKey && !e.altKey && /^[1-9]$/.test(e.key)) {
+      if (commandKey(e) && !e.shiftKey && !e.altKey && /^[1-9]$/.test(e.key)) {
         e.preventDefault();
         const list = tabsStateRef.current.list;
         const target = e.key === "9" ? list[list.length - 1] : list[Number(e.key) - 1];
@@ -2355,7 +2356,7 @@ export function App() {
       // With the native menu bar, its key equivalents handle their ⌘ shortcuts.
       if (menuOwnsKey(e)) return;
       // ⌘ keys of the command register (⌘K, ⌘O, ⌥⌘F, ⌘F, ⌘E, ⌘L, ⌘I).
-      const modCommand = mod ? commandForKey(e, !!model, "mod") : undefined;
+      const modCommand = mod ? commandForKey(e, !!model, "mod", !menuTakesKeys()) : undefined;
       if (modCommand) {
         e.preventDefault();
         modCommand.run(actionsRef.current);

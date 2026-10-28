@@ -24,6 +24,7 @@ Mit `CHROMIUM=/pfad/zu/chromium` wird ein vorhandenes Chromium benutzt.
 | `calm-start.mjs [board.json]` | Ruhiger Start: Seitenleiste eingeklappt bis zur ersten Auswahl, Rechtsklick sucht Bauteil oder Netz im Schaltplan, Mittelklick dreht |
 | `find.mjs [board.json]` | Suchmaske ⌘F: Bauteile/Netze, Teilwort/Anfang/Ganz, Klick zeigt, zweites Feld ergänzt, Enter schließt |
 | `links.mjs [board.json]` | Verbundene Netze in Stufen: Symbol 2 → 3 → 1 → 2, Netz hinter einer Spule unter „Verbunden“ |
+| `windows.mjs [board.json]` | Avero als Windows: Strg statt ⌘ (Strg+F, Strg+K, Strg+1/2), Tasten als „Strg+O“ in Palette und Hilfe, Menükürzel wie Strg+, im Fenster, Symbolleiste ohne Platz für die Mac-Fensterknöpfe |
 | `history.mjs [board.json]` | Ein Auswahlverlauf: ⌘← / ⌘→ und Zurück/Vor aus der Palette gehen durch dieselbe Liste |
 
 Ein Board als JSON:

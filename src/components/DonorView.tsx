@@ -56,7 +56,7 @@ export function DonorView({
     }).then(setHits, (e) => setError(String(e)));
   }, [model, part]);
 
-  const name = (path: string) => path.split("/").pop() ?? path;
+  const name = (path: string) => path.split(/[\\/]/).pop() ?? path;
   return (
     <Dialog title={t("donor.title", { part: p.name })} onClose={onClose} className="donor-dialog">
       <p className="muted">

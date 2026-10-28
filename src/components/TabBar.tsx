@@ -1,4 +1,5 @@
 import { useI18n } from "../i18n";
+import { forPlatform } from "../platform";
 import { CloseIcon } from "./Icons";
 
 export interface TabInfo {
@@ -17,7 +18,7 @@ interface Props {
 }
 
 export function TabBar({ tabs, active, onSwitch, onClose, onNew }: Props) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   return (
     <div className="tab-bar" role="tablist">
       {tabs.map((tab) => (
@@ -46,7 +47,7 @@ export function TabBar({ tabs, active, onSwitch, onClose, onNew }: Props) {
           </button>
         </div>
       ))}
-      <button className="tab-new" onClick={onNew} aria-label={t("tabs.new")} title={`${t("tabs.new")} (⌘T)`}>
+      <button className="tab-new" onClick={onNew} aria-label={t("tabs.new")} title={`${t("tabs.new")} (${forPlatform("⌘T", lang)})`}>
         +
       </button>
     </div>

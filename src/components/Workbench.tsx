@@ -5,6 +5,7 @@ import type { BoardModel } from "../core/board";
 import { pinKey, pointOf } from "../core/points";
 import type { Selection } from "../core/types";
 import { useI18n } from "../i18n";
+import { forPlatform } from "../platform";
 import { formatValue, QUANTITIES, type Reading } from "../workbench/measure";
 import {
   activeCase,
@@ -251,7 +252,7 @@ export function Workbench({ notes }: { notes: BoardNotes }) {
           <h3>
             {t("bookmark.title")} <span className="muted">{notes.bookmarks?.length ?? 0}</span>
           </h3>
-          <button className="small" onClick={onAddBookmark} title="⌘D">
+          <button className="small" onClick={onAddBookmark} title={forPlatform("⌘D", lang)}>
             + {t("bookmark.add")}
           </button>
         </div>

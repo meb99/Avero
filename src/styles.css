@@ -1,6 +1,6 @@
 :root {
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
-  --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Helvetica Neue", sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, "Cascadia Mono", monospace;
   --radius: 6px;
   --toolbar-h: 38px;
   --status-h: 26px;
@@ -253,6 +253,11 @@ kbd {
   background: var(--bar);
   border-bottom: 1px solid var(--border);
   min-width: 0;
+}
+
+/* Windows: the title bar with its buttons is above the toolbar. */
+:root[data-platform="windows"] .toolbar {
+  padding-left: 8px;
 }
 
 /* One row of symbols, as in FlexBV's bar. */

@@ -6,6 +6,7 @@
  * See GLOSSARY.md: Befehl, Befehlsregister.
  */
 import { matchCommands, type Command } from "./core/commands";
+import { forPlatform } from "./platform";
 import type { Translate } from "./i18n";
 import { bindings, keyLabel, type ShortcutAction, type Shortcuts } from "./shortcuts";
 import type { UiLevel } from "./settings";
@@ -296,18 +297,42 @@ export function command(id: string): CommandSpec {
 
 /** The key a command is shown with: the one set in the settings, else its fixed one. */
 export function shortcutOf(c: CommandSpec, shortcuts: Shortcuts | undefined, lang: string): string | undefined {
-  if (!c.bench) return c.key;
+  if (!c.bench) return c.key && forPlatform(c.key, lang);
   const first = bindings(shortcuts)[c.bench][0];
   return first ? keyLabel(first, lang) : undefined;
 }
 
-/** The command a key press runs, where the web view handles it. */
+/**
+ * Whether a key press is a menu key equivalent ("CmdOrCtrl+Shift+E"): letters and digits by
+ * physical key with Shift and Alt exactly as given, other keys by the character typed.
+ */
+export function acceleratorMatches(accelerator: string, e: { key: string; code: string; shiftKey?: boolean; altKey: boolean }): boolean {
+  const parts = accelerator.split(/\+(?=.)/);
+  const key = parts[parts.length - 1];
+  if (!parts.includes("CmdOrCtrl") || parts.includes("Alt") !== e.altKey) return false;
+  if (!/^[A-Z0-9]$/.test(key)) return e.key === key;
+  return parts.includes("Shift") === !!e.shiftKey && e.code === (/[0-9]/.test(key) ? `Digit${key}` : `Key${key}`);
+}
+
+/** Menu keys the web view handles anyway, with care for text being edited (⌘Z). */
+const OWN_KEYS = new Set(["undo", "redo"]);
+
+/**
+ * The command a key press runs, where the web view handles it. With `accelerators` (no
+ * native menu takes the keys: Windows, the browser) the menu's key equivalents count too,
+ * before the looser keys: Strg+Umschalt+E is the image export, not ⌘E.
+ */
 export function commandForKey(
-  e: { key: string; code: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean },
+  e: { key: string; code: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey?: boolean },
   board: boolean,
   phase: "mod" | "plain",
+  accelerators = false,
 ): CommandSpec | undefined {
   const mod = e.metaKey || e.ctrlKey;
+  if (accelerators && phase === "mod" && mod) {
+    const own = COMMANDS.find((c) => c.accelerator && !OWN_KEYS.has(c.id) && acceleratorMatches(c.accelerator, e));
+    if (own) return own;
+  }
   const key = phase === "mod" ? e.key.toLowerCase() : e.key;
   // The more particular match first: ⌥⌘F before ⌘F.
   const all = COMMANDS.flatMap((c) => (c.keys ?? []).map((k) => ({ c, k }))).sort((a, b) => Number(!!b.k.alt) - Number(!!a.k.alt));

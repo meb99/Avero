@@ -304,7 +304,7 @@ export function LibraryDialog({ drop, onOpen, onOpenText, onClose }: Props) {
   // Only files in Avero's own folder; they go to the Trash, not away for good.
   const remove = async (e: LibraryEntry) => {
     const paths = [...e.boards, ...e.schematics, ...e.unsupported].map((f) => f.path);
-    const names = paths.map((p) => p.split("/").pop() ?? p);
+    const names = paths.map((p) => p.split(/[\\/]/).pop() ?? p);
     const files = names.slice(0, 12).join("\n") + (names.length > 12 ? `\n+${names.length - 12}` : "");
     const { ask } = await import("@tauri-apps/plugin-dialog");
     const yes = await ask(t("library.deleteAsk", { name: e.title, files }), {

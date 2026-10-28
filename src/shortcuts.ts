@@ -1,3 +1,5 @@
+import { forPlatform, platform, type Platform } from "./platform";
+
 /**
  * Keys for the bench: what to press to save a reading and go to the next
  * point, flip the board and so on, changeable in the settings. A foot pedal
@@ -93,10 +95,12 @@ interface KeyLike {
  * others by name ("PageDown", "F13", "Space"), with modifiers in front
  * where they matter ("Alt+F5"; Shift only for keys that are no characters).
  */
-export function keyName(e: KeyLike): string {
+export function keyName(e: KeyLike, os: Platform = platform): string {
   const base = e.key === " " ? "Space" : e.key.length === 1 ? e.key.toLowerCase() : e.key;
   const printable = e.key.length === 1;
-  const mods = [e.ctrlKey && "Ctrl", e.metaKey && "Cmd", e.altKey && "Alt", e.shiftKey && !printable && "Shift"].filter(Boolean);
+  // The command key is "Cmd" on both systems (⌘ on the Mac, Strg on Windows), so a key set on one works on the other.
+  const command = os === "mac" ? [e.ctrlKey && "Ctrl", e.metaKey && "Cmd"] : [e.ctrlKey && "Cmd"];
+  const mods = [...command, e.altKey && "Alt", e.shiftKey && !printable && "Shift"].filter(Boolean);
   return [...mods, base].join("+");
 }
 
@@ -127,8 +131,8 @@ export function rebind(custom: Shortcuts | undefined, action: ShortcutAction, na
   return out;
 }
 
-/** "⌥F5", "Leertaste", "Bild ↓" for display. */
-export function keyLabel(name: string, lang: string): string {
+/** "⌥F5", "Leertaste", "Bild ↓" for display (on Windows "Alt+F5"). */
+export function keyLabel(name: string, lang: string, os: Platform = platform): string {
   const de = lang.startsWith("de");
   const words: Record<string, string> = {
     Space: de ? "Leertaste" : "Space",
@@ -140,8 +144,9 @@ export function keyLabel(name: string, lang: string): string {
     ArrowUp: "↑",
     ArrowDown: "↓",
   };
-  return name
+  const label = name
     .split("+")
     .map((p) => ({ Ctrl: "⌃", Cmd: "⌘", Alt: "⌥", Shift: "⇧" })[p] ?? words[p] ?? (p.length === 1 ? p.toUpperCase() : p))
     .join("");
+  return forPlatform(label, lang, os);
 }

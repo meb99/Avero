@@ -35,6 +35,12 @@ _Vermeiden_: Aktion, Menüpunkt, Kommando
 Die eine Liste aller festen Befehle, aus der Menüleiste, Befehlspalette und Tastatur lesen.
 _Vermeiden_: Action-Map, Shortcut-Liste
 
+**Befehlstaste** (Code: `commandKey`):
+Die Taste vor den Kürzeln: ⌘ auf dem Mac, Strg unter Windows. Gespeichert wird sie auf beiden
+Systemen als `Cmd`, damit eine eingestellte Taste überall gilt. Texte schreiben die Tasten so, wie
+das System sie nennt („⇧⌘E“ bzw. „Strg+Umschalt+E“).
+_Vermeiden_: Meta-Taste, Modifier
+
 **Auswahlverlauf** (Code: `selectionHistory`):
 Was auf einem Board nacheinander ausgewählt war, zum Zurück- und Vorgehen wie im Browser. Je Board
 eine Liste; alle Wege (Tasten, Menü, Palette, Maustasten) gehen durch dieselbe.

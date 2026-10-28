@@ -65,3 +65,30 @@ jobs:
           name: Avero.app
           path: target/release/bundle/macos/Avero.app
           retention-days: 14
+
+  windows:
+    name: Windows app
+    needs: [formats, frontend]
+    runs-on: windows-latest
+    steps:
+      # Files as they are in the repository (tests compare bytes).
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test -p avero
+      - name: Build the Windows installer
+        run: npm run tauri build -- --bundles nsis
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Avero-Windows-Setup
+          path: target/release/bundle/nsis/*-setup.exe
+          retention-days: 14

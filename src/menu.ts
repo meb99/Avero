@@ -1,6 +1,7 @@
 import { Menu, type MenuItemOptions, type PredefinedMenuItemOptions, type SubmenuOptions } from "@tauri-apps/api/menu";
 import { command, shortcutOf, type CommandActions } from "./commands";
 import type { Translate } from "./i18n";
+import { isMac, windowsKeys } from "./platform";
 import type { Shortcuts } from "./shortcuts";
 
 /** Everything the menu bar can trigger (see the command register). */
@@ -45,13 +46,30 @@ for (const a of ["X", "C", "V", "A", "Q", "H", "Alt+H", "M", "Ctrl+F"]) remember
  * custom bench key …) reaches only the web view, which must then act on it.
  */
 export function menuOwnsKey(e: { key: string; code: string; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }): boolean {
-  if (!nativeMenuActive || !e.metaKey) return false;
+  if (!menuTakesKeys() || !e.metaKey) return false;
   return menuKeys.has(keyId(e.shiftKey, e.altKey, e.ctrlKey, e.code)) || menuKeys.has(keyId(e.shiftKey, e.altKey, e.ctrlKey, e.key.toLowerCase()));
 }
 
+/**
+ * Whether the native menu takes its key equivalents itself. Only on the Mac: on Windows
+ * the menu bar shows the keys and the web view handles them, as it has the keyboard focus.
+ */
+export function menuTakesKeys(): boolean {
+  return nativeMenuActive && isMac;
+}
+
+/** "CmdOrCtrl+Shift+E" as Windows writes it: "Strg+Umschalt+E". */
+export function acceleratorText(accelerator: string, lang: string): string {
+  const glyph: Record<string, string> = { CmdOrCtrl: "⌘", Shift: "⇧", Alt: "⌥" };
+  const parts = accelerator.split(/\+(?=.)/);
+  const key = parts.pop() ?? "";
+  const mods = parts.map((p) => glyph[p] ?? "").join("");
+  return mods ? `${windowsKeys(mods, lang)}+${key}` : key;
+}
 
 /**
- * Builds the macOS menu bar. Actions go through `actions()` so the menu
+ * Builds the menu bar: the macOS one, or on Windows the window's menu bar with the same
+ * menus (Windows keeps Quit in File, Settings in Edit and About in Help). Actions go through `actions()` so the menu
  * always calls the current handlers without being rebuilt on every render.
  */
 export async function installMenu(
@@ -64,6 +82,8 @@ export async function installMenu(
   lang = "en",
 ): Promise<void> {
   const item = (id: string, text: string, run: (a: MenuActions) => void, accelerator?: string): MenuItemOptions => {
+    // Windows: the key after a tab, right-aligned as in every Windows menu; the web view handles it.
+    if (!isMac) return { id, text: accelerator ? `${text}\t${acceleratorText(accelerator, lang)}` : text, action: () => run(actions()) };
     if (accelerator) remember(accelerator.replace("CmdOrCtrl+", ""));
     return { id, text, accelerator, action: () => run(actions()) };
   };
@@ -72,31 +92,34 @@ export async function installMenu(
     const c = command(id);
     const label = c.menuLabel?.(t) ?? c.label(t, { lang } as Parameters<typeof c.label>[1]);
     const key = c.menuKey ? shortcutOf(c, shortcuts, lang) : undefined;
-    return item(c.menuId ?? c.id, key ? `${label}  ${key}` : label, (a) => c.run(a), c.accelerator);
+    return item(c.menuId ?? c.id, key ? `${label}${isMac ? "  " : "\t"}${key}` : label, (a) => c.run(a), c.accelerator);
   };
+  const about: PredefinedMenuItemOptions = {
+    item: {
+      About: {
+        name: "Avero",
+        version,
+        copyright: "© 2026 meb99 · MIT",
+        comments: t("app.tagline"),
+      },
+    },
+  };
+  const mac = <T,>(...entries: T[]): T[] => (isMac ? entries : []);
+  const windows = <T,>(...entries: T[]): T[] => (isMac ? [] : entries);
 
   const recentItems: Item[] = recent.length
     ? [
-        ...recent.map((path, i) => item(`recent-${i}`, path.split("/").pop() ?? path, (a) => a.openRecent(path))),
+        ...recent.map((path, i) => item(`recent-${i}`, path.split(/[\\/]/).pop() ?? path, (a) => a.openRecent(path))),
         SEP,
         item("recent-clear", t("menu.clearRecent"), (a) => a.clearRecent()),
       ]
     : [{ id: "recent-none", text: "—", enabled: false }];
 
   const items: Item[] = [
-    {
+    ...mac<Item>({
       text: "Avero",
       items: [
-        {
-          item: {
-            About: {
-              name: "Avero",
-              version,
-              copyright: "© 2026 meb99 · MIT",
-              comments: t("app.tagline"),
-            },
-          },
-        },
+        about,
         SEP,
         cmd("updates"),
         cmd("settings"),
@@ -110,7 +133,7 @@ export async function installMenu(
         // Not the predefined item: unsaved readings are written before the app ends.
         cmd("quit"),
       ],
-    },
+    }),
     {
       text: t("menu.file"),
       items: [
@@ -136,6 +159,7 @@ export async function installMenu(
         },
         SEP,
         cmd("close"),
+        ...windows<Item>(SEP, cmd("quit")),
       ],
     },
     {
@@ -143,11 +167,9 @@ export async function installMenu(
       items: [
         cmd("undo"),
         cmd("redo"),
-        SEP,
-        { item: "Cut" },
-        { item: "Copy" },
-        { item: "Paste" },
-        { item: "SelectAll" },
+        // Windows: the web view handles Strg+X/C/V/A itself; the predefined items would bring their own keys.
+        ...mac<Item>(SEP, { item: "Cut" }, { item: "Copy" }, { item: "Paste" }, { item: "SelectAll" }),
+        ...windows<Item>(SEP, cmd("settings")),
       ],
     },
     // As in FlexBV: View, Search, Board and the workshop (FlexBV's Jobs) each in their own menu.
@@ -170,8 +192,7 @@ export async function installMenu(
         cmd("schematic-window"),
         cmd("sidebar"),
         cmd("ui-level"),
-        SEP,
-        { item: "Fullscreen" },
+        ...mac<Item>(SEP, { item: "Fullscreen" }),
       ],
     },
     {
@@ -240,8 +261,7 @@ export async function installMenu(
             cmd("layout-save"),
           ],
         },
-        SEP,
-        { item: "BringAllToFront" },
+        ...mac<Item>(SEP, { item: "BringAllToFront" }),
       ],
     },
     {
@@ -249,6 +269,7 @@ export async function installMenu(
       items: [
         cmd("shortcuts"),
         cmd("website"),
+        ...windows<Item>(SEP, cmd("updates"), about),
       ],
     },
   ];

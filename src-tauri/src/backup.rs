@@ -134,7 +134,7 @@ fn safe_join(base: &Path, rel: &str) -> Option<PathBuf> {
 }
 
 fn home_dir() -> Option<String> {
-    std::env::var("HOME").ok().filter(|h| !h.is_empty())
+    ["HOME", "USERPROFILE"].iter().find_map(|v| std::env::var(v).ok().filter(|h| !h.is_empty()))
 }
 
 /// Replaces the first matching path prefix of every string in a JSON value

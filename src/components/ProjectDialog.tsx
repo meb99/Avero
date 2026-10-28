@@ -25,7 +25,7 @@ interface Props {
   onClose(): void;
 }
 
-const fileName = (p: string) => p.split("/").pop() ?? p;
+const fileName = (p: string) => p.split(/[\\/]/).pop() ?? p;
 
 function mappingText(m: PinMapping, t: ReturnType<typeof useI18n>["t"]): string {
   if (m.kind === "straight") return t("project.straight");

@@ -52,7 +52,7 @@ export function parseDatasheets(json: string | null): Datasheet[] {
         {
           id: d.id,
           file: d.file,
-          title: typeof d.title === "string" ? d.title : d.file.split("/").pop(),
+          title: typeof d.title === "string" ? d.title : d.file.split(/[\\/]/).pop(),
           chips: Array.isArray(d.chips) ? d.chips.filter((c: unknown) => typeof c === "string" && c.trim()) : [],
           pages: Array.isArray(d.pages)
             ? d.pages.filter((p: { label: unknown; page: unknown }) => typeof p?.label === "string" && Number.isInteger(p?.page) && (p.page as number) >= 0)

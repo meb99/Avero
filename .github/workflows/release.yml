@@ -1,6 +1,7 @@
 name: Release
 
-# Publishes a universal DMG as a GitHub release, fully automatic:
+# Publishes a universal DMG and a Windows installer as a GitHub release,
+# fully automatic:
 #
 # - after CI passed on main, when the version in src-tauri/tauri.conf.json
 #   has no release yet (bump the version, push, done);
@@ -89,11 +90,47 @@ jobs:
           releaseName: Avero ${{ needs.check.outputs.tag }}
           releaseCommitish: ${{ needs.check.outputs.sha }}
           releaseBody: |
-            Universal-DMG für Apple Silicon und Intel (macOS 13 oder neuer).
+            **Mac:** `Avero_…_universal.dmg` für Apple Silicon und Intel (macOS 13 oder neuer).
+            **Windows:** `Avero_…_x64-setup.exe` für Windows 10 und 11 (64 Bit).
 
-            Installation: DMG öffnen, Avero in den Programme-Ordner ziehen. Avero ist nicht von Apple notarisiert:
+            Installation auf dem Mac: DMG öffnen, Avero in den Programme-Ordner ziehen. Avero ist nicht von Apple notarisiert:
             - macOS 13/14: beim ersten Start Rechtsklick auf Avero → Öffnen.
             - macOS 15: einmal starten, dann Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen".
             - oder im Terminal: `xattr -dr com.apple.quarantine /Applications/Avero.app`
+
+            Installation unter Windows: Setup starten, Avero wird für den eigenen Benutzer eingerichtet (ohne Administratorrechte). Das Setup ist nicht signiert: SmartScreen meldet „Der Computer wurde durch Windows geschützt" → „Weitere Informationen" → „Trotzdem ausführen".
+
+            Die Datei wird während des Releases nachgereicht: der Windows-Build läuft nach dem Mac-Build.
           releaseDraft: false
           args: --target universal-apple-darwin
+
+  windows:
+    # After the Mac build, which creates the release; adds the installer to it.
+    needs: [check, dmg]
+    if: needs.check.outputs.publish == 'true'
+    runs-on: windows-latest
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.check.outputs.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run tauri build -- --bundles nsis
+      # A fixed name, as the in-app update downloads it: Avero_<version>_x64-setup.exe.
+      - name: Upload the installer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.check.outputs.tag }}
+        run: |
+          version="${TAG#v}"
+          setup=$(ls target/release/bundle/nsis/*-setup.exe | head -n 1)
+          test -n "$setup"
+          cp "$setup" "Avero_${version}_x64-setup.exe"
+          gh release upload "$TAG" "Avero_${version}_x64-setup.exe" --clobber --repo "$GITHUB_REPOSITORY"

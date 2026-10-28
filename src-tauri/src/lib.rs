@@ -42,6 +42,20 @@ fn io_error(path: &Path, e: std::io::Error) -> LoadError {
     LoadError { code: "io", message: format!("{}: {e}", path.display()), format: None }
 }
 
+/// A command line tool started in the background: on Windows without the
+/// console window a GUI app would otherwise open for it.
+pub(crate) fn quiet(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
+    #[allow(unused_mut)]
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
 fn read(path: &Path) -> Result<Vec<u8>, LoadError> {
     let size = std::fs::metadata(path).map_err(|e| io_error(path, e))?.len();
     if size > MAX_FILE_SIZE as u64 {
@@ -227,9 +241,23 @@ fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
 
-/// Files handed to the app by Finder before the UI subscribed to them.
+/// Files handed to the app (Finder, or a double-click in Explorer) before
+/// the UI subscribed to them.
 #[derive(Default)]
 struct PendingPaths(Mutex<Vec<String>>);
+
+/// The files among the arguments Avero was started with: Windows passes a
+/// double-clicked board as an argument (macOS sends an event instead).
+/// Relative paths are taken from `cwd`.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+fn file_args(args: impl IntoIterator<Item = String>, cwd: &Path) -> Vec<String> {
+    args.into_iter()
+        .filter(|a| !a.starts_with('-'))
+        .map(|a| cwd.join(a))
+        .filter(|p| p.is_file())
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect()
+}
 
 // Commands are async so large files are parsed off the main thread.
 #[tauri::command]
@@ -370,9 +398,12 @@ fn move_library_files(
 fn trash_library_files(app: tauri::AppHandle, paths: Vec<String>) -> Result<usize, String> {
     use tauri::Manager;
     let root = library_dir(&app)?;
-    let bin = app.path().home_dir().map_err(|e| e.to_string())?.join(".Trash");
     let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
-    import::trash(&root, &bin, &paths)
+    if cfg!(windows) {
+        return import::trash(&root, None, &paths);
+    }
+    let bin = app.path().home_dir().map_err(|e| e.to_string())?.join(".Trash");
+    import::trash(&root, Some(&bin), &paths)
 }
 
 /// Renames a file of the library; returns the new path.
@@ -904,10 +935,35 @@ fn take_pending_paths(pending: tauri::State<'_, PendingPaths>) -> Vec<String> {
 }
 
 pub fn run() {
-    let app = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // Windows: a second double-click hands its files to the running Avero, as on macOS.
+    #[cfg(windows)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+        use tauri::{Emitter, Manager};
+        let paths = file_args(argv.into_iter().skip(1), Path::new(&cwd));
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+        }
+        if paths.is_empty() {
+            return;
+        }
+        if let Ok(mut pending) = app.state::<PendingPaths>().0.lock() {
+            pending.extend(paths.iter().cloned());
+        }
+        let _ = app.emit("open-paths", paths);
+    }));
+    #[cfg(target_os = "macos")]
+    let pending = PendingPaths::default();
+    #[cfg(not(target_os = "macos"))]
+    let pending = PendingPaths(Mutex::new(file_args(
+        std::env::args().skip(1),
+        &std::env::current_dir().unwrap_or_default(),
+    )));
+    let app = builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .manage(PendingPaths::default())
+        .manage(pending)
         .manage(meter::Meter::default())
         .manage(mcp::Mcp::default())
         .setup(|app| {
@@ -1046,6 +1102,16 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn opens_the_files_it_was_started_with() {
+        let dir = std::env::temp_dir().join(format!("avero-args-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("board.brd"), b"str_length:").unwrap();
+        let args = ["--flag", "board.brd", "missing.brd"].map(String::from);
+        assert_eq!(file_args(args, &dir), [dir.join("board.brd").to_string_lossy().into_owned()]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     /// A small synthetic XZZ board whose part is not encrypted: the direct
     /// reader treats it as locked, the converter reads it.

@@ -4,10 +4,11 @@
 
 <h1 align="center">Avero</h1>
 
-<p align="center">Boardview für die Elektronik-Reparatur auf dem Mac.</p>
+<p align="center">Boardview für die Elektronik-Reparatur auf dem Mac und unter Windows.</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/macOS-13%2B-111111?logo=apple" alt="macOS 13+">
+  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows" alt="Windows 10 und 11">
   <img src="https://img.shields.io/badge/Rust-Tauri%202-F05138?logo=rust&logoColor=white" alt="Rust + Tauri 2">
   <img src="https://img.shields.io/badge/Lizenz-MIT-55D5B4" alt="MIT">
 </p>
@@ -66,6 +67,14 @@ Avero öffnet Boardview-Dateien, findet Bauteile, Pins und Netze und verfolgt ei
 - **Notizen** pro Board und pro Fall, Export/Import als JSON (z. B. Referenzwerte weitergeben).
 - **Foto des echten Boards** unter der Boardview (Darstellung → „Foto dieser Seite hinzufügen…"): zwei markante Punkte im Foto anklicken, dann dieselben Punkte auf dem Board (Pins rasten ein) – das Foto liegt danach deckungsgleich darunter, mit einstellbarer Deckkraft, getrennt für Ober- und Unterseite. Liegt neben dem Board ein PDF mit einem Bild der Platine (wie bei manchen Boardview-Paketen), übernimmt Avero die angezeigte Seite mit einem Klick als Foto und legt es selbst auf den Board-Umriss – ohne Datei auswählen, ohne Punkte klicken. Mit „Daneben“ steht das Foto unverändert neben dem Board: ein Klick auf ein Bauteil im Foto wählt es auf dem Board aus und springt hin, das Bauteil unter dem Mauszeiger wird mit Namen angezeigt, und was auf dem Board ausgewählt ist (Bauteil, Pin, alle Pins eines Netzes), wird im Foto markiert.
 - **Inhaltssuche über die ganze Bibliothek** (Bibliothek → „Inhalt“): Schaltpläne werden nach Text durchsucht, Boardviews nach Bauteilen und Netzen. Alles wird einmal indiziert; ein Klick auf einen Treffer öffnet Board und Schaltplan und springt zur Fundstelle.
+
+**Neu in 0.9.48**
+- **Avero für Windows:** dieselbe App wie auf dem Mac, mit allen Funktionen, für Windows 10 und 11 (64 Bit). Das Release enthält dazu `Avero_0.9.48_x64-setup.exe`.
+  - **Bedienung wie unter Windows üblich:** Strg statt ⌘ (Strg+F sucht, Strg+K öffnet die Befehlspalette, Strg+1 … 9 wechselt die Reiter). Alle Texte, Menüs und Tooltips nennen die Tasten so, wie Windows sie schreibt („Strg+Umschalt+E“), dazu Explorer statt Finder. Die Menüleiste sitzt im Fenster und hat die Windows-Ordnung: Beenden unter Datei, Einstellungen unter Bearbeiten, Über Avero und Updates unter Hilfe.
+  - **Dateien per Doppelklick:** Das Setup verknüpft die Boardview-Endungen mit Avero. Ein Doppelklick öffnet die Datei, bei laufendem Avero im selben Fenster als neuen Reiter.
+  - **Updates mit einem Klick** wie auf dem Mac: Avero lädt das neue Setup aus dem Release, startet es und kommt danach in der neuen Version wieder.
+  - Gelöschte Bibliotheksdateien landen im Windows-Papierkorb. 7z und RAR entpackt das in Windows eingebaute `tar`. Allegro-Dateien liest derselbe eingebaute Leser wie auf dem Mac.
+- Auf dem Mac ändert sich nichts. Neu ist nur: Avero bietet ein Update erst an, wenn die Datei für das eigene System am Release hängt.
 
 **Neu in 0.9.47**
 - **Verbundene Netze in Stufen, wie FlexBVs „Mycelium“:** Das gewählte Netz wird über Verbindungsteile – Spulen, Ferrite, Sicherungen, Jumper, 0-Ω-Widerstände – weiterverfolgt. Stufe 1 zeigt nur das Netz, Stufe 2 (Standard, wie bei FlexBV) auch die Netze hinter einem Verbindungsteil, Stufe 3 die hinter zweien. Jedes verbundene Netz hat seine eigene Farbe, auch für seine Verbindungslinien, und die Verbindungsteile tragen eine grüne Raute. Das Linien-Symbol in der Leiste zeigt die Stufe und schaltet sie weiter; die Verbindungslinien selbst schaltet ⇧⌘R (Darstellung → Verbindungslinien).
@@ -246,6 +255,8 @@ Ein Demo-Board mit passendem Demo-Schaltplan ist eingebaut, damit man alles ohne
 
 ## Tastatur und Maus
 
+Unter Windows gilt Strg statt ⌘ und Alt statt ⌥; Avero schreibt die Tasten dort auch so.
+
 | Aktion | Eingabe |
 | --- | --- |
 | Verschieben | Ziehen, zwei Finger, Pfeiltasten |
@@ -276,23 +287,31 @@ Ein Demo-Board mit passendem Demo-Schaltplan ist eingebaut, damit man alles ohne
 
 ## Installation
 
+**Mac**
+
 1. Unter [Releases](https://github.com/meb99/Avero/releases/latest) die Datei `Avero_…_universal.dmg` laden (Apple Silicon und Intel, macOS 13 oder neuer).
 2. DMG öffnen und Avero in den Programme-Ordner ziehen.
 3. Beim ersten Start meldet macOS, dass die App nicht von Apple geprüft ist (Avero ist nicht notarisiert). Unter macOS 13/14: Rechtsklick auf Avero → **Öffnen**. Unter macOS 15: einmal starten, dann **Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen"**.
    Alternativ im Terminal: `xattr -dr com.apple.quarantine /Applications/Avero.app`
 
-Avero meldet neue Versionen selbst und installiert sie mit einem Klick auf **„Jetzt aktualisieren“** (lädt das Release von GitHub, ersetzt die App und startet sie neu). Releases laufen automatisch: Wird die Version in `src-tauri/tauri.conf.json` erhöht und ist die CI auf `main` grün, baut GitHub Actions die DMG und veröffentlicht sie. Von Hand geht es über **Actions → Release → Run workflow**.
+**Windows**
+
+1. Unter [Releases](https://github.com/meb99/Avero/releases/latest) die Datei `Avero_…_x64-setup.exe` laden (Windows 10 und 11, 64 Bit).
+2. Setup starten. Avero wird für den eigenen Benutzer eingerichtet, ohne Administratorrechte. Fehlt die Laufzeit WebView2 (bei Windows 11 immer vorhanden), lädt das Setup sie nach.
+3. Das Setup ist nicht signiert: SmartScreen meldet „Der Computer wurde durch Windows geschützt“ → **Weitere Informationen** → **Trotzdem ausführen**.
+
+Avero meldet neue Versionen selbst und installiert sie mit einem Klick auf **„Jetzt aktualisieren“** (lädt das Release von GitHub, ersetzt die App und startet sie neu). Releases laufen automatisch: Wird die Version in `src-tauri/tauri.conf.json` erhöht und ist die CI auf `main` grün, baut GitHub Actions DMG und Windows-Setup und veröffentlicht sie. Von Hand geht es über **Actions → Release → Run workflow**.
 
 ## Selbst bauen
 
-Voraussetzungen: macOS 13+, Xcode Command Line Tools, [Rust](https://rustup.rs) (stable), Node.js 22.
+Voraussetzungen: macOS 13+ mit Xcode Command Line Tools oder Windows 10/11 mit den Visual Studio Build Tools (C++), dazu [Rust](https://rustup.rs) (stable) und Node.js 22.
 
 ```sh
 git clone https://github.com/meb99/Avero.git
 cd Avero
 npm install
 npm run tauri dev      # Entwicklung mit Hot Reload
-npm run tauri build    # Avero.app und DMG unter target/release/bundle
+npm run tauri build    # Avero.app und DMG (Mac) bzw. Setup (Windows) unter target/release/bundle
 ```
 
 Tests und Prüfungen:
