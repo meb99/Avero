@@ -264,7 +264,7 @@ export function BoardView({
     model,
     side,
     dual,
-    layout: dualLayout(model.board.bounds) as DualLayout,
+    layout: dualLayout(model.board.bounds, settings.bottomFlip) as DualLayout,
     selection,
     settings,
     palette,
@@ -671,7 +671,7 @@ export function BoardView({
   // New board: upload geometry and fit.
   useEffect(() => {
     stateRef.current.model = model;
-    stateRef.current.layout = dualLayout(model.board.bounds);
+    stateRef.current.layout = dualLayout(model.board.bounds, stateRef.current.settings.bottomFlip);
     const renderer = rendererRef.current;
     if (!renderer) return;
     renderer.setBoard(model, stateRef.current.palette);
@@ -682,9 +682,11 @@ export function BoardView({
     requestDraw();
   }, [model, requestDraw, fitIfNeeded, rendererVersion]);
 
-  // Orientation. Both sides: the layout camera is never mirrored, the bottom side's own camera is.
+  // Orientation. Both sides: the layout camera is never mirrored, the bottom side's own camera
+  // turns it over the same way.
   useEffect(() => {
     Object.assign(cameraRef.current, sideOrientation(!dual && side === "bottom", settings.bottomFlip ?? "leftRight", rotation));
+    stateRef.current.layout = dualLayout(stateRef.current.model.board.bounds, settings.bottomFlip);
     requestDraw();
   }, [side, dual, rotation, settings.bottomFlip, requestDraw]);
 
@@ -769,7 +771,7 @@ export function BoardView({
     // Sides kept apart: only the lines between pins of the side in view.
     // Both sides shown: lines run between them, each pin where its side is drawn.
     const view = dual || settings.ghostOtherSide ? undefined : side;
-    const layout = dualLayout(model.board.bounds);
+    const layout = dualLayout(model.board.bounds, settings.bottomFlip);
     const at = (pin: number) => {
       const p = model.pins[pin];
       return dual ? toLayout(p, p.side === "bottom" ? "bottom" : "top", layout) : p;
@@ -797,7 +799,7 @@ export function BoardView({
         : [{ segments: segments(ratsnestNet), color: palette.ratsnest }, ...[...linkedNets].map(([net, color]) => ({ segments: segments(net), color }))];
     renderer.setOverlay(groups, 1.4);
     requestDraw();
-  }, [model, ratsnestNet, linkedNets, palette, requestDraw, rendererVersion, side, dual, settings.ghostOtherSide, settings.netWeb, selection]);
+  }, [model, ratsnestNet, linkedNets, palette, requestDraw, rendererVersion, side, dual, settings.ghostOtherSide, settings.netWeb, settings.bottomFlip, selection]);
 
   useEffect(() => {
     stateRef.current.measured = measured;

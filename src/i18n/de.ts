@@ -534,7 +534,7 @@ export const de: Record<MessageKey, string> = {
   "trace.kindHint.coupling": "Koppelkondensator zwischen zwei Signalen (z. B. USB-, PCIe-, HDMI-Leitungen) – gleichspannungsmäßig getrennt",
   "settings.fadeUninformed": "Bauteile ohne Wert oder Typ in der Datei abschwächen (wie NexusBV)",
   "settings.bottomFlip": "Unterseite umdrehen",
-  "settings.bottomFlipHint": "Wie die Unterseite in einer Ansicht gezeigt wird. Bei beiden Seiten zugleich bleibt sie links-rechts gespiegelt.",
+  "settings.bottomFlipHint": "Wie die Unterseite gezeigt wird, allein und neben der Oberseite (beide Seiten zugleich).",
   "settings.bottomFlip.leftRight": "Links-rechts (wie in der Hand umgedreht)",
   "settings.bottomFlip.topBottom": "Oben-unten (über die X-Achse)",
   "settings.bottomFlip.none": "Nicht spiegeln (durch die Oberseite gesehen)",

@@ -1,28 +1,30 @@
 /**
  * Both sides of a board at once, the way FlexBV shows them: the top side as
  * it is and the bottom side beside it (below a wide board, to the right of a
- * tall one), mirrored as if the board were turned over.
+ * tall one), turned over as in the single view: mirrored left to right as if
+ * the board were turned in the hand (the default), top to bottom, or not at all.
  *
  * "Layout" coordinates hold both: the top side keeps its board coordinates,
- * the bottom side is mirrored about the board's middle and shifted by
- * `offset`. One camera looks at the layout; the bottom side is drawn with a
- * mirrored camera that puts every board point where the layout says.
+ * the bottom side is turned over about the board's middle and shifted by
+ * `offset`. One camera looks at the layout; the bottom side is drawn with its
+ * own camera that puts every board point where the layout says.
  */
 import type { ViewSide } from "./board";
-import { Camera } from "./camera";
+import { Camera, type BottomFlip } from "./camera";
 import type { Bounds, Point } from "./types";
 
 export interface DualLayout {
   /** Board bounds, one side. */
   board: Bounds;
-  /** Bottom side: layout = (mirror − x + offset.x, y + offset.y). */
-  mirror: number;
+  /** How the bottom side is turned over about the board's middle. */
+  flip: BottomFlip;
+  /** Bottom side: layout = turned-over point + offset. */
   offset: Point;
   /** Both sides together. */
   bounds: Bounds;
 }
 
-export function dualLayout(board: Bounds): DualLayout {
+export function dualLayout(board: Bounds, flip: BottomFlip = "leftRight"): DualLayout {
   const w = board.maxX - board.minX;
   const h = board.maxY - board.minY;
   const gap = Math.max(w, h) * 0.05;
@@ -30,7 +32,7 @@ export function dualLayout(board: Bounds): DualLayout {
   const offset = w >= h ? { x: 0, y: -(h + gap) } : { x: w + gap, y: 0 };
   return {
     board,
-    mirror: board.minX + board.maxX,
+    flip,
     offset,
     bounds: {
       minX: board.minX,
@@ -41,14 +43,23 @@ export function dualLayout(board: Bounds): DualLayout {
   };
 }
 
-/** Where a board point of a side is drawn in the layout. */
-export function toLayout(p: Point, side: ViewSide, layout: DualLayout): Point {
-  return side === "top" ? p : { x: layout.mirror - p.x + layout.offset.x, y: p.y + layout.offset.y };
+/** The bottom side turned over about the board's middle; its own inverse. */
+function turnOver(p: Point, layout: DualLayout): Point {
+  const b = layout.board;
+  if (layout.flip === "none") return p;
+  return layout.flip === "topBottom" ? { x: p.x, y: b.minY + b.maxY - p.y } : { x: b.minX + b.maxX - p.x, y: p.y };
 }
 
-/** The board point of a layout point on the bottom side (the mirroring is its own inverse). */
+/** Where a board point of a side is drawn in the layout. */
+export function toLayout(p: Point, side: ViewSide, layout: DualLayout): Point {
+  if (side === "top") return p;
+  const q = turnOver(p, layout);
+  return { x: q.x + layout.offset.x, y: q.y + layout.offset.y };
+}
+
+/** The board point of a layout point on a side. */
 export function fromLayout(p: Point, side: ViewSide, layout: DualLayout): Point {
-  return side === "top" ? p : { x: layout.mirror - (p.x - layout.offset.x), y: p.y - layout.offset.y };
+  return side === "top" ? p : turnOver({ x: p.x - layout.offset.x, y: p.y - layout.offset.y }, layout);
 }
 
 export function boundsToLayout(b: Bounds, side: ViewSide, layout: DualLayout): Bounds {
@@ -63,12 +74,14 @@ export function boundsToLayout(b: Bounds, side: ViewSide, layout: DualLayout): B
  */
 export function bottomCamera(master: Camera, layout: DualLayout): Camera {
   const cam = master.clone();
-  cam.mirrored = !master.mirrored;
-  // Layout = R·p + o with R = mirror in x; the camera center c' = R·(c − o).
-  const ox = layout.mirror + layout.offset.x;
-  const oy = layout.offset.y;
-  cam.centerX = ox - master.centerX;
-  cam.centerY = master.centerY - oy;
+  // Layout = R·p + o with R the turn-over: the camera folds R into its own
+  // transform and centers on R⁻¹(c − o), the board point under the center.
+  const center = fromLayout({ x: master.centerX, y: master.centerY }, "bottom", layout);
+  cam.centerX = center.x;
+  cam.centerY = center.y;
+  if (layout.flip !== "none") cam.mirrored = !master.mirrored;
+  // Mirrored left to right and turned half way round is mirrored top to bottom.
+  if (layout.flip === "topBottom") cam.rotation = (master.rotation + 2) & 3;
   return cam;
 }
 

@@ -532,7 +532,7 @@ export const en = {
   "trace.kindHint.coupling": "Coupling capacitor between two signals (e.g. USB, PCIe, HDMI lanes) – DC separated",
   "settings.fadeUninformed": "Fade parts without value or type in the file (as NexusBV)",
   "settings.bottomFlip": "Turning the bottom side over",
-  "settings.bottomFlipHint": "How the bottom side is shown in a single view. With both sides at once it stays mirrored left to right.",
+  "settings.bottomFlipHint": "How the bottom side is shown, on its own and beside the top side (both sides at once).",
   "settings.bottomFlip.leftRight": "Left to right (as turned over in the hand)",
   "settings.bottomFlip.topBottom": "Top to bottom (over the X-axis)",
   "settings.bottomFlip.none": "No mirroring (seen through the top)",

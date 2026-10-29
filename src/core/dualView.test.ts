@@ -23,18 +23,37 @@ describe("dualLayout", () => {
     expect(boundsToLayout(wide, "bottom", l)).toEqual({ minX: 0, minY: -2200, maxX: 4000, maxY: -200 });
   });
 
-  for (const rotation of [0, 1, 2, 3]) {
-    it(`draws bottom points where the layout camera shows them (rotation ${rotation})`, () => {
-      const l = dualLayout(tall);
-      const master = Object.assign(new Camera(), { centerX: 1700, centerY: 900, scale: 0.37, rotation, width: 1200, height: 800 });
-      const cam = bottomCamera(master, l);
-      for (const p of [{ x: 100, y: 0 }, { x: 2000, y: 3000 }, { x: 777, y: 1234 }]) {
-        const a = cam.toScreen(p);
-        const b = master.toScreen(toLayout(p, "bottom", l));
-        expect(a.x).toBeCloseTo(b.x, 6);
-        expect(a.y).toBeCloseTo(b.y, 6);
-      }
-    });
+  it("turns the bottom side over as the single view does, or not at all", () => {
+    const over = dualLayout(wide, "topBottom");
+    const through = dualLayout(wide, "none");
+    // Turned over the X-axis the lower edge is on top; seen through the top nothing moves.
+    expect(toLayout({ x: 0, y: 500 }, "bottom", over)).toEqual({ x: 0, y: -700 });
+    expect(toLayout({ x: 0, y: 500 }, "bottom", through)).toEqual({ x: 0, y: -1700 });
+    for (const l of [over, through]) {
+      const p = { x: 1234, y: 567 };
+      expect(fromLayout(toLayout(p, "bottom", l), "bottom", l)).toEqual(p);
+      // The bottom side takes the same place whichever way it is turned.
+      expect(boundsToLayout(wide, "bottom", l)).toEqual({ minX: 0, minY: -2200, maxX: 4000, maxY: -200 });
+      expect(l.bounds).toEqual(dualLayout(wide).bounds);
+    }
+  });
+
+  for (const flip of ["leftRight", "topBottom", "none"] as const) {
+    for (const rotation of [0, 1, 2, 3]) {
+      it(`draws bottom points where the layout camera shows them (${flip}, rotation ${rotation})`, () => {
+        const l = dualLayout(tall, flip);
+        const master = Object.assign(new Camera(), { centerX: 1700, centerY: 900, scale: 0.37, rotation, width: 1200, height: 800 });
+        const cam = bottomCamera(master, l);
+        for (const p of [{ x: 100, y: 0 }, { x: 2000, y: 3000 }, { x: 777, y: 1234 }]) {
+          const a = cam.toScreen(p);
+          const b = master.toScreen(toLayout(p, "bottom", l));
+          expect(a.x).toBeCloseTo(b.x, 6);
+          expect(a.y).toBeCloseTo(b.y, 6);
+        }
+        // Mirrored text and pins only where the side is turned over.
+        expect(cam.mirrored).toBe(flip !== "none");
+      });
+    }
   }
 
   it("tells which side a layout point is on", () => {
