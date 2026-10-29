@@ -95,6 +95,30 @@ export function wordsFromRuns(runs: TextRun[], page: number): Word[] {
 
 const readingOrder = (a: Word, b: Word) => a.page - b.page || a.box.y0 - b.box.y0 || a.box.x0 - b.box.x0;
 
+/** A typed search: part of a word, "a whole word" in quotes, or /a regular expression/. */
+export type SearchQuery = { kind: "part" | "word" | "regex"; matches(key: string): boolean } | { kind: "invalid" };
+
+/** How a typed search reads; null when there is nothing to search for. Case is ignored. */
+export function parseSearch(text: string): SearchQuery | null {
+  const q = text.trim();
+  const quoted = /^["„“”](.*)["“”]$/.exec(q);
+  if (quoted) {
+    const word = quoted[1].trim().toUpperCase();
+    return word ? { kind: "word", matches: (key) => key === word } : null;
+  }
+  const pattern = /^\/(.+)\/$/.exec(q);
+  if (pattern) {
+    try {
+      const re = new RegExp(pattern[1], "i");
+      return { kind: "regex", matches: (key) => re.test(key) };
+    } catch {
+      return { kind: "invalid" };
+    }
+  }
+  const part = q.toUpperCase();
+  return part ? { kind: "part", matches: (key) => key.includes(part) } : null;
+}
+
 /** All words of a document, looked up by upper-case text. */
 export class WordIndex {
   private readonly byKey = new Map<string, Word[]>();
@@ -136,13 +160,13 @@ export class WordIndex {
     return out.sort(readingOrder);
   }
 
-  /** Words containing `text`, ignoring case, in reading order. */
+  /** Words matching a typed search (see `parseSearch`), in reading order. */
   search(text: string, limit = 5000): Word[] {
-    const q = text.trim().toUpperCase();
-    if (!q) return [];
+    const query = parseSearch(text);
+    if (!query || query.kind === "invalid") return [];
     const out: Word[] = [];
     for (const [key, list] of this.byKey) {
-      if (!key.includes(q)) continue;
+      if (!query.matches(key)) continue;
       out.push(...list);
       if (out.length >= limit) break;
     }

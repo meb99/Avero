@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { WordIndex, wordsFromRuns, type TextRun } from "./textIndex";
+import { WordIndex, parseSearch, wordsFromRuns, type TextRun } from "./textIndex";
 
 // Viewport transform for an unrotated 800×600 page: flip Y.
 function run(str: string, x: number, y: number, size: number, width: number, angleDeg = 0): TextRun {
@@ -58,6 +58,29 @@ describe("WordIndex", () => {
     expect(index.search("300").map((w) => w.key)).toEqual(["U3000"]);
     expect(index.search("  ")).toEqual([]);
     expect(index.search("n", 2)).toHaveLength(2);
+  });
+
+  it("matches a word in quotes as a whole and /…/ as a regular expression", () => {
+    const index = new WordIndex();
+    const w = (key: string, page: number) => ({ key, text: key, page, box: { x0: 0, y0: 0, x1: 1, y1: 1 } });
+    index.add([w("PP3V3_S0", 1), w("PP3V3_S5", 0), w("PP3V3", 2), w("U3000", 2)]);
+    expect(index.search("pp3v3").map((x) => x.key)).toEqual(["PP3V3_S5", "PP3V3_S0", "PP3V3"]);
+    expect(index.search('"pp3v3"').map((x) => x.key)).toEqual(["PP3V3"]);
+    expect(index.search("„PP3V3“").map((x) => x.key)).toEqual(["PP3V3"]);
+    expect(index.search("/^pp3v3_s[05]$/").map((x) => x.key)).toEqual(["PP3V3_S5", "PP3V3_S0"]);
+    expect(index.search("/^U\\d{4}$/").map((x) => x.key)).toEqual(["U3000"]);
+    // Nothing between the marks, or a broken expression: no hits, never a throw.
+    expect(index.search('""')).toEqual([]);
+    expect(index.search("/(/")).toEqual([]);
+  });
+
+  it("tells a broken expression from an empty search", () => {
+    expect(parseSearch("/(/")?.kind).toBe("invalid");
+    expect(parseSearch("/[a-/")?.kind).toBe("invalid");
+    expect(parseSearch("  ")).toBeNull();
+    expect(parseSearch('" "')).toBeNull();
+    expect(parseSearch("1/16W")?.kind).toBe("part");
+    expect(parseSearch("//")?.kind).toBe("part");
   });
 
   it("finds the word under a point", () => {

@@ -1752,6 +1752,8 @@ export const de: Record<MessageKey, string> = {
   "help.tabs": "⌘T, ⌘W, ⌘1 … 9, ⌃⇥",
   "help.tabsLabel": "Tabs: neu, schließen, wechseln",
   "schematic.search": "Im Schaltplan suchen",
+  "schematic.searchHelp": "Teil eines Worts · „Wort“ in Anführungszeichen: nur das ganze Wort · /Ausdruck/: regulärer Ausdruck",
+  "schematic.badRegex": "Ungültiger regulärer Ausdruck",
   "menu.findSchematic": "Im Schaltplan suchen",
   "help.marker": "M",
   "help.markerLabel": "Markierung mit Notiz auf das Board setzen",

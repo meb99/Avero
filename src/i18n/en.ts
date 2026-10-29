@@ -1750,6 +1750,8 @@ export const en = {
   "help.tabs": "⌘T, ⌘W, ⌘1 … 9, ⌃⇥",
   "help.tabsLabel": "Tabs: new, close, switch",
   "schematic.search": "Search schematic",
+  "schematic.searchHelp": "Part of a word · \"word\" in quotes: the whole word only · /pattern/: regular expression",
+  "schematic.badRegex": "Invalid regular expression",
   "menu.findSchematic": "Search in Schematic",
   "help.marker": "M",
   "help.markerLabel": "Place a note on the board",

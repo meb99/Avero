@@ -16,7 +16,7 @@ import { useI18n } from "../i18n";
 import type { OutlineEntry, PageSize, SchematicDocument } from "./document";
 import { PageCamera } from "./pageCamera";
 import { findPinSpot, type PinSpot } from "./pinFind";
-import type { Box, Word } from "./textIndex";
+import { parseSearch, type Box, type Word } from "./textIndex";
 import { useOcr } from "./useOcr";
 import { mappedWords, type PartLinks } from "./mapping";
 
@@ -744,6 +744,7 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
             autoComplete="off"
             placeholder={t("schematic.search")}
             aria-label={t("schematic.search")}
+            title={t("schematic.searchHelp")}
             value={query}
             list={recentId}
             onChange={(e) => setQuery(e.target.value)}
@@ -779,8 +780,12 @@ export function SchematicView({ doc, focus, scroll, classify, onPick, onClose, o
             </button>
           </div>
         )}
-        {(typed || focus) && hits.length === 0 && indexed >= doc.pageCount && (
-          <span className="muted hits-none">{t("schematic.notFound", { text: typed || focus?.text || "" })}</span>
+        {typed && parseSearch(typed)?.kind === "invalid" ? (
+          <span className="muted hits-none">{t("schematic.badRegex")}</span>
+        ) : (
+          (typed || focus) &&
+          hits.length === 0 &&
+          indexed >= doc.pageCount && <span className="muted hits-none">{t("schematic.notFound", { text: typed || focus?.text || "" })}</span>
         )}
         {indexed < doc.pageCount && <span className="muted">{t("schematic.indexing", { n: indexed, total: doc.pageCount })}</span>}
         {ocr.progress ? (
