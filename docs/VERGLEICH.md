@@ -4,8 +4,8 @@ Stand Oktober 2026. Grundlage sind öffentliche Quellen: das
 [FlexBV-5-Handbuch](https://pldaniels.com/flexbv5/manual/), die
 [NexusBV-Seite](https://nexusbv.net/) mit Changelog (v0.9) und der offene Quellcode von
 [OpenBoardView](https://github.com/OpenBoardView/OpenBoardView) (MIT, Stand `cc76e69`).
-Ideen und Bedienkonzepte übernimmt Avero, Code nicht. FlexBV und NexusBV sind bisher nicht
-zerlegt worden (siehe „Programmanalyse“ unten).
+Ideen und Bedienkonzepte übernimmt Avero, Code nicht. FlexBV wird nicht zerlegt (Lizenz), von
+NexusBV sind nur mitgelieferte Textdateien und der Starter angesehen worden (siehe „Programmanalyse“ unten).
 
 ## Was FlexBV einfach macht
 
@@ -44,6 +44,10 @@ zerlegt worden (siehe „Programmanalyse“ unten).
 | Widerstände bis 1 Ω als Verbindungsteile (FlexBV) | ab 0.9.48 |
 | Suche mit Wert und Typ (OpenBoardView „Including details“) | ab 0.9.48 |
 | FlexBV und NexusBV laufen auf Windows | Avero ab 0.9.48 auch |
+| NexusBV: Trace-Regeln (`tracedef.txt`, Pins In → Out, Import/Export) | nach 0.9.48 (Branch `local/nexusbv-parity`) |
+| NexusBV: Unterseite über die X-Achse umdrehen oder ohne Spiegelung zeigen | nach 0.9.48, auch bei beiden Seiten zugleich |
+| NexusBV: Bauteile ohne Informationen abdunkeln | nach 0.9.48 |
+| NexusBV: exakte Suche in Anführungszeichen und reguläre Ausdrücke im PDF | nach 0.9.48 |
 
 ## OpenBoardView
 
@@ -69,16 +73,31 @@ Ohne Beispieldateien (Formate brauchen nach den Regeln des Projekts echte Dateie
 - **Teboview TVW** – Leser vorhanden, aber an keiner echten Datei abgenommen; damit auch kein
   Silkscreen (FlexBV zeigt ihn nur bei TVW).
 
-Ohne Dateien machbar, als nächster Schritt:
+Ohne Dateien machbar:
 
-- **Zoom-Ring** um den Mauszeiger beim Zoomen.
+- **Zoom-Ring** um den Mauszeiger beim Zoomen (FlexBV).
+- NexusBV: vollständigen Signalweg und Parallelzweige auf dem Board hervorheben, zuletzt geöffnete
+  Dateien anheften, Themes und Tastenbelegung als Datei austauschen, Suchergebnisse im PDF fixieren,
+  Websuche nach Teilenummer.
+
+FlexBV- oder NexusBV-Kompatibilität ist damit nicht vollständig; maßgeblich ist die
+[Bestandsaufnahme](BESTANDSAUFNAHME.md).
 
 ## Programmanalyse von FlexBV und NexusBV
 
-Bisher nicht gemacht. Eine Analyse der Programme (etwa mit Ghidra und einem
-Reverse-Engineering-MCP wie REA/ReVa) läuft dort, wo Programme und Werkzeuge liegen, also in
-einer Claude-Sitzung auf dem eigenen Rechner. Eine Cloud-Sitzung erreicht weder den Rechner noch
-dessen MCP-Server. Dafür braucht es:
+Stand Oktober 2026, lokale Sitzung unter Windows mit GhidraMCP und REA:
+
+- **FlexBV 5 (free):** Die EULA verbietet in Abschnitt 3a Dekompilieren, Reverse Engineering und
+  Disassemblieren. Es gibt keine Analyse; der Funktionsumfang kommt aus dem öffentlichen Handbuch.
+- **NexusBV 0.9:** `NexusBV.exe` ist nur ein Starter (Import `NEXUSBV_CORE.DLL!NexusBV_Run`), ohne
+  Format- oder Modelllogik. Ausgewertet wurden die mitgelieferten Textdateien (`changelog.txt`,
+  `tracedef.txt`, `.theme`, `.keybindings`) und der Dateifilter. Eine Lizenz liegt NexusBV nicht bei;
+  die Kern-DLL wurde nicht analysiert.
+- **REA** findet unter Windows keinen Analyse-Provider (Smart App Control blockiert das native Addon).
+
+Formatwissen kommt damit weiter nur aus echten Beispieldateien. Grundsätzlich gilt: Eine Analyse
+der Programme läuft dort, wo Programme und Werkzeuge liegen, also in einer Claude-Sitzung auf dem
+eigenen Rechner. Eine Cloud-Sitzung erreicht weder den Rechner noch dessen MCP-Server. Dafür braucht es:
 
 - die installierten Programmordner (FlexBV 5 und NexusBV, mit `.exe`, `.dll` und Ressourcen)
   und eine gültige eigene Lizenz;

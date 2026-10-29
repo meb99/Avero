@@ -23,7 +23,7 @@ Dateiendung allein bedeutet keine Unterstützung.
 | Datenmodell | `model.rs` und gleichlautend `src/core/types.ts`: `Board` mit `Part`, `Pin` (Lage, Radius, Padform, Netz, Seite), `Net` (Art: Signal, Versorgung, Masse, nicht verbunden), `TestPoint`, `Trace`, `Layer`, Umriss, `Derived` (was abgeleitet ist) und `FileReading` (Messwerte mit Herkunft). Einheit mil, Y nach oben, für alle Formate gleich. |
 | `src-tauri` | Datei- und Bibliotheksimport (Ordner, ZIP, 7z, RAR), XZZ-Konvertierung, Notizen, Board-Pakete, Sicherung, Messgerät, MCP, Updater. Binäres Allegro über einen eigenen Prozess (`tools/allegro-reader`, GPL-3.0). |
 | Frontend | `src/core` (Boardmodell, Suche, BGA, Jumper, Vergleich, Versorgungsbaum, Signalweg, Trace-Regeln), `src/render` (WebGL 2), `src/schematic` (pdf.js, Wortindex, OCR, Querverweise), `src/workbench` (Messwerte, Fälle, Chronik, Berichte). |
-| Tests | Rust: 44 Integrationstests (`tests/formats.rs`, `tests/conversion.rs`), 56 Modultests in `avero-formats`, 57 in `src-tauri`. Frontend: 86 Vitest-Dateien mit 464 Tests. Browser-Tests (Playwright) brauchen Cargo und laufen deshalb weder lokal noch in der CI. |
+| Tests | Rust: 44 Integrationstests (`tests/formats.rs`, `tests/conversion.rs`), 56 Modultests in `avero-formats`, 57 in `src-tauri`. Frontend: 86 Vitest-Dateien mit 475 Tests. Browser-Tests (Playwright) brauchen Cargo und laufen deshalb weder lokal noch in der CI. |
 
 ## Formate und ihre Implementierungstiefe
 
@@ -73,7 +73,7 @@ Robustheit für alle Leser: `errors`, `garbage_never_panics`, `damaged_files_nev
 | Bauteil- und Pad-Darstellung | vorhanden | Padformen aus GenCAD, KiCad, Altium u. a.; geschätzte Pin-Radien (`builder.rs`); Pin 1 hervorgehoben. **Fehlend:** Silkscreen |
 | Netze und Verbindungen | vorhanden | Netzhervorhebung über beide Seiten, Verbindungslinien (Spannbaum), Netweb, Verfolgung über Serienbauteile in drei Stufen, Signalweg mit Trace-Regeln (`trace.ts`, `traceRules.ts`). **Teilweise:** vollständiger Signalweg und Parallelzweige nur als Liste, nicht als Board-Hervorhebung |
 | Layer-Verwaltung | teilweise | Leiterbahnlagen einzeln schaltbar (`LayerList.tsx`), Ober-/Unterseite. Keine Lagen für Silkscreen und Füllungen, keine Transparenz |
-| Suche und Navigation | vorhanden | Suchmaske (⌘F), Befehlspalette, `Bauteil.Pin`, Suche mit Wert und Typ (`partSearch.test.ts`), Auswahlverlauf (`selectionHistory.test.ts`), Lesezeichen. **Schaltplan:** nur Teilwortsuche; exakte Suche und reguläre Ausdrücke fehlen |
+| Suche und Navigation | vorhanden | Suchmaske (⌘F), Befehlspalette, `Bauteil.Pin`, Suche mit Wert und Typ (`partSearch.test.ts`), Auswahlverlauf (`selectionHistory.test.ts`), Lesezeichen. **Schaltplan:** Teilwort, ganzes Wort in Anführungszeichen, reguläre Ausdrücke `/…/` (`textIndex.test.ts`); Suchergebnisse fixieren fehlt |
 | Auswahl und Hervorhebung | vorhanden | Mehrfachauswahl mit gemeinsamen Netzen, Isolation, angeheftete Netze in eigenen Farben, Bauteile ohne Informationen abdunkeln |
 | Board- und Bauteilinformationen | vorhanden | Detailpanel, Infoleiste, Tooltips mit Messwerten, Datenherkunft (`Derived`, Importbericht) |
 | Zoom, Pan und Rendering | vorhanden | `zoomBy`, `zoomTo`, Pinch, Minimap, Text nach Größe. **Fehlend:** Zoom-Ring um den Mauszeiger |
@@ -83,7 +83,7 @@ Robustheit für alle Leser: `errors`, `garbage_never_panics`, `damaged_files_nev
 | Zuletzt geöffnete Dateien anheften | fehlend | Liste vorhanden, Anheften nicht |
 | Themes und Tastenbelegung als Datei austauschen | fehlend | Editoren vorhanden, ohne Datei-Import und -Export |
 | Websuche nach Teilenummer | fehlend | – |
-| Dual View ohne Spiegelung der Unterseite | fehlend | „Unterseite umdrehen“ gilt bisher nur für die Einzelansicht |
+| Dual View ohne Spiegelung der Unterseite | vorhanden | „Unterseite umdrehen“ (links-rechts, oben-unten, gar nicht) gilt auch bei beiden Seiten zugleich (`dualView.test.ts`, alle Arten und Drehungen). Darstellung lokal nicht angesehen |
 
 ## Analysewerkzeuge
 

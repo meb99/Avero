@@ -53,19 +53,44 @@ Nachgereicht in 0.5:
 - mehrere Boards in Tabs, jeder mit eigenem Schaltplan, eigener Auswahl und Ansicht
 - zwei Boards nebeneinander vergleichen, Auswahl nach Namen gespiegelt
 
-## Offen
-
-Diese Punkte brauchen **echte Beispieldateien**, die Avero nicht mitliefern darf. Wer eigene Dateien hat, kann sie lokal mit `avero-inspect` prüfen und die Ergebnisse (nicht die Dateien) als Issue melden:
-
-- Diodenwerte aus XZZ-Dateien (Abschnitt nach `v6v6555v6v6`) als Referenzwerte übernehmen – Aufbau des Abschnitts ist nicht öffentlich beschrieben
-- XZZ-Bauteile auf der Unterseite erkennen (bisher alles „Oben", wie bei OpenBoardView)
-- Teboview `.tvw` – keine freie Formatbeschreibung
-- Cadence Allegro `.brd` (binär), binäre Altium-`.PcbDoc` – werden erkannt, aber noch nicht gelesen (Altium im Textformat „PCB ASCII“ liest Avero seit 0.9.23)
-- Boardviews, die nur als PDF vorliegen (Bauteilnamen und Pads als Zeichnung)
-- `.fz`-Dateien mit echtem Schlüssel gegenprüfen (bisher mit synthetischen Dateien nach OpenBoardView getestet)
-- Multimeter-Profile über Owon XDM hinaus mit echten Geräten prüfen (Antwort auf `*IDN?` und `MEAS?`)
-
 Erledigt in 0.9.20: Pin-Sprung in den Schaltplan, echte Pad-Formen aus GenCAD, frei belegbare Tastenkürzel, Texterkennung für gescannte Schaltpläne, XZZ über den Konverter vollständig öffnen.
 
-Weitere Ideen:
-- Bauteil-Silkscreen, wo das Format ihn enthält
+Erledigt bis 0.9.48: XZZ-Diodenwerte (`阻值`) als Referenz, binäres Allegro 16.0–17.4, binäres Altium, Teboview-TVW-Leser, HyperLynx, EasyEDA Pro V2, ODB++-Bestückung, Boardeditor, räumliche PDF-Suche, Windows-Version. Einzelheiten: [Bestandsaufnahme](BESTANDSAUFNAHME.md).
+
+## Stand Oktober 2026 (Branch `local/nexusbv-parity`, Version noch 0.9.48)
+
+### Erledigt
+
+- Trace-Regeln im `tracedef.txt`-Format mit Import und Export (Einstellungen › Trace-Regeln)
+- Unterseite umdrehen: links-rechts, oben-unten oder gar nicht, in der Einzelansicht und bei beiden Seiten zugleich
+- Bauteile ohne Informationen abdunkeln
+- Schaltplansuche: ganzes Wort in Anführungszeichen, reguläre Ausdrücke als `/…/`
+- Vitest läuft unabhängig vom Betriebssystem des Rechners
+- CI auch für `local/**`-Branches: Rust-Prüfungen für lokale Windows-Sitzungen, in denen Smart App Control Cargo blockiert
+- [Bestandsaufnahme](BESTANDSAUFNAHME.md) mit Formattiefe und Funktionsmatrix
+
+### Offen, ohne Beispieldateien machbar
+
+- Zoom-Ring um den Mauszeiger beim Zoomen (FlexBV)
+- Vollständigen Signalweg und Parallelzweige auf dem Board hervorheben (bisher Liste mit „Zeigen“)
+- Zuletzt geöffnete Dateien anheften
+- Themes und Tastenbelegung als Datei importieren und exportieren
+- Suchergebnisse im Schaltplan fixieren
+- Websuche nach Teilenummer, nur auf Klick
+- Bauteil-, Pin- und Netzname über das Kontextmenü kopieren (per ⌘C schon vorhanden)
+- Release 0.9.49 vorbereiten: Version an fünf Stellen, README „Neu in 0.9.49“, `docs/VERGLEICH.md`
+
+### Blockiert: echte Beispieldateien fehlen
+
+Avero darf Herstellerdateien nicht mitliefern. Wer eigene Dateien hat, kann sie lokal mit `avero-inspect` prüfen und die Ergebnisse (nicht die Dateien) als Issue melden.
+
+- Neue Leser: A3P, F2B, FAZ, BVRE, ASR, CON, Fabmaster-FIL, Mentor Neutral, TopTest- und Landrex-BRD, NBV, Allegro ab 18, EasyEDA V3
+- XZZ-Bauteile auf der Unterseite erkennen (bisher alles „Oben“, wie bei OpenBoardView)
+- Teboview TVW und ATE BV an echten Dateien abnehmen; Bauteil-Silkscreen, wo das Format ihn enthält
+- `.fz`-Dateien mit echtem Schlüssel gegenprüfen (bisher synthetische Dateien nach OpenBoardView)
+- Boardviews, die nur als PDF vorliegen (Bauteilnamen und Pads als Zeichnung)
+- Multimeter-Profile über Owon XDM hinaus mit echten Geräten prüfen (Antwort auf `*IDN?` und `MEAS?`)
+
+### Blockiert: Werkzeuge
+
+- Browser-Tests (`tools/browser-tests/run.sh`) brauchen Cargo für das Demo-Board: lokal blockiert Smart App Control, in der CI ist kein Job dafür eingerichtet
