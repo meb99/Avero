@@ -96,7 +96,20 @@ import { ProjectDialog } from "./components/ProjectDialog";
 import { BenchBar, type BenchHandle } from "./components/BenchBar";
 import { exportDevicePackage, exportPackage, openPackage, PACKAGE_EXTENSION } from "./workbench/package";
 import type { Word } from "./schematic/textIndex";
-import { clearRecent, loadRecent, loadSettings, rememberRecent, saveSettings, type DockPane, type SavedLayout, type Settings } from "./settings";
+import {
+  clearRecent,
+  loadPinned,
+  loadRecent,
+  loadSettings,
+  recentList,
+  rememberRecent,
+  savePinned,
+  saveSettings,
+  togglePin,
+  type DockPane,
+  type SavedLayout,
+  type Settings,
+} from "./settings";
 import { DOCK_ORDER, paneWeights, parseLayouts, PRESETS, PRESET_IDS, sidebarPixels, withLayout, type PresetId } from "./workbench/layouts";
 import { useTheme } from "./theme";
 import { dailyCheck, fetchUpdate, localModeOn, type Update } from "./updates";
@@ -275,7 +288,10 @@ export function App() {
   dialogRef.current = dialog;
   const [libraryDrop, setLibraryDrop] = useState<LibraryDrop | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [recent, setRecent] = useState<string[]>(loadRecent);
+  const [recentFiles, setRecentFiles] = useState<string[]>(loadRecent);
+  const [pinned, setPinned] = useState<string[]>(loadPinned);
+  // The recent list as menu, palette and start page show it: pinned files first.
+  const recent = useMemo(() => recentList(recentFiles, pinned), [recentFiles, pinned]);
   const [toast, setToast] = useState<string | null>(null);
   // The "parts are encrypted" notice, dismissed per board.
   const [lockedDismissed, setLockedDismissed] = useState<BoardModel | null>(null);
@@ -1031,7 +1047,7 @@ export function App() {
     setRotation(restore?.rotation ?? 0);
     setInitialView(restore?.view);
     setSidebarFolded(true);
-    if (source.path) setRecent(rememberRecent(source.path));
+    if (source.path) setRecentFiles(rememberRecent(source.path));
     return true;
   }, []);
 
@@ -2181,7 +2197,7 @@ export function App() {
     openRecent: (path) => void openPath(path),
     clearRecent: () => {
       clearRecent();
-      setRecent([]);
+      setRecentFiles([]);
     },
     library: () => setDialog((d) => (d === "library" ? null : "library")),
     importToLibrary: () => void importToLibrary(),
@@ -2618,13 +2634,19 @@ export function App() {
           {welcome ? (
             <Welcome
               recent={recent}
+              pinned={pinned}
+              onTogglePin={(p) => {
+                const next = togglePin(pinned, p);
+                savePinned(next);
+                setPinned(next);
+              }}
               onOpen={() => void openDialog()}
               onDemo={() => void openDemo()}
               onLibrary={() => setDialog("library")}
               onOpenRecent={(p) => void openPath(p)}
               onClearRecent={() => {
                 clearRecent();
-                setRecent([]);
+                setRecentFiles([]);
               }}
             />
           ) : (

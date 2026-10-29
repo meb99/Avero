@@ -7,6 +7,9 @@ export const en = {
   "welcome.formats": "Reads",
   "welcome.privacy": "Runs entirely on your computer. Files are never uploaded.",
   "welcome.clearRecent": "Clear",
+  "welcome.pin": "Pin",
+  "welcome.unpin": "Unpin",
+  "welcome.pinHint": "Pinned files stay at the top and are kept when the list is cleared",
 
   "toolbar.open": "Open",
   "toolbar.top": "Top",

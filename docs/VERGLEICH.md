@@ -48,6 +48,7 @@ NexusBV sind nur mitgelieferte Textdateien und der Starter angesehen worden (sie
 | NexusBV: Unterseite über die X-Achse umdrehen oder ohne Spiegelung zeigen | nach 0.9.48, auch bei beiden Seiten zugleich |
 | NexusBV: Bauteile ohne Informationen abdunkeln | nach 0.9.48 |
 | NexusBV: exakte Suche in Anführungszeichen und reguläre Ausdrücke im PDF | nach 0.9.48 |
+| NexusBV: zuletzt geöffnete Dateien anheften | nach 0.9.48 |
 
 ## OpenBoardView
 
@@ -76,9 +77,8 @@ Ohne Beispieldateien (Formate brauchen nach den Regeln des Projekts echte Dateie
 Ohne Dateien machbar:
 
 - **Zoom-Ring** um den Mauszeiger beim Zoomen (FlexBV).
-- NexusBV: vollständigen Signalweg und Parallelzweige auf dem Board hervorheben, zuletzt geöffnete
-  Dateien anheften, Themes und Tastenbelegung als Datei austauschen, Suchergebnisse im PDF fixieren,
-  Websuche nach Teilenummer.
+- NexusBV: vollständigen Signalweg und Parallelzweige auf dem Board hervorheben, Themes und
+  Tastenbelegung als Datei austauschen, Suchergebnisse im PDF fixieren, Websuche nach Teilenummer.
 
 FlexBV- oder NexusBV-Kompatibilität ist damit nicht vollständig; maßgeblich ist die
 [Bestandsaufnahme](BESTANDSAUFNAHME.md).

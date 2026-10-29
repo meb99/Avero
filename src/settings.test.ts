@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS, fromStored, migrate, showsExtra, UI_EXTRAS } from "./settings";
+import { DEFAULT_SETTINGS, fromStored, migrate, recentList, showsExtra, togglePin, UI_EXTRAS } from "./settings";
+
+describe("recent files", () => {
+  it("lists pinned files first, in the order they were pinned, then the others newest first", () => {
+    expect(recentList(["c", "b", "a"], ["a", "x"])).toEqual(["a", "x", "c", "b"]);
+    expect(recentList(["c", "b"], [])).toEqual(["c", "b"]);
+  });
+
+  it("pins a file and unpins it again", () => {
+    expect(togglePin([], "a")).toEqual(["a"]);
+    expect(togglePin(["a", "b"], "c")).toEqual(["a", "b", "c"]);
+    expect(togglePin(["a", "b"], "a")).toEqual(["b"]);
+  });
+});
 
 describe("settings migration", () => {
   it("turns ghosting of the other side off once for older settings", () => {

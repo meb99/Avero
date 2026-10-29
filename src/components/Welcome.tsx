@@ -1,7 +1,10 @@
 import { useI18n } from "../i18n";
 
 interface Props {
+  /** Pinned files first. */
   recent: string[];
+  pinned: string[];
+  onTogglePin(path: string): void;
   onOpen(): void;
   onDemo(): void;
   onLibrary(): void;
@@ -11,7 +14,7 @@ interface Props {
 
 const FORMATS = ["BRD", "BRD2", "BDV", "ASC", "BVR", "BVR3", "GenCAD", "CAD", "CST", "XZZ", "FZ", "KiCad", "EAGLE", "Altium", "GR", "PDF"];
 
-export function Welcome({ recent, onOpen, onDemo, onLibrary, onOpenRecent, onClearRecent }: Props) {
+export function Welcome({ recent, pinned, onTogglePin, onOpen, onDemo, onLibrary, onOpenRecent, onClearRecent }: Props) {
   const { t } = useI18n();
   return (
     <div className="welcome">
@@ -32,19 +35,28 @@ export function Welcome({ recent, onOpen, onDemo, onLibrary, onOpenRecent, onCle
           <section className="welcome-recent">
             <header>
               <h2>{t("welcome.recent")}</h2>
-              <button className="link" onClick={onClearRecent}>
-                {t("welcome.clearRecent")}
-              </button>
+              {/* Clearing keeps the pinned files. */}
+              {recent.some((p) => !pinned.includes(p)) && (
+                <button className="link" onClick={onClearRecent}>
+                  {t("welcome.clearRecent")}
+                </button>
+              )}
             </header>
             <ul>
-              {recent.map((path) => (
-                <li key={path}>
-                  <button className="recent-item" onClick={() => onOpenRecent(path)} title={path}>
-                    <span className="recent-name">{path.split(/[\\/]/).pop()}</span>
-                    <span className="recent-path">{path}</span>
-                  </button>
-                </li>
-              ))}
+              {recent.map((path) => {
+                const isPinned = pinned.includes(path);
+                return (
+                  <li key={path} className={isPinned ? "pinned" : undefined}>
+                    <button className="recent-item" onClick={() => onOpenRecent(path)} title={path}>
+                      <span className="recent-name">{path.split(/[\\/]/).pop()}</span>
+                      <span className="recent-path">{path}</span>
+                    </button>
+                    <button className="link recent-pin" onClick={() => onTogglePin(path)} aria-pressed={isPinned} title={t("welcome.pinHint")}>
+                      {t(isPinned ? "welcome.unpin" : "welcome.pin")}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         )}

@@ -174,6 +174,7 @@ export const DEFAULT_SETTINGS: Settings = {
 
 const KEY = "avero.settings.v1";
 const RECENT_KEY = "avero.recent.v1";
+const PINNED_KEY = "avero.recent.pinned.v1";
 const MAX_RECENT = 10;
 
 // Storage can be unavailable (private windows, locked-down webviews);
@@ -215,15 +216,42 @@ export function saveSettings(s: Settings): void {
   }
 }
 
-/** Recently opened file paths (desktop app only). */
-export function loadRecent(): string[] {
+function loadPaths(key: string): string[] {
   try {
-    const raw = localStorage.getItem(RECENT_KEY);
+    const raw = localStorage.getItem(key);
     const list = raw ? (JSON.parse(raw) as unknown) : [];
     return Array.isArray(list) ? list.filter((x): x is string => typeof x === "string") : [];
   } catch {
     return [];
   }
+}
+
+/** Recently opened file paths (desktop app only). */
+export function loadRecent(): string[] {
+  return loadPaths(RECENT_KEY);
+}
+
+/** Files pinned to the recent list; clearing the list keeps them. */
+export function loadPinned(): string[] {
+  return loadPaths(PINNED_KEY);
+}
+
+export function savePinned(list: string[]): void {
+  try {
+    localStorage.setItem(PINNED_KEY, JSON.stringify(list));
+  } catch {
+    // ignore
+  }
+}
+
+/** The recent list as shown: pinned files first, in the order they were pinned, then the others. */
+export function recentList(recent: readonly string[], pinned: readonly string[]): string[] {
+  return [...pinned, ...recent.filter((p) => !pinned.includes(p))];
+}
+
+/** A file pinned at the end of the pinned files, or unpinned when it was pinned. */
+export function togglePin(pinned: readonly string[], path: string): string[] {
+  return pinned.includes(path) ? pinned.filter((p) => p !== path) : [...pinned, path];
 }
 
 export function rememberRecent(path: string): string[] {

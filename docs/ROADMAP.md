@@ -65,6 +65,7 @@ Erledigt bis 0.9.48: XZZ-Diodenwerte (`阻值`) als Referenz, binäres Allegro 1
 - Unterseite umdrehen: links-rechts, oben-unten oder gar nicht, in der Einzelansicht und bei beiden Seiten zugleich
 - Bauteile ohne Informationen abdunkeln
 - Schaltplansuche: ganzes Wort in Anführungszeichen, reguläre Ausdrücke als `/…/`
+- Zuletzt geöffnete Dateien anheften: oben in der Liste, im Menü und in der Palette, bleiben beim Leeren erhalten
 - Vitest läuft unabhängig vom Betriebssystem des Rechners
 - CI auch für `local/**`-Branches: Rust-Prüfungen für lokale Windows-Sitzungen, in denen Smart App Control Cargo blockiert
 - [Bestandsaufnahme](BESTANDSAUFNAHME.md) mit Formattiefe und Funktionsmatrix
@@ -73,7 +74,6 @@ Erledigt bis 0.9.48: XZZ-Diodenwerte (`阻值`) als Referenz, binäres Allegro 1
 
 - Zoom-Ring um den Mauszeiger beim Zoomen (FlexBV)
 - Vollständigen Signalweg und Parallelzweige auf dem Board hervorheben (bisher Liste mit „Zeigen“)
-- Zuletzt geöffnete Dateien anheften
 - Themes und Tastenbelegung als Datei importieren und exportieren
 - Suchergebnisse im Schaltplan fixieren
 - Websuche nach Teilenummer, nur auf Klick

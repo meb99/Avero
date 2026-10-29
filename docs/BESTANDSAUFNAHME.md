@@ -80,7 +80,7 @@ Robustheit für alle Leser: `errors`, `garbage_never_panics`, `damaged_files_nev
 | Kopieren von Bauteil, Pin, Netz | vorhanden | ⌘C bzw. Strg+C ohne markierten Text kopiert die Auswahl (`selectionText`). Kein eigener Kontextmenüpunkt |
 | Fehlerbehandlung | vorhanden | 19 Fehlercodes (`LoadErrorCode`), Importbericht, Tests gegen Abstürze bei beschädigten Dateien |
 | Große Dateien | ungeprüft | Größengrenze (`too-large`), virtuelle Listen, Editor-Test mit großem Board. Keine Messung mit echten großen Boards |
-| Zuletzt geöffnete Dateien anheften | fehlend | Liste vorhanden, Anheften nicht |
+| Zuletzt geöffnete Dateien anheften | vorhanden | Startseite „Anheften“/„Lösen“; angeheftete Dateien stehen in Liste, Menü und Palette oben und bleiben beim Leeren (`settings.test.ts`). Darstellung lokal nicht angesehen |
 | Themes und Tastenbelegung als Datei austauschen | fehlend | Editoren vorhanden, ohne Datei-Import und -Export |
 | Websuche nach Teilenummer | fehlend | – |
 | Dual View ohne Spiegelung der Unterseite | vorhanden | „Unterseite umdrehen“ (links-rechts, oben-unten, gar nicht) gilt auch bei beiden Seiten zugleich (`dualView.test.ts`, alle Arten und Drehungen). Darstellung lokal nicht angesehen |

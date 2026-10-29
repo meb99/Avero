@@ -939,6 +939,30 @@ button.net-chip {
   text-align: left;
 }
 
+.welcome-recent li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.welcome-recent li .recent-item {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Shown on pinned files, on the others while the pointer is over them. */
+.recent-pin {
+  flex: none;
+  font-size: 11px;
+  visibility: hidden;
+}
+
+.welcome-recent li:hover .recent-pin,
+.welcome-recent li.pinned .recent-pin,
+.recent-pin:focus-visible {
+  visibility: visible;
+}
+
 .recent-name {
   font-weight: 600;
 }

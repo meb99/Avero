@@ -9,6 +9,9 @@ export const de: Record<MessageKey, string> = {
   "welcome.formats": "Liest",
   "welcome.privacy": "Läuft komplett auf deinem Rechner. Dateien werden nie hochgeladen.",
   "welcome.clearRecent": "Leeren",
+  "welcome.pin": "Anheften",
+  "welcome.unpin": "Lösen",
+  "welcome.pinHint": "Angeheftete Dateien stehen oben und bleiben beim Leeren erhalten",
 
   "toolbar.open": "Öffnen",
   "toolbar.top": "Oben",
