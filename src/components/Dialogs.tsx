@@ -7,6 +7,7 @@ import { CloseIcon } from "./Icons";
 import { MeterSettings } from "./MeterSettings";
 import { ColorEditor } from "./ColorEditor";
 import { McpSettings } from "./McpSettings";
+import { TraceRulesSettings } from "./TraceRulesSettings";
 
 export function Dialog({
   title,
@@ -116,6 +117,13 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
           <option value="separate">{t("sides.separate")}</option>
           <option value="synced">{t("sides.synced")}</option>
         </select>
+
+        <label htmlFor="set-flip">{t("settings.bottomFlip")}</label>
+        <select id="set-flip" value={settings.bottomFlip ?? "leftRight"} title={t("settings.bottomFlipHint")} onChange={(e) => set("bottomFlip", e.target.value as Settings["bottomFlip"])}>
+          <option value="leftRight">{t("settings.bottomFlip.leftRight")}</option>
+          <option value="topBottom">{t("settings.bottomFlip.topBottom")}</option>
+          <option value="none">{t("settings.bottomFlip.none")}</option>
+        </select>
       </div>
       <h3>{t("ui.level")}</h3>
       <div className="form-grid">
@@ -148,6 +156,10 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
         {check("netNames", t("settings.netNames"))}
         {check("ghostOtherSide", t("settings.ghost"))}
         {check("dimUnselected", t("settings.dim"))}
+        <label className="check">
+          <input type="checkbox" checked={settings.fadeUninformed === true} onChange={(e) => set("fadeUninformed", e.target.checked)} />
+          {t("settings.fadeUninformed")}
+        </label>
         {check("showVias", t("settings.vias"))}
         {check("showTraces", t("settings.traces"))}
         {check("ratsnest", t("settings.ratsnest"))}
@@ -187,6 +199,9 @@ export function SettingsDialog({ settings, onChange, onCheckUpdates, onClose }: 
       <p className="muted setting-hint">{t("settings.fzKeyHint", { n: fzWords(settings.fzKey) })}</p>
       <h3>{t("schematic.title")}</h3>
       <div className="checks">{check("autoSchematic", t("settings.autoSchematic"))}</div>
+      <h3>{t("traceRules.title")}</h3>
+      <p className="muted setting-hint">{t("traceRules.hint")}</p>
+      <TraceRulesSettings value={settings.traceRules} onChange={(v) => set("traceRules", v)} />
       <h3>{t("colors.title")}</h3>
       <p className="muted setting-hint">{t("colors.hint")}</p>
       <ColorEditor colors={settings.colors} onChange={(colors) => set("colors", colors)} />

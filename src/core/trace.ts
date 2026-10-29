@@ -13,17 +13,24 @@
  * - `coupling`: a capacitor between two signals (AC coupling on USB, PCIe,
  *   DisplayPort lanes); decoupling to ground is left out.
  *
+ * - `rule`: an own trace rule (see `traceRules.ts`) from input to output pins,
+ *   such as a regulator or DrMOS.
+ *
+ * Own rules come before these guesses: a part a rule fits passes the signal
+ * only as the rule says.
+ *
  * Ground and unconnected nets end every path. `through` links are followed
  * as far as they go; the others one step from any reached net, and only up
  * to `MAX_HOPS` of them in a row, so a trace stays readable.
  */
 import type { BoardModel } from "./board";
 import { isZeroOhm, partRole, passesThrough } from "./partRole";
+import { ruleFor, ruleKind, rulePassage, type TraceRule } from "./traceRules";
 import { railVolts } from "../workbench/diagnosis";
 
-export type TraceKind = "through" | "switch" | "diode" | "resistor" | "coupling";
+export type TraceKind = "through" | "switch" | "diode" | "resistor" | "coupling" | "rule";
 
-export const TRACE_KINDS: TraceKind[] = ["through", "switch", "diode", "resistor", "coupling"];
+export const TRACE_KINDS: TraceKind[] = ["through", "switch", "diode", "resistor", "coupling", "rule"];
 
 export interface TraceLink {
   net: number;
@@ -60,9 +67,30 @@ function partNets(model: BoardModel, part: number): number[] {
   return out;
 }
 
-/** How a part passes the signal from `net` on, and to which nets. */
-export function partLinks(model: BoardModel, part: number, net: number): { kind: TraceKind; nets: number[] } | null {
+/** The nets a part passes `net` on to under an own rule. */
+function ruleLinks(model: BoardModel, part: number, net: number, rule: TraceRule): number[] {
   const p = model.parts[part];
+  const pins = model.pins.slice(p.firstPin, p.firstPin + p.pinCount);
+  const passage = rulePassage(
+    rule,
+    pins.filter((pin) => pin.net === net).map((pin) => pin.number),
+  );
+  const out: number[] = [];
+  for (const pin of pins) {
+    if (passage.pins !== "others" && !passage.pins.includes(pin.number)) continue;
+    if (pin.net !== net && usable(model, pin.net) && !out.includes(pin.net)) out.push(pin.net);
+  }
+  return out;
+}
+
+/** How a part passes the signal from `net` on, and to which nets. */
+export function partLinks(model: BoardModel, part: number, net: number, rules?: readonly TraceRule[]): { kind: TraceKind; nets: number[] } | null {
+  const p = model.parts[part];
+  const rule = rules && rules.length > 0 ? ruleFor(rules, p) : undefined;
+  if (rule) {
+    const nets = ruleLinks(model, part, net, rule);
+    return nets.length > 0 ? { kind: ruleKind(rule), nets } : null;
+  }
   const nets = partNets(model, part);
   const others = nets.filter((n) => n !== net && usable(model, n));
   if (others.length === 0) return null;
@@ -91,7 +119,7 @@ export function partLinks(model: BoardModel, part: number, net: number): { kind:
 }
 
 /** Every net reached from `start`, breadth first, with the part and kind of each step. */
-export function traceNet(model: BoardModel, start: number, kinds: ReadonlySet<TraceKind> = new Set(TRACE_KINDS)): TraceLink[] {
+export function traceNet(model: BoardModel, start: number, kinds: ReadonlySet<TraceKind> = new Set(TRACE_KINDS), rules?: readonly TraceRule[]): TraceLink[] {
   const out: TraceLink[] = [];
   const seen = new Set([start]);
   // Net, depth, and how many non-`through` steps led here.
@@ -103,7 +131,7 @@ export function traceNet(model: BoardModel, start: number, kinds: ReadonlySet<Tr
       const part = model.pins[pin].part;
       if (visited.has(part)) continue;
       visited.add(part);
-      const link = partLinks(model, part, net);
+      const link = partLinks(model, part, net, rules);
       if (!link || !kinds.has(link.kind)) continue;
       const nextHops = link.kind === "through" ? hops : hops + 1;
       if (nextHops > MAX_HOPS) continue;

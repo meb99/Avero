@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from "react";
 import type { BoardModel, Hit, ViewSide } from "../core/board";
-import { Camera, lerpCamera } from "../core/camera";
+import { Camera, lerpCamera, sideOrientation } from "../core/camera";
 import { drawGrid, drawOrigin } from "../render/grid";
 import { bottomCamera, boundsToLayout, dualLayout, fromLayout, sideAt, toLayout, type DualLayout } from "../core/dualView";
 import type { Bounds, Point, Selection } from "../core/types";
@@ -684,11 +684,9 @@ export function BoardView({
 
   // Orientation. Both sides: the layout camera is never mirrored, the bottom side's own camera is.
   useEffect(() => {
-    const cam = cameraRef.current;
-    cam.mirrored = !dual && side === "bottom";
-    cam.rotation = rotation & 3;
+    Object.assign(cameraRef.current, sideOrientation(!dual && side === "bottom", settings.bottomFlip ?? "leftRight", rotation));
     requestDraw();
-  }, [side, dual, rotation, requestDraw]);
+  }, [side, dual, rotation, settings.bottomFlip, requestDraw]);
 
   // Switching between one and both sides shows everything.
   const firstDual = useRef(true);
@@ -723,6 +721,7 @@ export function BoardView({
           linkedNets,
           dimUnselected: settings.dimUnselected,
           extraParts,
+          fadeUninformed: settings.fadeUninformed,
         },
         palette,
       );

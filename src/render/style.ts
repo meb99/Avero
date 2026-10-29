@@ -17,6 +17,8 @@ export interface DisplayOptions {
   dimUnselected: boolean;
   /** Parts selected together with the selection. */
   extraParts?: ReadonlySet<number>;
+  /** Fade parts the file says nothing about (no value or type), as NexusBV's "darken components without info". */
+  fadeUninformed?: boolean;
 }
 
 /** Per-element colors for one frame, as GPU-ready byte arrays. */
@@ -41,12 +43,18 @@ const DIM_ALPHA = 0.55;
 const TRACE_DIM_ALPHA = 0.22;
 const INNER_ALPHA = 0.55;
 const FAR_TRACE_ALPHA = 0.35;
+const UNINFORMED_ALPHA = 0.35;
 
 function put(out: Uint8Array, i: number, c: RGBA, alpha = 1): void {
   out[i * 4] = c[0];
   out[i * 4 + 1] = c[1];
   out[i * 4 + 2] = c[2];
   out[i * 4 + 3] = Math.round(c[3] * alpha);
+}
+
+/** Whether the file tells anything about a part beyond its name: a value or type. */
+export function hasInfo(part: { device?: string }): boolean {
+  return !!part.device?.trim();
 }
 
 /** Pin 1 of a part with more than two pins: FlexBV draws it red to show the orientation. */
@@ -198,11 +206,12 @@ export function computeStyle(
       continue;
     }
     put(padMarkColors, i, palette.padMark, near ? dim : far);
+    const rest = options.fadeUninformed && !hasInfo(parts[i]) ? dim * UNINFORMED_ALPHA : dim;
     const pkg = parts[i].package;
     if (pkg && i !== selectedPart && !options.extraParts?.has(i)) {
       // Package families in their own colors: caps tan, coils grey, chips black.
-      put(partFillColors, i, palette.packageFill[pkg], near ? (partsOnNet.has(i) ? 1 : dim) : far);
-      put(partOutlineColors, i, partsOnNet.has(i) ? palette.partOnNetOutline : palette.partOutline, near ? (partsOnNet.has(i) ? 1 : dim) : far);
+      put(partFillColors, i, palette.packageFill[pkg], near ? (partsOnNet.has(i) ? 1 : rest) : far);
+      put(partOutlineColors, i, partsOnNet.has(i) ? palette.partOnNetOutline : palette.partOutline, near ? (partsOnNet.has(i) ? 1 : rest) : far);
       partOutlineWidths[i] = partsOnNet.has(i) ? 2 : 1;
       continue;
     }
@@ -215,8 +224,8 @@ export function computeStyle(
       put(partOutlineColors, i, palette.partOnNetOutline, near ? 1 : farHighlight);
       partOutlineWidths[i] = 1.5;
     } else {
-      put(partFillColors, i, palette.partFill, near ? dim : far);
-      put(partOutlineColors, i, palette.partOutline, near ? dim : far);
+      put(partFillColors, i, palette.partFill, near ? rest : far);
+      put(partOutlineColors, i, palette.partOutline, near ? rest : far);
     }
   }
 

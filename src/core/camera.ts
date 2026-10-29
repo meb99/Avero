@@ -103,6 +103,21 @@ export class Camera {
   }
 }
 
+/**
+ * How the bottom side is turned over in a single view: left to right like a board turned in
+ * the hand (the default), top to bottom (NexusBV's "flip over the X-axis"), or not mirrored at
+ * all, seen as through the top (NexusBV's "flip without mirroring").
+ */
+export type BottomFlip = "leftRight" | "topBottom" | "none";
+
+/** Mirroring and quarter turns of the camera for a side; `rotation` is the user's turn. */
+export function sideOrientation(bottom: boolean, flip: BottomFlip, rotation: number): { mirrored: boolean; rotation: number } {
+  const turn = rotation & 3;
+  if (!bottom || flip === "none") return { mirrored: false, rotation: turn };
+  // Mirrored left to right and turned half way round is mirrored top to bottom.
+  return flip === "topBottom" ? { mirrored: true, rotation: (turn + 2) & 3 } : { mirrored: true, rotation: turn };
+}
+
 export function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }

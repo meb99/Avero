@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Camera } from "./camera";
+import { Camera, sideOrientation } from "./camera";
 
 function camera(): Camera {
   const c = new Camera();
@@ -45,6 +45,21 @@ describe("Camera", () => {
         expect(back.y).toBeCloseTo(w.y);
       }
     }
+  });
+
+  it("turns the bottom side over left to right, top to bottom or not at all", () => {
+    const at = (bottom: boolean, flip: "leftRight" | "topBottom" | "none") => {
+      const c = camera();
+      Object.assign(c, sideOrientation(bottom, flip, 0));
+      return c.toScreen({ x: 1010, y: 510 });
+    };
+    expect(at(false, "topBottom")).toEqual({ x: 420, y: 280 });
+    expect(at(true, "leftRight")).toEqual({ x: 380, y: 280 });
+    const tb = at(true, "topBottom");
+    expect(tb.x).toBeCloseTo(420);
+    expect(tb.y).toBeCloseTo(320);
+    expect(at(true, "none")).toEqual({ x: 420, y: 280 });
+    expect(sideOrientation(true, "topBottom", 3)).toEqual({ mirrored: true, rotation: 1 });
   });
 
   it("keeps the point under the cursor fixed while zooming", () => {

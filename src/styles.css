@@ -3854,12 +3854,15 @@ button.danger {
 .trace-diode { color: #c77dff; }
 .trace-resistor { color: #2ec4b6; }
 .trace-coupling { color: #7bd389; }
+.trace-rule { color: #f2c94c; }
+.trace-rules-settings textarea { width: 100%; font-family: ui-monospace, monospace; font-size: 11.5px; }
 
 :root[data-theme="light"] .trace-through { color: #0b62c4; }
 :root[data-theme="light"] .trace-switch { color: #b85c00; }
 :root[data-theme="light"] .trace-diode { color: #7b2cbf; }
 :root[data-theme="light"] .trace-resistor { color: #0f7f74; }
 :root[data-theme="light"] .trace-coupling { color: #2d7a3a; }
+:root[data-theme="light"] .trace-rule { color: #8a6d00; }
 
 .color-actions {
   display: flex;

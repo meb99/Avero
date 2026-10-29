@@ -1,6 +1,7 @@
 import { Fragment, useState, type ReactNode } from "react";
 import { ShortFinder } from "./ShortFinder";
 import { traceNet } from "../core/trace";
+import { storedRules } from "../core/traceRules";
 import { askConfirm } from "./Ask";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { chipFor, type ChipInfo, type ChipPin } from "../knowledge/chips";
@@ -390,7 +391,7 @@ export function Details() {
     const n = model.nets[net];
     if (n.kind === "unconnected") return null;
     const members = model.netMembers(net);
-    const series = traceNet(model, net);
+    const series = traceNet(model, net, undefined, storedRules(settings.traceRules));
     return (
       <section className="details-section">
         <h3>

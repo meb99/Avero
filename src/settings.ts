@@ -58,7 +58,11 @@ export interface Settings {
   bothSides: boolean;
   /** Both sides in one view, or in two views side by side (zoomed on their own or in step). */
   bothSidesMode: "together" | "separate" | "synced";
+  /** How the bottom side is turned over in a single view (see core/camera.ts); left to right when unset. */
+  bottomFlip?: import("./core/camera").BottomFlip;
   dimUnselected: boolean;
+  /** Fade parts without value or type in the file (NexusBV's "darken components without info"). */
+  fadeUninformed?: boolean;
   showVias: boolean;
   /** A mm or mil grid over the board, through its own origin. */
   grid: boolean;
@@ -79,6 +83,8 @@ export interface Settings {
    * FlexBV's levels: 1 the net alone, 2 one link part further, 3 two.
    */
   linkDepth: 1 | 2 | 3;
+  /** Own trace rules in NexusBV's CSV form (see core/traceRules.ts); none by default. */
+  traceRules?: string;
   /** Small map of the whole board in a corner while zoomed in. */
   overview: boolean;
   /** Shields and frames without their bodies, as in FlexBV (see mechanicalParts). */
