@@ -1374,6 +1374,8 @@ export const en = {
   "find.mode.substring": "Substring",
   "find.mode.prefix": "Prefix",
   "find.mode.strict": "Whole name",
+  "find.mode.regex": "Regular expression",
+  "find.badRegex": "Invalid regular expression",
   "find.entry": "Item {n}",
   "info.title": "Info",
   "info.history": "Selection history ({n})",

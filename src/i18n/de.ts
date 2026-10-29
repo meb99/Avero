@@ -1376,6 +1376,8 @@ export const de: Record<MessageKey, string> = {
   "find.mode.substring": "Teilwort",
   "find.mode.prefix": "Anfang",
   "find.mode.strict": "Ganzer Name",
+  "find.mode.regex": "Regulärer Ausdruck",
+  "find.badRegex": "Ungültiger regulärer Ausdruck",
   "find.entry": "Eintrag {n}",
   "info.title": "Info",
   "info.history": "Auswahlverlauf ({n})",

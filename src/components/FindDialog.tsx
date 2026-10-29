@@ -7,7 +7,7 @@
  */
 import { useMemo, useRef, useState } from "react";
 import type { BoardModel } from "../core/board";
-import { findNames, type SearchMode, type SearchResult } from "../core/search";
+import { findNames, regexOk, type SearchMode, type SearchResult } from "../core/search";
 import type { Selection } from "../core/types";
 import { useI18n } from "../i18n";
 import { Dialog } from "./Dialogs";
@@ -106,7 +106,7 @@ export function FindDialog({
           {t("find.details")}
         </label>
         <span>{t("find.mode")}</span>
-        {(["substring", "prefix", "strict"] as const).map((mode) => (
+        {(["substring", "prefix", "strict", "regex"] as const).map((mode) => (
           <label className="check" key={mode}>
             <input type="radio" name="find-mode" checked={options.mode === mode} onChange={() => change({ ...options, mode })} />
             {t(`find.mode.${mode}`)}
@@ -137,6 +137,9 @@ export function FindDialog({
                 }
               }}
             />
+            {options.mode === "regex" && queries[column].trim() !== "" && !regexOk(queries[column].trim()) && (
+              <span className="muted find-badregex">{t("find.badRegex")}</span>
+            )}
             <ul className="find-results" aria-label={t("find.entry", { n: column + 1 })}>
               {hits[column].map((hit) => (
                 <li key={`${hit.kind}-${hit.label}`}>

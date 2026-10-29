@@ -85,8 +85,19 @@ export function search(model: BoardModel, query: string, limit = 50): SearchResu
   return results;
 }
 
-/** How a name must match, as in FlexBV's search: anywhere, at its start, or all of it. */
-export type SearchMode = "substring" | "prefix" | "strict";
+/** How a name must match: anywhere, at its start, all of it (FlexBV), or a regular expression. */
+export type SearchMode = "substring" | "prefix" | "strict" | "regex";
+
+/** Whether a regular expression is well formed. False for an empty or broken pattern. */
+export function regexOk(pattern: string): boolean {
+  if (!pattern.trim()) return false;
+  try {
+    new RegExp(pattern, "i");
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * The search for component / network: parts and nets (as chosen) whose name holds the query
@@ -101,16 +112,22 @@ export function findNames(
   const q = query.trim().toUpperCase();
   if (!q) return [];
   const limit = options.limit ?? 500;
+  // A regular expression matches case-insensitively against the raw name; a broken one matches
+  // nothing (the dialog shows the error). The other modes compare upper case.
+  const re = options.mode === "regex" ? (regexOk(query.trim()) ? new RegExp(query.trim(), "i") : null) : undefined;
+  if (re === null) return [];
   const matches = (name: string) => {
+    if (re) return re.test(name);
     const n = name.toUpperCase();
     return options.mode === "strict" ? n === q : options.mode === "prefix" ? n.startsWith(q) : n.includes(q);
   };
   // With details a part is found by its value and type too ("10K", "TPS62130"), word by word
-  // where the mode looks at the start or the whole.
+  // where the mode looks at the start or the whole; substring and regex look at the whole text.
   const inDetails = (device: string | undefined) =>
-    !!options.details && !!device && (options.mode === "substring" ? matches(device) : device.split(/[\s·_,;/]+/).some(matches));
+    !!options.details && !!device && (options.mode === "substring" || options.mode === "regex" ? matches(device) : device.split(/[\s·_,;/]+/).some(matches));
   const out: SearchResult[] = [];
-  const pinRef = /^([^\s.:]+)[.:\s]+([^\s.:]+)$/.exec(q);
+  // `U10.A3` addresses one pin; not in regex mode, where `.` is a pattern character.
+  const pinRef = options.mode === "regex" ? null : /^([^\s.:]+)[.:\s]+([^\s.:]+)$/.exec(q);
   if (pinRef && options.parts) {
     const part = model.findPart(pinRef[1]);
     const pin = part === undefined ? undefined : model.findPin(part, pinRef[2]);

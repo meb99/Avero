@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BoardModel } from "./board";
-import { findNames } from "./search";
+import { findNames, regexOk } from "./search";
 import { testBoard } from "./testBoard";
 
 const model = new BoardModel(testBoard());
@@ -53,5 +53,31 @@ describe("search for component / network", () => {
 
   it("leaves out unconnected nets", () => {
     expect(names("UNCONNECTED", { ...both, mode: "strict" })).toEqual([]);
+  });
+
+  it("matches a regular expression, case-insensitively, and never throws on a broken one", () => {
+    // The dialog's "regex" radio chooses the mode, so the field holds the bare pattern.
+    expect(names("^PP3V3$", { ...both, mode: "regex" })).toEqual(["PP3V3"]);
+    expect(names("3v3", { ...both, mode: "regex" })).toEqual(["PP3V3", "PP3V3_L", "PP3V3_R"]);
+    expect(names("^PP3V3_[LR]$", { ...both, mode: "regex" })).toEqual(["PP3V3_L", "PP3V3_R"]);
+    expect(names("^R\\d$", { parts: true, nets: false, mode: "regex" })).toEqual(["R1", "R9"]);
+    // A broken pattern or an empty one yields nothing, no exception.
+    expect(names("(", { ...both, mode: "regex" })).toEqual([]);
+    expect(names("", { ...both, mode: "regex" })).toEqual([]);
+    // A dot is a pattern character here, not the pin separator: it matches the underscore.
+    expect(names("PP3V3.L", { ...both, mode: "regex" })).toEqual(["PP3V3_L"]);
+  });
+
+  it("finds a part by its details with a regular expression", () => {
+    expect(names("10k", { ...both, mode: "regex", details: true })).toEqual(["R1"]);
+    expect(names("10k", { ...both, mode: "regex" })).toEqual([]);
+  });
+});
+
+describe("regexOk", () => {
+  it("accepts a valid pattern and rejects a broken or empty one", () => {
+    expect(regexOk("^PP.*$")).toBe(true);
+    expect(regexOk("(")).toBe(false);
+    expect(regexOk("  ")).toBe(false);
   });
 });
