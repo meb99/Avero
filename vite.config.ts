@@ -67,5 +67,5 @@ export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   // WKWebView on macOS 13+ is the only runtime.
   build: { target: "safari16", sourcemap: true },
-  test: { environment: "node", include: ["src/**/*.test.ts"] },
+  test: { environment: "node", include: ["src/**/*.test.ts"], setupFiles: ["src/testSetup.ts"] },
 });
