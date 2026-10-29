@@ -1226,3 +1226,55 @@ fn damaged_files_never_panic() {
         }
     }
 }
+
+/// A fixed xorshift step, so corruption fuzzing is reproducible.
+fn asc_xorshift(seed: &mut u64) -> u64 {
+    *seed ^= *seed << 13;
+    *seed ^= *seed >> 7;
+    *seed ^= *seed << 17;
+    *seed
+}
+
+/// One corrupted copy of `data`: random byte flips, truncation, or a corrupted tail.
+fn asc_damage(data: &[u8], seed: &mut u64) -> Vec<u8> {
+    let mut d = data.to_vec();
+    if d.is_empty() {
+        return d;
+    }
+    match asc_xorshift(seed) % 3 {
+        0 => {
+            for _ in 0..1 + asc_xorshift(seed) % 8 {
+                let i = (asc_xorshift(seed) as usize) % d.len();
+                d[i] = asc_xorshift(seed) as u8;
+            }
+        }
+        1 => {
+            let t = (asc_xorshift(seed) as usize) % d.len();
+            d.truncate(t);
+        }
+        _ => {
+            let i = (asc_xorshift(seed) as usize) % d.len();
+            for b in &mut d[i..] {
+                *b = b.wrapping_add(asc_xorshift(seed) as u8);
+            }
+        }
+    }
+    d
+}
+
+#[test]
+fn damaged_asc_bundle_never_panics() {
+    // The three-file ASUS ASC set goes through parse_asc, not parse, so the general
+    // corruption fuzz above does not exercise it. Fixed seed for reproducibility.
+    let mut seed: u64 = 0x9e37_79b9_7f4a_7c15;
+    for round in 0..400u64 {
+        let f = asc_damage(ASC_FORMAT.as_bytes(), &mut seed);
+        let p = asc_damage(ASC_PINS.as_bytes(), &mut seed);
+        let n = asc_damage(ASC_NAILS.as_bytes(), &mut seed);
+        let r = std::panic::catch_unwind(|| parse_asc(Some(&f), &p, Some(&n)));
+        assert!(r.is_ok(), "asc round {round} panicked");
+        // The nails file is optional; the format/pins path must be just as safe without it.
+        let r = std::panic::catch_unwind(|| parse_asc(Some(&f), &p, None));
+        assert!(r.is_ok(), "asc round {round} (no nails) panicked");
+    }
+}
