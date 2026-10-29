@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # local/**: branches from local Windows sessions, where Smart App Control blocks cargo's build scripts.
+    branches: [main, "local/**"]
   pull_request:
   workflow_dispatch:
 
