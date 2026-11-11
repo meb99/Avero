@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { BoardModel } from "../core/board";
 import { HIDE_GROUPS, partsInGroup } from "../core/hideGroups";
 import type { Selection } from "../core/types";
@@ -11,11 +12,14 @@ import { hideParts, setHideMode, showParts, type BoardNotes } from "../workbench
 export function HiddenParts({
   model,
   notes,
+  namesRevision,
   update,
   onSelect,
 }: {
   model: BoardModel;
   notes: BoardNotes;
+  /** Counts up when own net names or kinds changed the model in place. */
+  namesRevision: number;
   update(change: (n: BoardNotes) => BoardNotes): void;
   onSelect(selection: Selection, zoom: boolean): void;
 }) {
@@ -23,20 +27,20 @@ export function HiddenParts({
   const hidden = notes.hidden?.parts ?? [];
   const key = notes.key;
   const change = (f: (n: BoardNotes) => BoardNotes) => update((n) => (n.key === key ? f(n) : n));
+  // Looked up once per board, not on every selection: it goes through all parts.
+  // namesRevision: own net kinds (ground or not) change the model in place.
+  const groups = useMemo(() => HIDE_GROUPS.map((g) => ({ g, parts: partsInGroup(model, g).map((i) => model.parts[i].name) })), [model, namesRevision]);
   return (
     <details className="hidden-parts" open={hidden.length > 0 || undefined}>
       <summary>
         {t("hide.title")} <span className="muted">{hidden.length}</span>
       </summary>
       <div className="hidden-groups">
-        {HIDE_GROUPS.map((g) => {
-          const parts = partsInGroup(model, g).map((i) => model.parts[i].name);
-          return (
-            <button key={g} className="small" disabled={parts.length === 0} title={t(`hide.group.${g}Hint`)} onClick={() => change((n) => hideParts(n, parts))}>
-              {t(`hide.group.${g}`, { n: parts.length })}
-            </button>
-          );
-        })}
+        {groups.map(({ g, parts }) => (
+          <button key={g} className="small" disabled={parts.length === 0} title={t(`hide.group.${g}Hint`)} onClick={() => change((n) => hideParts(n, parts))}>
+            {t(`hide.group.${g}`, { n: parts.length })}
+          </button>
+        ))}
       </div>
       {hidden.length > 0 && (
         <>

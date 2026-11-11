@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BoardModel } from "./board";
-import { findNames } from "./search";
+import { findNames, search } from "./search";
 import { testBoard } from "./testBoard";
 
 const model = new BoardModel(testBoard());
@@ -53,5 +53,45 @@ describe("search for component / network", () => {
 
   it("leaves out unconnected nets", () => {
     expect(names("UNCONNECTED", { ...both, mode: "strict" })).toEqual([]);
+  });
+});
+
+describe("search of the command palette", () => {
+  // Many names that match alike: the best few must come out as if all had been sorted.
+  const board = testBoard();
+  const b = board.bounds;
+  for (let i = 0; i < 400; i++) {
+    board.nets.push({ name: `SIG_${(i * 37) % 400}`, kind: "signal", pins: [], testPoints: [] });
+    board.parts.push({ name: `sig_${(i * 91) % 400}x`, side: "top", mount: "smd", firstPin: 0, pinCount: 0, outline: [], bounds: b });
+  }
+  // A part and a net of the same name: the part comes first.
+  board.parts.push({ name: "SIG_7", side: "top", mount: "smd", firstPin: 0, pinCount: 0, outline: [], bounds: b });
+  const big = new BoardModel(board);
+
+  const reference = (query: string, limit: number): string[] => {
+    const q = query.toUpperCase();
+    const tier = (name: string) => {
+      const n = name.toUpperCase();
+      return n === q ? 0 : n.startsWith(q) ? 1 : n.includes(q) ? 2 : -1;
+    };
+    const all = [
+      ...big.parts.map((p) => ({ label: p.name, kind: "part", tier: tier(p.name) })),
+      ...big.nets.filter((n) => n.kind !== "unconnected").map((n) => ({ label: n.name, kind: "net", tier: tier(n.name) })),
+    ].filter((h) => h.tier >= 0);
+    all.sort((x, y) => x.tier - y.tier || x.label.length - y.label.length || x.label.localeCompare(y.label));
+    return all.slice(0, limit).map((h) => `${h.kind} ${h.label}`);
+  };
+
+  it("gives the best hits in the order a sort of all hits would", () => {
+    for (const [query, limit] of [["SIG_1", 30], ["sig", 50], ["SIG_7", 5], ["7", 12], ["_", 1], ["SIG_399", 30], ["x", 400]] as const) {
+      const got = search(big, query, limit).map((r) => `${r.kind} ${r.label}`);
+      expect([query, got]).toEqual([query, reference(query, limit)]);
+    }
+  });
+
+  it("keeps a pin reference in front and counts it towards the limit", () => {
+    const hits = search(big, "U10.A3", 3);
+    expect(hits[0]).toMatchObject({ kind: "pin", detail: "I2C_SDA" });
+    expect(hits.length).toBeLessThanOrEqual(3);
   });
 });

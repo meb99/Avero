@@ -323,7 +323,6 @@ export function BoardView({
     el.style.transform = `translate(${at.x}px, ${at.y}px)`;
   }, []);
   const [glError, setGlError] = useState(false);
-  const [rendererVersion, setRendererVersion] = useState(0);
   const initialViewRef = useRef(initialView);
   initialViewRef.current = initialView;
 
@@ -637,7 +636,8 @@ export function BoardView({
     }
     const cam = cameraRef.current;
     rendererRef.current.resize(cam.width, cam.height, dprRef.current);
-    setRendererVersion((v) => v + 1);
+    // The effects below run after this one in the same pass and find the renderer there:
+    // nothing has to tell them, which would upload the board a second time.
     return () => {
       rendererRef.current?.dispose();
       rendererRef.current = null;
@@ -680,7 +680,7 @@ export function BoardView({
     needsFitRef.current = !view;
     fitIfNeeded();
     requestDraw();
-  }, [model, requestDraw, fitIfNeeded, rendererVersion]);
+  }, [model, requestDraw, fitIfNeeded]);
 
   // Orientation. Both sides: the layout camera is never mirrored, the bottom side's own camera is.
   useEffect(() => {
@@ -733,7 +733,7 @@ export function BoardView({
     if (dual) rendererRef.current?.setStyle(styleFor("bottom"), palette, 1);
     requestDraw();
     // namesRevision: net names live in the model and are drawn as labels.
-  }, [model, side, dual, selection, settings, palette, hiddenLayers, pinnedNets, linkedNets, linkParts, namesRevision, requestDraw, rendererVersion, extraParts]);
+  }, [model, side, dual, selection, settings, palette, hiddenLayers, pinnedNets, linkedNets, linkParts, namesRevision, requestDraw, extraParts]);
 
   useEffect(() => {
     Object.assign(stateRef.current, { markers, activeMarker });
@@ -754,7 +754,7 @@ export function BoardView({
     }
     requestDraw();
     // The model dependency re-uploads after setBoard released the photo.
-  }, [model, photoImage, photoMatrix, photoPerspective, requestDraw, rendererVersion]);
+  }, [model, photoImage, photoMatrix, photoPerspective, requestDraw]);
 
   const photoOpacity = photo?.opacity ?? 1;
   useEffect(() => {
@@ -798,7 +798,7 @@ export function BoardView({
         : [{ segments: segments(ratsnestNet), color: palette.ratsnest }, ...[...linkedNets].map(([net, color]) => ({ segments: segments(net), color }))];
     renderer.setOverlay(groups, 1.4);
     requestDraw();
-  }, [model, ratsnestNet, linkedNets, palette, requestDraw, rendererVersion, side, dual, settings.ghostOtherSide, settings.netWeb, selection]);
+  }, [model, ratsnestNet, linkedNets, palette, requestDraw, side, dual, settings.ghostOtherSide, settings.netWeb, selection]);
 
   useEffect(() => {
     stateRef.current.measured = measured;

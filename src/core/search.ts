@@ -39,48 +39,35 @@ export function search(model: BoardModel, query: string, limit = 50): SearchResu
     }
   }
 
-  type Scored = SearchResult & { tier: number; len: number };
-  const scored: Scored[] = [];
-  const tier = (name: string): number => {
+  // Only the best `limit` hits are kept, in order, while going through the names once: on a
+  // board with tens of thousands of nets, sorting every hit on each key press was the slow part.
+  interface Hit {
+    tier: number;
+    label: string;
+    kind: "part" | "net";
+    index: number;
+  }
+  const room = limit - results.length;
+  const best: Hit[] = [];
+  const after = (a: Hit, b: Hit) => a.tier - b.tier || a.label.length - b.label.length || a.label.localeCompare(b.label);
+  const offer = (name: string, kind: "part" | "net", index: number) => {
     const n = name.toUpperCase();
-    if (n === q) return 0;
-    if (n.startsWith(q)) return 1;
-    if (n.includes(q)) return 2;
-    return -1;
+    const tier = n === q ? 0 : n.startsWith(q) ? 1 : n.includes(q) ? 2 : -1;
+    if (tier < 0 || room <= 0) return;
+    const hit: Hit = { tier, label: name, kind, index };
+    // Equal hits stay in the order they were found: a part before a net of the same name.
+    if (best.length === room && after(hit, best[room - 1]) >= 0) return;
+    let at = best.length;
+    while (at > 0 && after(hit, best[at - 1]) < 0) at--;
+    best.splice(at, 0, hit);
+    if (best.length > room) best.pop();
   };
+  model.parts.forEach((p, i) => offer(p.name, "part", i));
+  model.nets.forEach((n, i) => n.kind !== "unconnected" && offer(n.name, "net", i));
 
-  model.parts.forEach((p, i) => {
-    const t = tier(p.name);
-    if (t >= 0) {
-      scored.push({
-        selection: { kind: "part", part: i },
-        label: p.name,
-        detail: p.device ?? "",
-        kind: "part",
-        tier: t,
-        len: p.name.length,
-      });
-    }
-  });
-  model.nets.forEach((n, i) => {
-    if (n.kind === "unconnected") return;
-    const t = tier(n.name);
-    if (t >= 0) {
-      scored.push({
-        selection: { kind: "net", net: i },
-        label: n.name,
-        detail: String(n.pins.length),
-        kind: "net",
-        tier: t,
-        len: n.name.length,
-      });
-    }
-  });
-
-  scored.sort((a, b) => a.tier - b.tier || a.len - b.len || a.label.localeCompare(b.label));
-  for (const s of scored) {
-    if (results.length >= limit) break;
-    results.push({ selection: s.selection, label: s.label, detail: s.detail, kind: s.kind });
+  for (const h of best) {
+    if (h.kind === "part") results.push({ selection: { kind: "part", part: h.index }, label: h.label, detail: model.parts[h.index].device ?? "", kind: "part" });
+    else results.push({ selection: { kind: "net", net: h.index }, label: h.label, detail: String(model.nets[h.index].pins.length), kind: "net" });
   }
   return results;
 }

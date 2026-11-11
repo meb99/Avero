@@ -61,6 +61,7 @@ Befehle mit `&&` verketten, damit ein Fehler den Commit verhindert.
 - `src/workbench/` – Messwerte, Fälle, Chronik, Hinweise, Berichte, Pakete.
 - `src/components/` – Oberfläche. `src/i18n/de.ts` und `en.ts`: jeder Text in beiden Sprachen.
 - `tools/browser-tests/` – Browser-Tests mit Attrappe der Tauri-Seite (siehe dortiges README).
+- `tools/perf/` – Tempo an künstlichen Riesenboards messen (siehe dortiges README, mit Messwerten).
 
 ## Skills
 
